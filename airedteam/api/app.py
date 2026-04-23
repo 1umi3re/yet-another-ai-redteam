@@ -9,6 +9,7 @@ from airedteam.api.routers import targets as targets_router
 from airedteam.api.routers import datasets as datasets_router
 from airedteam.api.routers import plugins as plugins_router
 from airedteam.api.routers import scenarios as scenarios_router
+from airedteam.api.routers import runs as runs_router
 
 
 @asynccontextmanager
@@ -34,4 +35,5 @@ def create_app() -> FastAPI:
     app.include_router(datasets_router.router, prefix="/api", tags=["datasets"])
     app.include_router(plugins_router.router, prefix="/api", tags=["plugins"])
     app.include_router(scenarios_router.router, prefix="/api", tags=["scenarios"])
+    app.include_router(runs_router.router, prefix="/api", tags=["runs"])
     return app
