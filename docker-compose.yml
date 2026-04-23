@@ -1,0 +1,32 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: airedteam
+      POSTGRES_PASSWORD: airedteam
+      POSTGRES_DB: airedteam
+    ports: ["5432:5432"]
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+  api:
+    build: { context: ., dockerfile: docker/api.Dockerfile }
+    environment:
+      AIREDTEAM_DATABASE_URL: postgresql+asyncpg://airedteam:airedteam@postgres:5432/airedteam
+      AIREDTEAM_DATABASE_URL_SYNC: postgresql+psycopg2://airedteam:airedteam@postgres:5432/airedteam
+      AIREDTEAM_BLOB_DIR: /data/blobs
+      AIREDTEAM_MASTER_KEY: ${AIREDTEAM_MASTER_KEY}
+      AIREDTEAM_ADMIN_PASSWORD: ${AIREDTEAM_ADMIN_PASSWORD}
+      AIREDTEAM_JWT_SECRET: ${AIREDTEAM_JWT_SECRET:-change-me-jwt}
+      AIREDTEAM_CORS_ORIGINS: '["http://localhost:5173","http://localhost:8080"]'
+    ports: ["8000:8000"]
+    volumes: ["blobs:/data/blobs"]
+    depends_on: [postgres]
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+      args: { VITE_API_URL: "http://localhost:8000" }
+    ports: ["8080:80"]
+    depends_on: [api]
+volumes:
+  pgdata: {}
+  blobs: {}
