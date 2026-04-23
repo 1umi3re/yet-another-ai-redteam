@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from airedteam.api.deps import get_state
 from airedteam.storage import models
 from airedteam.api.routers import login as login_router
+from airedteam.api.routers import targets as targets_router
 
 
 @asynccontextmanager
@@ -26,4 +27,5 @@ def create_app() -> FastAPI:
                        allow_methods=["*"],
                        allow_headers=["*"])
     app.include_router(login_router.router, prefix="/api", tags=["auth"])
+    app.include_router(targets_router.router, prefix="/api", tags=["targets"])
     return app
