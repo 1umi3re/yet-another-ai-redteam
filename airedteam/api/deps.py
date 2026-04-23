@@ -1,0 +1,59 @@
+from __future__ import annotations
+from dataclasses import dataclass
+from fastapi import Depends, Header, HTTPException
+from airedteam.config import Settings, get_settings
+from airedteam.storage.db import make_engine, make_sessionmaker
+from airedteam.storage.blobs import LocalBlobStore
+from airedteam.storage.secretbox import SecretBox
+from airedteam.engine.progress import ProgressBus
+from airedteam.services.target_configs import TargetConfigService
+from airedteam.services.datasets import DatasetService
+from airedteam.services.runs import RunService
+from .auth import verify_token
+
+
+@dataclass
+class AppState:
+    settings: Settings
+    session_factory: object
+    blob_store: LocalBlobStore
+    secret_box: SecretBox
+    bus: ProgressBus
+    targets: TargetConfigService
+    datasets: DatasetService
+    runs: RunService
+
+
+def build_state(settings: Settings | None = None) -> AppState:
+    s = settings or get_settings()
+    engine = make_engine(s.database_url)
+    SessionLocal = make_sessionmaker(engine)
+    blob = LocalBlobStore(s.blob_dir)
+    box = SecretBox(s.master_key)
+    bus = ProgressBus()
+    targets = TargetConfigService(SessionLocal, box)
+    datasets = DatasetService(SessionLocal, blob)
+    runs = RunService(SessionLocal, blob, box, targets, datasets, bus,
+                      response_inline_max_bytes=s.response_inline_max_bytes,
+                      max_concurrency=s.max_concurrency)
+    return AppState(s, SessionLocal, blob, box, bus, targets, datasets, runs)
+
+
+_STATE: AppState | None = None
+
+
+def get_state() -> AppState:
+    global _STATE
+    if _STATE is None:
+        _STATE = build_state()
+    return _STATE
+
+
+def require_admin(authorization: str = Header(default=""), state: AppState = Depends(get_state)) -> str:
+    if not authorization.lower().startswith("bearer "):
+        raise HTTPException(401, "missing bearer token")
+    token = authorization.split(" ", 1)[1]
+    try:
+        return verify_token(token, secret=state.settings.jwt_secret)
+    except PermissionError:
+        raise HTTPException(401, "invalid token")
