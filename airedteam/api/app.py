@@ -1,0 +1,29 @@
+from __future__ import annotations
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from airedteam.api.deps import get_state
+from airedteam.storage import models
+from airedteam.api.routers import login as login_router
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    state = get_state()
+    from airedteam.storage.db import make_engine
+    eng = make_engine(state.settings.database_url)
+    async with eng.begin() as c:
+        await c.run_sync(models.Base.metadata.create_all)
+    yield
+
+
+def create_app() -> FastAPI:
+    app = FastAPI(title="airedteam API", lifespan=lifespan)
+    state = get_state()
+    app.add_middleware(CORSMiddleware,
+                       allow_origins=state.settings.cors_origins,
+                       allow_credentials=True,
+                       allow_methods=["*"],
+                       allow_headers=["*"])
+    app.include_router(login_router.router, prefix="/api", tags=["auth"])
+    return app
