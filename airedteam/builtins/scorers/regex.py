@@ -1,0 +1,20 @@
+from __future__ import annotations
+import re
+from airedteam.core.types import AttemptResult, ScoreResult
+
+
+_FLAG_MAP = {"i": re.IGNORECASE, "m": re.MULTILINE, "s": re.DOTALL}
+
+
+class RegexScorer:
+    name = "regex"
+    def __init__(self, *, pattern: str, flags: str = "") -> None:
+        f = 0
+        for c in flags:
+            f |= _FLAG_MAP.get(c.lower(), 0)
+        self._re = re.compile(pattern, f)
+
+    async def score(self, attempt: AttemptResult) -> ScoreResult:
+        text = (attempt.response.text if attempt.response else "") or ""
+        m = self._re.search(text)
+        return ScoreResult(scorer=self.name, value={"label": bool(m), "match": m.group(0) if m else None})
