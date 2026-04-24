@@ -13,6 +13,22 @@ import clsx from "clsx";
 
 type Tab = "overview" | "attempts" | "events";
 
+// Map a score record to a target-side verdict. Scorers emit an explicit
+// `attack_success` field now; we fall back to legacy heuristics for older
+// runs where only `label` exists. Legacy `label` had inconsistent polarity
+// (refusal: true=refused; llm_judge/substring/regex: true=attack success),
+// so we dispatch on scorer name.
+function verdictOf(score: any): "refused" | "complied" {
+  const v = score?.value ?? {};
+  if (typeof v.attack_success === "boolean") {
+    return v.attack_success ? "complied" : "refused";
+  }
+  const label = v.label;
+  if (typeof label !== "boolean") return "complied";
+  if (score?.scorer === "refusal") return label ? "refused" : "complied";
+  return label ? "complied" : "refused";
+}
+
 export default function RunDetail() {
   const { id = "" } = useParams();
   const token = useAuth(s => s.token);
@@ -50,8 +66,9 @@ export default function RunDetail() {
     for (const a of attempts as any[]) {
       byTarget[a.target_name] ||= { target: a.target_name, refused: 0, complied: 0 };
       const sc = (scores as any[]).find((s: any) => s.attempt_id === a.id);
-      if (sc?.value?.label === true) byTarget[a.target_name].refused++;
-      else if (sc) byTarget[a.target_name].complied++;
+      if (!sc) continue;
+      if (verdictOf(sc) === "refused") byTarget[a.target_name].refused++;
+      else byTarget[a.target_name].complied++;
     }
     return Object.values(byTarget);
   }, [attempts, scores]);
@@ -59,7 +76,7 @@ export default function RunDetail() {
   const totals = useMemo(() => {
     let refused = 0, complied = 0;
     for (const s of scores as any[]) {
-      if (s?.value?.label === true) refused++; else complied++;
+      if (verdictOf(s) === "refused") refused++; else complied++;
     }
     return { refused, complied, total: refused + complied };
   }, [scores]);
@@ -144,14 +161,16 @@ export default function RunDetail() {
               <tbody className="divide-y divide-gray-100">
                 {(attempts as any[]).map(a => {
                   const sc = (scores as any[]).find((s: any) => s.attempt_id === a.id);
-                  const refused = sc?.value?.label === true;
+                  const verdict = sc ? verdictOf(sc) : null;
                   return (
                     <tr key={a.id} className="align-top hover:bg-gray-50/60">
                       <td className="px-5 py-3 font-medium whitespace-nowrap">{a.target_name}</td>
                       <td className="px-5 py-3 max-w-xs"><div className="truncate text-gray-700" title={a.prompt}>{a.prompt}</div></td>
                       <td className="px-5 py-3 max-w-md"><div className="truncate text-gray-600" title={a.response ?? ""}>{a.response ?? <span className="text-gray-400">(blob)</span>}</div></td>
                       <td className="px-5 py-3">
-                        {sc ? (refused ? <Badge tone="green">refused</Badge> : <Badge tone="red">complied</Badge>) : <Badge>-</Badge>}
+                        {verdict === "refused" ? <Badge tone="green">refused</Badge>
+                          : verdict === "complied" ? <Badge tone="red">complied</Badge>
+                          : <Badge>-</Badge>}
                       </td>
                       <td className="px-5 py-3 text-right">
                         <button onClick={() => setDetailAttemptId(a.id)}
@@ -289,14 +308,13 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function ScoreCard({ score }: { score: any }) {
   const v = score?.value ?? {};
-  const label = v.label;
-  const tone = label === true ? "green" : label === false ? "red" : undefined;
-  const labelText = label === true ? "refused" : label === false ? "complied" : String(label ?? "—");
+  const verdict = verdictOf(score);
+  const tone = verdict === "refused" ? "green" : "red";
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-3 space-y-2">
       <div className="flex items-center gap-2 text-xs">
         <span className="font-medium text-gray-700">{score.scorer}</span>
-        <Badge tone={tone as any}>{labelText}</Badge>
+        <Badge tone={tone as any}>{verdict}</Badge>
         {typeof v.confidence === "number" && (
           <span className="text-gray-500">confidence {v.confidence.toFixed(2)}</span>
         )}

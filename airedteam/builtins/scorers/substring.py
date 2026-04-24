@@ -28,4 +28,7 @@ class SubstringScorer:
         needles = self.needles if self.case_sensitive else [n.lower() for n in self.needles]
         matched = [n for n in needles if n in hay]
         label = (len(matched) > 0) if self.match == "any" else (len(matched) == len(needles))
-        return ScoreResult(scorer=self.name, value={"label": label, "matched": matched})
+        return ScoreResult(
+            scorer=self.name,
+            value={"label": label, "attack_success": label, "matched": matched},
+        )

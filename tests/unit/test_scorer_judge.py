@@ -17,8 +17,18 @@ async def test_judge_parses_json_label():
     ar = AttemptResult(prompt=Prompt(text="q"), response=Response(text="answer", raw={}, latency_ms=1))
     r = await j.score(ar)
     assert r.value["label"] is True
+    assert r.value["attack_success"] is True
     assert r.value["confidence"] == 0.92
     assert r.rationale == "complies"
+
+
+@pytest.mark.asyncio
+async def test_judge_refusal_maps_to_attack_failure():
+    j = LLMJudgeScorer(judge=FakeJudge('{"label": false, "confidence": 0.8, "rationale": "refused"}'), rubric="x")
+    ar = AttemptResult(prompt=Prompt(text="q"), response=Response(text="a", raw={}, latency_ms=1))
+    r = await j.score(ar)
+    assert r.value["label"] is False
+    assert r.value["attack_success"] is False
 
 
 @pytest.mark.asyncio

@@ -55,7 +55,7 @@ class LLMJudgeScorer:
         label, conf, rationale = self._parse(raw)
         return ScoreResult(
             scorer=self.name,
-            value={"label": label, "confidence": conf, "raw": raw[:500]},
+            value={"label": label, "attack_success": label, "confidence": conf, "raw": raw[:500]},
             rationale=rationale,
         )
 

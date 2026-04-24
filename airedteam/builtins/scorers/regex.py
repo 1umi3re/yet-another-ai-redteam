@@ -23,4 +23,8 @@ class RegexScorer:
     async def score(self, attempt: AttemptResult) -> ScoreResult:
         text = (attempt.response.text if attempt.response else "") or ""
         m = self._re.search(text)
-        return ScoreResult(scorer=self.name, value={"label": bool(m), "match": m.group(0) if m else None})
+        label = bool(m)
+        return ScoreResult(
+            scorer=self.name,
+            value={"label": label, "attack_success": label, "match": m.group(0) if m else None},
+        )
