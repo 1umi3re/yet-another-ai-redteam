@@ -3,6 +3,16 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 
+MessageRole = Literal["system", "user", "assistant"]
+
+
+@dataclass(frozen=True)
+class Message:
+    role: MessageRole
+    text: str
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
 @dataclass(frozen=True)
 class Prompt:
     text: str
@@ -28,6 +38,7 @@ class AttemptResult:
     status: AttemptStatus = "completed"
     error: str | None = None
     converter_chain: list[str] = field(default_factory=list)
+    conversation: list[Message] | None = None
 
 
 @dataclass
