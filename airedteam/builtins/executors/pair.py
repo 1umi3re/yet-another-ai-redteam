@@ -97,6 +97,8 @@ class PAIRExecutor(MultiTurnExecutor):
         # PAIR is iterative-single-turn: each target call sees ONLY the current user
         # message (no prior turns). Override the base loop while still building a
         # conversation log for the UI.
+        self._last_score = 0
+        self._last_rationale = ""
         chain: list[str] = []
         cur = prompt
         for c in converters:

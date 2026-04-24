@@ -36,3 +36,32 @@ async def test_pair_requires_judge_and_attacker():
         PAIRExecutor(attacker=None, judge=Scripted("j", []), goal="x")
     with pytest.raises(ValueError, match="judge"):
         PAIRExecutor(attacker=Scripted("a", []), judge=None, goal="x")
+
+
+@pytest.mark.asyncio
+async def test_pair_resets_judge_state_between_runs():
+    """Ensure judge state doesn't leak between successive runs of the same executor."""
+    # First run: judge returns score 10 on both turns
+    atk = Scripted("a", ['{"prompt": "p1-a", "improvement": "x"}',
+                         '{"prompt": "p2-a", "improvement": "x"}'])
+    tgt = Scripted("t", ["r1", "r2"])
+    jdg = Scripted("j", ['{"score": 10, "rationale": "win-1"}',
+                         '{"score": 10, "rationale": "win-2"}'])
+    ex = PAIRExecutor(attacker=atk, judge=jdg, max_turns=5, goal="g")
+    await ex.run(Prompt(text="seed-1"), tgt, [])
+    
+    # First run ends with judge score 10 set in self._last_score.
+    # After first run, reuse executor for second run.
+    # Clear attacker history and set up for second run.
+    atk.seen.clear()
+    atk.replies = ['{"prompt": "p2-turn2", "improvement": "x"}']
+    tgt.replies = ["r2a"]
+    # Second run: judge returns score 1 (very different from 10)
+    jdg.replies = ['{"score": 1, "rationale": "refused"}']
+    await ex.run(Prompt(text="seed-2"), tgt, [])
+    
+    # First attacker call in second run happens at turn 1, after turn 0's judge call.
+    # It should show the NEW judge score (1) from turn 0 of run 2, not the old score (10).
+    # If the bug existed, it would show 10.
+    assert "JUDGE SCORE: 1" in atk.seen[0]
+    assert "JUDGE SCORE: 10" not in atk.seen[0]
