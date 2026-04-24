@@ -34,4 +34,26 @@ def run_cmd(runspec_yaml: str, name: str) -> None:
         await state.runs.execute_run(run.id)
         click.echo(json.dumps({"run_id": run.id}))
 
+@main.command("seed-datasets")
+def seed_datasets() -> None:
+    """Seed bundled AdvBench + HarmBench sample datasets into the DB."""
+    from importlib import resources
+    from airedteam.api.deps import build_state
+
+    state = build_state()
+
+    async def _go():
+        samples = [
+            ("AdvBench (sample)", "advbench_sample.json"),
+            ("HarmBench (sample)", "harmbench_sample.json"),
+        ]
+        for name, filename in samples:
+            data = resources.files("airedteam.builtins.datasets.samples").joinpath(filename).read_bytes()
+            ds = await state.datasets.create_json_upload(name=name, file_bytes=data)
+            click.echo(f"{name}: id={ds.id}  items={ds.item_count}")
+
     asyncio.run(_go())
+
+
+if __name__ == "__main__":
+    main()

@@ -90,3 +90,21 @@ docker compose up --build
 ```bash
 pytest -q
 ```
+
+## Seeding sample datasets (AdvBench / HarmBench)
+
+For quick end-to-end testing without needing HuggingFace downloads, bundled curated samples of **AdvBench** (30 prompts) and **HarmBench** (30 prompts) are shipped with the package. Seed them into your running instance with:
+
+```bash
+airedteam seed-datasets
+```
+
+This registers both as `json_upload` datasets using the same env/DB your API uses (set `AIREDTEAM_MASTER_KEY`, `AIREDTEAM_DATABASE_URL`, `AIREDTEAM_BLOB_DIR` first). They then appear in the `/datasets` page of the UI and can be selected in **New run**.
+
+Inside Docker compose:
+
+```bash
+docker compose exec api airedteam seed-datasets
+```
+
+> The bundled samples are small subsets intended for smoke testing. For full evaluations, pull the upstream datasets via the `hf` dataset plugin (`repo: walledai/AdvBench` / `repo: walledai/HarmBench`) or upload your own JSON.
