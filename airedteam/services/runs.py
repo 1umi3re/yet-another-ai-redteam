@@ -79,8 +79,22 @@ class RunService:
                 stored_text = None
             else:
                 stored_text = text
+
+            attempt_id = str(uuid.uuid4())
+            conv_path: str | None = None
+            if ar.conversation:
+                conv_path = f"runs/{run_id}/conversations/{attempt_id}.json"
+                payload = json.dumps({
+                    "messages": [
+                        {"role": m.role, "text": m.text, "metadata": dict(m.metadata)}
+                        for m in ar.conversation
+                    ]
+                }).encode("utf-8")
+                await self._blob.put(conv_path, payload)
+
             async with self._sf() as s:
                 a = Attempt(
+                    id=attempt_id,
                     run_id=run_id,
                     target_id=target_name,
                     target_name=target_name,
@@ -89,6 +103,7 @@ class RunService:
                     converter_chain=ar.converter_chain,
                     response_text=stored_text,
                     response_blob_path=blob_path,
+                    conversation_blob_path=conv_path,
                     latency_ms=(ar.response.latency_ms if ar.response else None),
                     tokens_in=(ar.response.tokens_in if ar.response else None),
                     tokens_out=(ar.response.tokens_out if ar.response else None),
@@ -96,17 +111,6 @@ class RunService:
                     error=ar.error,
                 )
                 s.add(a); await s.commit(); await s.refresh(a)
-                if ar.conversation:
-                    conv_path = f"runs/{run_id}/conversations/{a.id}.json"
-                    payload = json.dumps({
-                        "messages": [
-                            {"role": m.role, "text": m.text, "metadata": dict(m.metadata)}
-                            for m in ar.conversation
-                        ]
-                    }).encode("utf-8")
-                    await self._blob.put(conv_path, payload)
-                    a.conversation_blob_path = conv_path
-                    await s.commit()
                 idx = len(attempt_id_by_index)
                 attempt_id_by_index[idx] = a.id
                 await s.execute(update(Run).where(Run.id == run_id).values(progress_done=Run.progress_done + 1))
