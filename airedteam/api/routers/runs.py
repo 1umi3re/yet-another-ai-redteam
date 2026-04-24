@@ -68,7 +68,7 @@ async def list_attempts(rid: str, _=Depends(require_admin), state: AppState = De
     async with state.session_factory() as s:
         rows = (await s.execute(select(Attempt).where(Attempt.run_id == rid).order_by(Attempt.created_at))).scalars().all()
         return [{
-            "id": a.id, "target_name": a.target_name, "dataset_item_id": a.dataset_item_id,
+            "id": a.id, "target_id": a.target_id, "target_name": a.target_name, "dataset_item_id": a.dataset_item_id,
             "prompt": a.prompt_text, "response": a.response_text, "response_blob_path": a.response_blob_path,
             "converter_chain": a.converter_chain, "status": a.status, "error": a.error,
             "latency_ms": a.latency_ms, "tokens_in": a.tokens_in, "tokens_out": a.tokens_out,

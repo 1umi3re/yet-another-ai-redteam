@@ -1,6 +1,6 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/auth";
-import { Shield, Target, Database, PlayCircle, ListChecks, LogOut, Sparkles } from "lucide-react";
+import { Shield, Target, Database, PlayCircle, ListChecks, LogOut, Sparkles, MessageSquare } from "lucide-react";
 import clsx from "clsx";
 
 const nav = [
@@ -9,6 +9,7 @@ const nav = [
   { to: "/datasets",  label: "Datasets",  icon: Database },
   { to: "/runs/new",  label: "New run",   icon: PlayCircle },
   { to: "/runs",      label: "Runs",      icon: ListChecks },
+  { to: "/manual",    label: "Manual Console", icon: MessageSquare },
 ];
 
 export default function Layout() {
