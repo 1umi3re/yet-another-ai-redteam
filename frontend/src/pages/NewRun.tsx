@@ -105,15 +105,18 @@ export default function NewRun() {
 
   const convSchemas: PluginSchemas = plugins?.params?.converters ?? {};
   const scorerSchemas: PluginSchemas = plugins?.params?.scorers ?? {};
+  const executorSchemas: PluginSchemas = plugins?.params?.executors ?? {};
 
   const [mode, setMode] = useState<"preset" | "custom">("preset");
   const [name, setName] = useState("My run");
   const [scenarioId, setScenarioId] = useState("");
   const [targetId, setTargetId] = useState("");
   const [datasetId, setDatasetId] = useState("");
+  const [executor, setExecutor] = useState<ConfiguredPlugin>({ plugin: "single_turn", params: {} });
   const [scorer, setScorer] = useState<ConfiguredPlugin>({ plugin: "refusal", params: {} });
   const [converters, setConverters] = useState<ConfiguredPlugin[]>([]);
 
+  const executorSchema = executorSchemas[executor.plugin];
   const scorerSchema = scorerSchemas[scorer.plugin];
 
   const toggleConverter = (c: string) => {
@@ -128,6 +131,13 @@ export default function NewRun() {
     setConverters(prev => prev.map((p, i) => i === idx ? { ...p, params: { ...p.params, [key]: v } } : p));
   };
 
+  const setExecutorPlugin = (p: string) => {
+    setExecutor({ plugin: p, params: defaultsFor(executorSchemas[p]) });
+  };
+  const updateExecutorParam = (key: string, v: any) => {
+    setExecutor(prev => ({ ...prev, params: { ...prev.params, [key]: v } }));
+  };
+
   const setScorerPlugin = (p: string) => {
     setScorer({ plugin: p, params: defaultsFor(scorerSchemas[p]) });
   };
@@ -138,6 +148,13 @@ export default function NewRun() {
   const paramValidation = useMemo(() => {
     const missing: string[] = [];
     if (mode === "custom") {
+      for (const [k, s] of Object.entries(executorSchema ?? {})) {
+        if (s.required) {
+          const v = executor.params[k];
+          const empty = v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0);
+          if (empty) missing.push(`executor.${k}`);
+        }
+      }
       for (const [k, s] of Object.entries(scorerSchema ?? {})) {
         if (s.required) {
           const v = scorer.params[k];
@@ -157,7 +174,7 @@ export default function NewRun() {
       }
     }
     return missing;
-  }, [mode, scorer, scorerSchema, converters, convSchemas]);
+  }, [mode, executor, executorSchema, scorer, scorerSchema, converters, convSchemas]);
 
   const submit = useMutation({
     mutationFn: async () => {
@@ -165,7 +182,7 @@ export default function NewRun() {
         name,
         targets: [{ config_id: targetId }],
         dataset: { config_id: datasetId },
-        executor: { plugin: "single_turn" },
+        executor: { plugin: executor.plugin, params: executor.params },
         scorers: [{ plugin: scorer.plugin, params: scorer.params }],
         converters: converters.map(c => ({ plugin: c.plugin, params: c.params })),
       };
@@ -263,9 +280,26 @@ export default function NewRun() {
         <Card>
           <CardHeader>
             <CardTitle>3. Pipeline</CardTitle>
-            <CardDescription>Converters mutate the prompt before it hits the target. Scorer classifies the response.</CardDescription>
+            <CardDescription>Executor orchestrates multi-turn conversations. Converters mutate the prompt. Scorer classifies the response.</CardDescription>
           </CardHeader>
           <CardBody className="space-y-6">
+            <div>
+              <Field label="Executor">
+                <Select value={executor.plugin} onChange={e => setExecutorPlugin(e.target.value)}>
+                  {plugins?.executors?.map((ex: string) => <option key={ex} value={ex}>{ex}</option>)}
+                </Select>
+              </Field>
+              {executorSchema && Object.keys(executorSchema).length > 0 && (
+                <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50/50 p-4 space-y-3">
+                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Executor params</div>
+                  {Object.entries(executorSchema).map(([k, s]) => (
+                    <ParamField key={k} name={k} schema={s} targets={targets ?? []}
+                      value={executor.params[k]} onChange={v => updateExecutorParam(k, v)} />
+                  ))}
+                </div>
+              )}
+            </div>
+
             <div>
               <Field label="Scorer">
                 <Select value={scorer.plugin} onChange={e => setScorerPlugin(e.target.value)}>
