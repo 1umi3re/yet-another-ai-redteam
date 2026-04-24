@@ -31,6 +31,9 @@ PARAM_SCHEMAS: dict[str, dict[str, dict]] = {
                          "default": "zero_width", "label": "Strategy"},
             "every": {"type": "string", "default": "2", "label": "Insert every N chars (zero_width only)"},
         },
+        "leetspeak": {
+            "case_sensitive": {"type": "bool", "default": False, "label": "Case sensitive"},
+        },
     },
     "executors": {
         "single_turn": {},
