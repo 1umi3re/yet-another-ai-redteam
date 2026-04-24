@@ -57,6 +57,7 @@ unicode_obfuscation = "airedteam.builtins.converters.unicode_obfuscation:Unicode
 leetspeak = "airedteam.builtins.converters.leetspeak:LeetspeakConverter"
 persona_role_play_prefix = "airedteam.builtins.converters.persona_role_play_prefix:PersonaRolePlayPrefixConverter"
 emoji_substitution = "airedteam.builtins.converters.emoji_substitution:EmojiSubstitutionConverter"
+translation_llm = "airedteam.builtins.converters.translation_llm:TranslationLLMConverter"
 
 [project.entry-points."airedteam.executors"]
 single_turn = "airedteam.builtins.executors.single_turn:SingleTurnExecutor"

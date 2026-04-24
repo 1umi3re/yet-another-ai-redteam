@@ -40,6 +40,10 @@ PARAM_SCHEMAS: dict[str, dict[str, dict]] = {
             "description": {"type": "text", "default": "", "label": "Custom description (optional)"},
         },
         "emoji_substitution": {},
+        "translation_llm": {
+            "translator_config_id": {"type": "target_ref", "required": True, "label": "Translator LLM"},
+            "target_language": {"type": "string", "default": "French", "label": "Target language"},
+        },
     },
     "executors": {
         "single_turn": {},

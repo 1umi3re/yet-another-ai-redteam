@@ -57,7 +57,18 @@ class RunService:
 
         targets = [build_target(r) for r in target_refs]
         dataset = build_dataset(ds_ref, blob_store=self._blob)
-        converters = [build_converter(c.model_dump()) for c in spec.converters]
+        
+        # Resolve converter-level target references (translator) before building.
+        converter_refs = []
+        for conv in spec.converters:
+            ref = conv.model_dump()
+            params = dict(ref.get("params") or {})
+            if ref.get("plugin") == "translation_llm" and "translator_config_id" in params:
+                tcid = params.pop("translator_config_id")
+                tgt_cfg = await self._targets.resolve_for_runtime(tcid)
+                params["translator"] = self._build_target_from_cfg(tgt_cfg)
+            converter_refs.append({"plugin": ref["plugin"], "params": params})
+        converters = [build_converter(r) for r in converter_refs]
         
         # Resolve executor-level target references (attacker) before building.
         executor_ref = spec.executor.model_dump()
