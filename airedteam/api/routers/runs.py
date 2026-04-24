@@ -104,3 +104,16 @@ async def sse(rid: str, state: AppState = Depends(get_state), token: str = ""):
             state.bus.unsubscribe(rid, queue)
 
     return EventSourceResponse(event_gen())
+
+
+@router.get("/runs/{rid}/attempts/{aid}/conversation")
+async def get_attempt_conversation(rid: str, aid: str, _=Depends(require_admin),
+                                   state: AppState = Depends(get_state)):
+    async with state.session_factory() as s:
+        a = await s.get(Attempt, aid)
+        if a is None or a.run_id != rid:
+            raise HTTPException(404)
+        if not a.conversation_blob_path:
+            return {"messages": []}
+        raw = await state.blob_store.get(a.conversation_blob_path)
+        return json.loads(raw.decode("utf-8"))

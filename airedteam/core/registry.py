@@ -35,6 +35,12 @@ class Registry:
             raise KeyError(f"{group}/{name} not registered")
         return item
 
+    def register(self, group: str, name: str, cls: Any) -> None:
+        """Register a plugin class in-process (primarily for tests)."""
+        assert group in GROUPS, group
+        self._load(group)  # ensure group initialized
+        self._cache[group][name] = cls
+
 
 _default: Registry | None = None
 

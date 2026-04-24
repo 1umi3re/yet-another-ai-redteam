@@ -1,4 +1,5 @@
 from __future__ import annotations
+import json
 import uuid
 import yaml
 from datetime import datetime
@@ -95,6 +96,17 @@ class RunService:
                     error=ar.error,
                 )
                 s.add(a); await s.commit(); await s.refresh(a)
+                if ar.conversation:
+                    conv_path = f"runs/{run_id}/conversations/{a.id}.json"
+                    payload = json.dumps({
+                        "messages": [
+                            {"role": m.role, "text": m.text, "metadata": dict(m.metadata)}
+                            for m in ar.conversation
+                        ]
+                    }).encode("utf-8")
+                    await self._blob.put(conv_path, payload)
+                    a.conversation_blob_path = conv_path
+                    await s.commit()
                 idx = len(attempt_id_by_index)
                 attempt_id_by_index[idx] = a.id
                 await s.execute(update(Run).where(Run.id == run_id).values(progress_done=Run.progress_done + 1))
