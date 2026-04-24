@@ -34,6 +34,11 @@ PARAM_SCHEMAS: dict[str, dict[str, dict]] = {
         "leetspeak": {
             "case_sensitive": {"type": "bool", "default": False, "label": "Case sensitive"},
         },
+        "persona_role_play_prefix": {
+            "persona": {"type": "enum", "options": ["DAN", "evil_twin", "grandma"],
+                        "default": "DAN", "label": "Persona"},
+            "description": {"type": "text", "default": "", "label": "Custom description (optional)"},
+        },
     },
     "executors": {
         "single_turn": {},
