@@ -1,0 +1,29 @@
+from __future__ import annotations
+import json
+import pytest
+import respx
+import httpx
+from airedteam.builtins.targets.openai_compat import OpenAICompatTarget
+from airedteam.core.types import Message
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_openai_chat_sends_message_list():
+    route = respx.post("https://oai.example.com/v1/chat/completions").mock(
+        return_value=httpx.Response(200, json={
+            "choices": [{"message": {"content": "pong"}}],
+            "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+        })
+    )
+    t = OpenAICompatTarget(name="t", base_url="https://oai.example.com/v1", model="m", api_key="k")
+    r = await t.chat([
+        Message(role="system", text="be concise"),
+        Message(role="user", text="ping"),
+    ])
+    assert r.text == "pong"
+    body = json.loads(route.calls.last.request.content)
+    assert body["messages"] == [
+        {"role": "system", "content": "be concise"},
+        {"role": "user", "content": "ping"},
+    ]
