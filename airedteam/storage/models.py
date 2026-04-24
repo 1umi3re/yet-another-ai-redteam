@@ -2,7 +2,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from sqlalchemy import (
-    String, Integer, DateTime, ForeignKey, JSON, LargeBinary, Text, Index
+    String, Integer, DateTime, ForeignKey, JSON, LargeBinary, Text, Index, Boolean
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -48,6 +48,7 @@ class Run(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    kind: Mapped[str] = mapped_column(String(20), default="automated")
     attempts = relationship("Attempt", back_populates="run", cascade="all, delete-orphan")
 
 
@@ -81,6 +82,10 @@ class Score(Base):
     value_json: Mapped[dict] = mapped_column(JSON)
     rationale: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    reviewer_label: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    reviewer_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reviewer_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     attempt = relationship("Attempt", back_populates="scores")
 
 
