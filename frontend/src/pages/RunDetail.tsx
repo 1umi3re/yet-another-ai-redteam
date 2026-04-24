@@ -1,5 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
-import { Link, useParams } from "react-router-dom";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
@@ -8,8 +8,9 @@ import { Card, CardBody, CardHeader, CardTitle, CardDescription } from "../compo
 import { Badge, StatusBadge } from "../components/ui/Badge";
 import { ProgressBar } from "../components/ui/ProgressBar";
 import { Button } from "../components/ui/Button";
-import { ArrowLeft, X, Clock, Hash, AlertCircle } from "lucide-react";
+import { ArrowLeft, X, Clock, Hash, AlertCircle, MessageSquare } from "lucide-react";
 import clsx from "clsx";
+import { toast } from "sonner";
 
 type Tab = "overview" | "attempts" | "events";
 
@@ -212,6 +213,7 @@ export default function RunDetail() {
 }
 
 function AttemptDetailDrawer({ attempt, scores, onClose }: { attempt: any | null; scores: any[]; onClose: () => void }) {
+  const nav = useNavigate();
   const { data: conversation } = useQuery({
     queryKey: ["attempt-conversation", attempt?.id],
     queryFn: async () => {
@@ -221,6 +223,19 @@ function AttemptDetailDrawer({ attempt, scores, onClose }: { attempt: any | null
       return res.data;
     },
     enabled: !!attempt,
+  });
+
+  const replayMut = useMutation({
+    mutationFn: async ({ name, target_id, attempt_id }: { name: string; target_id: string; attempt_id: string }) => {
+      const createRes = await api.post("/api/manual/runs", { name, target_id });
+      const runId = createRes.data.run_id;
+      const convRes = await api.post(`/api/manual/runs/${runId}/conversations`, { seed_attempt_id: attempt_id });
+      return { run_id: runId, attempt_id: convRes.data.attempt_id };
+    },
+    onSuccess: (data) => {
+      nav(`/manual?run=${data.run_id}&attempt=${data.attempt_id}`);
+    },
+    onError: () => toast.error("Failed to start replay"),
   });
 
   useEffect(() => {
@@ -233,6 +248,15 @@ function AttemptDetailDrawer({ attempt, scores, onClose }: { attempt: any | null
   if (!attempt) return null;
   const chain = Array.isArray(attempt.converter_chain) ? attempt.converter_chain : [];
   const messages = conversation?.messages ?? [];
+
+  const handleReplay = () => {
+    if (!attempt.target_id) {
+      toast.error("Cannot replay: target_id not available");
+      return;
+    }
+    const replayName = `Replay of attempt ${attempt.id.slice(0, 8)}`;
+    replayMut.mutate({ name: replayName, target_id: attempt.target_id, attempt_id: attempt.id });
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex">
@@ -268,6 +292,20 @@ function AttemptDetailDrawer({ attempt, scores, onClose }: { attempt: any | null
               </span>
             )}
           </div>
+
+          {messages.length > 0 && attempt.target_id && (
+            <div>
+              <Button 
+                variant="secondary" 
+                size="sm" 
+                onClick={handleReplay}
+                loading={replayMut.isPending}
+                icon={<MessageSquare className="h-3.5 w-3.5" />}
+              >
+                Replay in Manual Console
+              </Button>
+            </div>
+          )}
 
           {attempt.error && (
             <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 flex gap-2">
