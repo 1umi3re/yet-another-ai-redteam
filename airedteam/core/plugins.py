@@ -1,13 +1,38 @@
 from __future__ import annotations
-from typing import Any, AsyncIterator, Protocol, runtime_checkable
-from .types import Prompt, Response, AttemptResult, ScoreResult
+from typing import AsyncIterator, Protocol, runtime_checkable
+from .types import Prompt, Response, Message, AttemptResult, ScoreResult
 
 
 @runtime_checkable
 class Target(Protocol):
     name: str
     async def generate(self, prompt: Prompt) -> Response: ...
+    async def chat(self, messages: list[Message]) -> Response: ...
     async def aclose(self) -> None: ...
+
+
+class BaseTarget:
+    """Mixin/base that provides a default ``chat()`` in terms of ``generate()``.
+
+    Built-in Targets that speak a native messages API (OpenAI, Anthropic) should
+    override ``chat()``. Subclasses that only know single-turn generation can
+    inherit the fallback, which serializes the messages into a labelled text
+    block and calls ``generate()``.
+    """
+    name: str
+
+    async def generate(self, prompt: Prompt) -> Response:  # pragma: no cover - abstract
+        raise NotImplementedError
+
+    async def chat(self, messages: list[Message]) -> Response:
+        parts: list[str] = []
+        for m in messages:
+            parts.append(f"{m.role.upper()}: {m.text}")
+        assembled = "\n\n".join(parts) + "\n\nASSISTANT:"
+        return await self.generate(Prompt(text=assembled))
+
+    async def aclose(self) -> None:
+        return None
 
 
 @runtime_checkable
