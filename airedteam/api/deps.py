@@ -9,6 +9,7 @@ from airedteam.engine.progress import ProgressBus
 from airedteam.services.target_configs import TargetConfigService
 from airedteam.services.datasets import DatasetService
 from airedteam.services.runs import RunService
+from airedteam.services.manual import ManualService
 from .auth import verify_token
 
 
@@ -22,6 +23,7 @@ class AppState:
     targets: TargetConfigService
     datasets: DatasetService
     runs: RunService
+    manual: ManualService
 
 
 def build_state(settings: Settings | None = None) -> AppState:
@@ -36,7 +38,8 @@ def build_state(settings: Settings | None = None) -> AppState:
     runs = RunService(SessionLocal, blob, box, targets, datasets, bus,
                       response_inline_max_bytes=s.response_inline_max_bytes,
                       max_concurrency=s.max_concurrency)
-    return AppState(s, SessionLocal, blob, box, bus, targets, datasets, runs)
+    manual = ManualService(SessionLocal, blob, targets)
+    return AppState(s, SessionLocal, blob, box, bus, targets, datasets, runs, manual)
 
 
 _STATE: AppState | None = None
