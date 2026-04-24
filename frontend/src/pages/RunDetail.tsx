@@ -212,6 +212,17 @@ export default function RunDetail() {
 }
 
 function AttemptDetailDrawer({ attempt, scores, onClose }: { attempt: any | null; scores: any[]; onClose: () => void }) {
+  const { data: conversation } = useQuery({
+    queryKey: ["attempt-conversation", attempt?.id],
+    queryFn: async () => {
+      if (!attempt) return { messages: [] };
+      const runId = attempt.run_id;
+      const res = await api.get(`/api/runs/${runId}/attempts/${attempt.id}/conversation`);
+      return res.data;
+    },
+    enabled: !!attempt,
+  });
+
   useEffect(() => {
     if (!attempt) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -221,6 +232,7 @@ function AttemptDetailDrawer({ attempt, scores, onClose }: { attempt: any | null
 
   if (!attempt) return null;
   const chain = Array.isArray(attempt.converter_chain) ? attempt.converter_chain : [];
+  const messages = conversation?.messages ?? [];
 
   return (
     <div className="fixed inset-0 z-50 flex">
@@ -264,23 +276,49 @@ function AttemptDetailDrawer({ attempt, scores, onClose }: { attempt: any | null
             </div>
           )}
 
-          <Section title="Prompt">
-            <pre className="text-xs whitespace-pre-wrap break-words font-mono bg-gray-50 border border-gray-200 rounded-lg p-3 text-gray-800 max-h-64 overflow-auto">
+          {messages.length > 0 ? (
+            <Section title="Conversation">
+              <div className="space-y-3">
+                {messages.map((msg: any, i: number) => (
+                  <div key={i} className={clsx("flex", msg.role === "user" ? "justify-end" : "justify-start")}>
+                    <div className={clsx(
+                      "max-w-[80%] rounded-lg px-3 py-2",
+                      msg.role === "user" 
+                        ? "bg-gray-100 border border-gray-200" 
+                        : "bg-white border border-gray-300"
+                    )}>
+                      <div className="text-[10px] uppercase tracking-wider font-semibold text-gray-500 mb-1">
+                        {msg.role}
+                      </div>
+                      <pre className="text-xs whitespace-pre-wrap break-words font-mono text-gray-800">
+{msg.text}
+                      </pre>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Section>
+          ) : (
+            <>
+              <Section title="Prompt">
+                <pre className="text-xs whitespace-pre-wrap break-words font-mono bg-gray-50 border border-gray-200 rounded-lg p-3 text-gray-800 max-h-64 overflow-auto">
 {attempt.prompt ?? ""}
-            </pre>
-          </Section>
+                </pre>
+              </Section>
 
-          <Section title="Response">
-            {attempt.response ? (
-              <pre className="text-xs whitespace-pre-wrap break-words font-mono bg-gray-50 border border-gray-200 rounded-lg p-3 text-gray-800 max-h-96 overflow-auto">
+              <Section title="Response">
+                {attempt.response ? (
+                  <pre className="text-xs whitespace-pre-wrap break-words font-mono bg-gray-50 border border-gray-200 rounded-lg p-3 text-gray-800 max-h-96 overflow-auto">
 {attempt.response}
-              </pre>
-            ) : attempt.response_blob_path ? (
-              <div className="text-xs text-gray-500 italic">Response stored as blob: <span className="font-mono">{attempt.response_blob_path}</span></div>
-            ) : (
-              <div className="text-xs text-gray-400 italic">No response</div>
-            )}
-          </Section>
+                  </pre>
+                ) : attempt.response_blob_path ? (
+                  <div className="text-xs text-gray-500 italic">Response stored as blob: <span className="font-mono">{attempt.response_blob_path}</span></div>
+                ) : (
+                  <div className="text-xs text-gray-400 italic">No response</div>
+                )}
+              </Section>
+            </>
+          )}
 
           <Section title={scores.length > 1 ? `Scores (${scores.length})` : "Score"}>
             {scores.length === 0 ? (
