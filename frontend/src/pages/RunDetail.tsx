@@ -8,7 +8,7 @@ import { Card, CardBody, CardHeader, CardTitle, CardDescription } from "../compo
 import { Badge, StatusBadge } from "../components/ui/Badge";
 import { ProgressBar } from "../components/ui/ProgressBar";
 import { Button } from "../components/ui/Button";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, X, Clock, Hash, AlertCircle } from "lucide-react";
 import clsx from "clsx";
 
 type Tab = "overview" | "attempts" | "events";
@@ -18,6 +18,7 @@ export default function RunDetail() {
   const token = useAuth(s => s.token);
   const [events, setEvents] = useState<any[]>([]);
   const [tab, setTab] = useState<Tab>("overview");
+  const [detailAttemptId, setDetailAttemptId] = useState<string | null>(null);
 
   const { data: run } = useQuery({
     queryKey: ["run", id],
@@ -137,6 +138,7 @@ export default function RunDetail() {
                   <th className="text-left px-5 py-2.5">Prompt</th>
                   <th className="text-left px-5 py-2.5">Response</th>
                   <th className="text-left px-5 py-2.5">Score</th>
+                  <th className="px-5 py-2.5"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -144,18 +146,22 @@ export default function RunDetail() {
                   const sc = (scores as any[]).find((s: any) => s.attempt_id === a.id);
                   const refused = sc?.value?.label === true;
                   return (
-                    <tr key={a.id} className="align-top">
+                    <tr key={a.id} className="align-top hover:bg-gray-50/60">
                       <td className="px-5 py-3 font-medium whitespace-nowrap">{a.target_name}</td>
                       <td className="px-5 py-3 max-w-xs"><div className="truncate text-gray-700" title={a.prompt}>{a.prompt}</div></td>
                       <td className="px-5 py-3 max-w-md"><div className="truncate text-gray-600" title={a.response ?? ""}>{a.response ?? <span className="text-gray-400">(blob)</span>}</div></td>
                       <td className="px-5 py-3">
                         {sc ? (refused ? <Badge tone="green">refused</Badge> : <Badge tone="red">complied</Badge>) : <Badge>-</Badge>}
                       </td>
+                      <td className="px-5 py-3 text-right">
+                        <button onClick={() => setDetailAttemptId(a.id)}
+                          className="text-xs font-medium text-brand-600 hover:text-brand-700">View</button>
+                      </td>
                     </tr>
                   );
                 })}
                 {!(attempts as any[]).length && (
-                  <tr><td colSpan={4} className="px-5 py-10 text-center text-sm text-gray-500">No attempts yet.</td></tr>
+                  <tr><td colSpan={5} className="px-5 py-10 text-center text-sm text-gray-500">No attempts yet.</td></tr>
                 )}
               </tbody>
             </table>
@@ -176,6 +182,140 @@ export default function RunDetail() {
           </CardBody>
         </Card>
       )}
+
+      <AttemptDetailDrawer
+        attempt={detailAttemptId ? (attempts as any[]).find(a => a.id === detailAttemptId) ?? null : null}
+        scores={detailAttemptId ? (scores as any[]).filter(s => s.attempt_id === detailAttemptId) : []}
+        onClose={() => setDetailAttemptId(null)}
+      />
+    </div>
+  );
+}
+
+function AttemptDetailDrawer({ attempt, scores, onClose }: { attempt: any | null; scores: any[]; onClose: () => void }) {
+  useEffect(() => {
+    if (!attempt) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [attempt, onClose]);
+
+  if (!attempt) return null;
+  const chain = Array.isArray(attempt.converter_chain) ? attempt.converter_chain : [];
+
+  return (
+    <div className="fixed inset-0 z-50 flex">
+      <div className="flex-1 bg-gray-900/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="w-full max-w-2xl bg-white shadow-2xl overflow-y-auto border-l border-gray-200">
+        <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-white/90 backdrop-blur">
+          <div>
+            <div className="text-xs text-gray-500">Attempt</div>
+            <div className="font-semibold text-gray-900">{attempt.target_name}</div>
+            <div className="text-[10px] font-mono text-gray-400 mt-0.5">{attempt.id}</div>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 p-1 rounded hover:bg-gray-100">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="px-6 py-5 space-y-5">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
+            <StatusBadge status={attempt.status} />
+            {typeof attempt.latency_ms === "number" && (
+              <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" />{attempt.latency_ms} ms</span>
+            )}
+            {(attempt.tokens_in != null || attempt.tokens_out != null) && (
+              <span className="inline-flex items-center gap-1">
+                <Hash className="h-3 w-3" />
+                in {attempt.tokens_in ?? "-"} / out {attempt.tokens_out ?? "-"}
+              </span>
+            )}
+            {chain.length > 0 && (
+              <span className="inline-flex items-center gap-1">
+                converters:
+                {chain.map((c: string, i: number) => <Badge key={i}>{c}</Badge>)}
+              </span>
+            )}
+          </div>
+
+          {attempt.error && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 flex gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+              <span className="font-mono whitespace-pre-wrap break-words">{attempt.error}</span>
+            </div>
+          )}
+
+          <Section title="Prompt">
+            <pre className="text-xs whitespace-pre-wrap break-words font-mono bg-gray-50 border border-gray-200 rounded-lg p-3 text-gray-800 max-h-64 overflow-auto">
+{attempt.prompt ?? ""}
+            </pre>
+          </Section>
+
+          <Section title="Response">
+            {attempt.response ? (
+              <pre className="text-xs whitespace-pre-wrap break-words font-mono bg-gray-50 border border-gray-200 rounded-lg p-3 text-gray-800 max-h-96 overflow-auto">
+{attempt.response}
+              </pre>
+            ) : attempt.response_blob_path ? (
+              <div className="text-xs text-gray-500 italic">Response stored as blob: <span className="font-mono">{attempt.response_blob_path}</span></div>
+            ) : (
+              <div className="text-xs text-gray-400 italic">No response</div>
+            )}
+          </Section>
+
+          <Section title={scores.length > 1 ? `Scores (${scores.length})` : "Score"}>
+            {scores.length === 0 ? (
+              <div className="text-xs text-gray-400 italic">No score yet</div>
+            ) : (
+              <div className="space-y-3">
+                {scores.map((s, i) => <ScoreCard key={i} score={s} />)}
+              </div>
+            )}
+          </Section>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5">{title}</div>
+      {children}
+    </div>
+  );
+}
+
+function ScoreCard({ score }: { score: any }) {
+  const v = score?.value ?? {};
+  const label = v.label;
+  const tone = label === true ? "green" : label === false ? "red" : undefined;
+  const labelText = label === true ? "refused" : label === false ? "complied" : String(label ?? "—");
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-3 space-y-2">
+      <div className="flex items-center gap-2 text-xs">
+        <span className="font-medium text-gray-700">{score.scorer}</span>
+        <Badge tone={tone as any}>{labelText}</Badge>
+        {typeof v.confidence === "number" && (
+          <span className="text-gray-500">confidence {v.confidence.toFixed(2)}</span>
+        )}
+        {typeof v.score === "number" && (
+          <span className="text-gray-500">score {v.score}</span>
+        )}
+      </div>
+      {score.rationale && (
+        <div className="text-xs text-gray-700 leading-relaxed">{score.rationale}</div>
+      )}
+      {v.rationale && v.rationale !== score.rationale && (
+        <div className="text-xs text-gray-700 leading-relaxed">{v.rationale}</div>
+      )}
+      <details className="text-[11px] text-gray-500">
+        <summary className="cursor-pointer hover:text-gray-700">Raw value</summary>
+        <pre className="mt-1 bg-gray-50 border border-gray-200 rounded p-2 font-mono overflow-auto max-h-48">
+{JSON.stringify(v, null, 2)}
+        </pre>
+      </details>
     </div>
   );
 }
