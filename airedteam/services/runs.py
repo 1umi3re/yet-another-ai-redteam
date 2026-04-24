@@ -62,11 +62,16 @@ class RunService:
         # Resolve executor-level target references (attacker) before building.
         executor_ref = spec.executor.model_dump()
         executor_params = dict(executor_ref.get("params") or {})
-        if executor_ref.get("plugin") == "crescendo" and "attacker_config_id" in executor_params:
+        plugin_name = executor_ref.get("plugin")
+        if plugin_name in ("crescendo", "pair") and "attacker_config_id" in executor_params:
             aid = executor_params.pop("attacker_config_id")
             tgt_cfg = await self._targets.resolve_for_runtime(aid)
             executor_params["attacker"] = self._build_target_from_cfg(tgt_cfg)
-        executor = build_executor({"plugin": executor_ref["plugin"], "params": executor_params})
+        if plugin_name == "pair" and "judge_config_id" in executor_params:
+            jid = executor_params.pop("judge_config_id")
+            jcfg = await self._targets.resolve_for_runtime(jid)
+            executor_params["judge"] = self._build_target_from_cfg(jcfg)
+        executor = build_executor({"plugin": plugin_name, "params": executor_params})
         
         scorers = []
         for sc in spec.scorers:
