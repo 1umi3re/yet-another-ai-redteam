@@ -27,3 +27,22 @@ async def test_openai_chat_sends_message_list():
         {"role": "system", "content": "be concise"},
         {"role": "user", "content": "ping"},
     ]
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_openai_chat_forwards_temperature():
+    route = respx.post("https://oai.example.com/v1/chat/completions").mock(
+        return_value=httpx.Response(200, json={
+            "choices": [{"message": {"content": "ok"}}],
+            "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+        })
+    )
+    t = OpenAICompatTarget(
+        name="t", base_url="https://oai.example.com/v1", model="m", api_key="k",
+        temperature=0.5,
+    )
+    await t.chat([Message(role="user", text="hi")])
+    body = json.loads(route.calls.last.request.content)
+    assert body["temperature"] == 0.5
+    await t.aclose()
