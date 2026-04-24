@@ -81,7 +81,17 @@ async def list_scores(rid: str, _=Depends(require_admin), state: AppState = Depe
         rows = (await s.execute(
             select(Score, Attempt).join(Attempt, Score.attempt_id == Attempt.id).where(Attempt.run_id == rid)
         )).all()
-        return [{"attempt_id": a.id, "scorer": sc.scorer, "value": sc.value_json, "rationale": sc.rationale} for sc, a in rows]
+        return [{
+            "id": sc.id,
+            "attempt_id": a.id,
+            "scorer": sc.scorer,
+            "value": sc.value_json,
+            "rationale": sc.rationale,
+            "reviewer_label": sc.reviewer_label,
+            "reviewer_notes": sc.reviewer_notes,
+            "reviewer_id": sc.reviewer_id,
+            "reviewed_at": sc.reviewed_at.isoformat() if sc.reviewed_at else None,
+        } for sc, a in rows]
 
 
 @router.get("/runs/{rid}/events")
@@ -117,3 +127,37 @@ async def get_attempt_conversation(rid: str, aid: str, _=Depends(require_admin),
             return {"messages": []}
         raw = await state.blob_store.get(a.conversation_blob_path)
         return json.loads(raw.decode("utf-8"))
+
+
+class AnnotationIn(BaseModel):
+    reviewer_label: bool | None = None
+    reviewer_notes: str | None = None
+
+
+@router.patch("/runs/{rid}/scores/{sid}")
+async def annotate_score(rid: str, sid: str, ann: AnnotationIn,
+                         admin=Depends(require_admin), state: AppState = Depends(get_state)):
+    from datetime import datetime
+    async with state.session_factory() as s:
+        sc = await s.get(Score, sid)
+        if sc is None:
+            raise HTTPException(404)
+        att = await s.get(Attempt, sc.attempt_id)
+        if att is None or att.run_id != rid:
+            raise HTTPException(404)
+        sc.reviewer_label = ann.reviewer_label
+        sc.reviewer_notes = ann.reviewer_notes
+        sc.reviewer_id = admin if isinstance(admin, str) else getattr(admin, "id", "admin")
+        sc.reviewed_at = datetime.utcnow()
+        await s.commit()
+        return {
+            "id": sc.id,
+            "attempt_id": sc.attempt_id,
+            "scorer": sc.scorer,
+            "value": sc.value_json,
+            "rationale": sc.rationale,
+            "reviewer_label": sc.reviewer_label,
+            "reviewer_notes": sc.reviewer_notes,
+            "reviewer_id": sc.reviewer_id,
+            "reviewed_at": sc.reviewed_at.isoformat() if sc.reviewed_at else None,
+        }
