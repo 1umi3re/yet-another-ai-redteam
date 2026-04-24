@@ -115,6 +115,10 @@ export default function NewRun() {
   const [executor, setExecutor] = useState<ConfiguredPlugin>({ plugin: "single_turn", params: {} });
   const [scorer, setScorer] = useState<ConfiguredPlugin>({ plugin: "refusal", params: {} });
   const [converters, setConverters] = useState<ConfiguredPlugin[]>([]);
+  const [samplingEnabled, setSamplingEnabled] = useState(false);
+  const [samplingLimit, setSamplingLimit] = useState<string>("");
+  const [samplingShuffle, setSamplingShuffle] = useState(false);
+  const [samplingSeed, setSamplingSeed] = useState<string>("");
 
   const executorSchema = executorSchemas[executor.plugin];
   const scorerSchema = scorerSchemas[scorer.plugin];
@@ -187,6 +191,16 @@ export default function NewRun() {
         converters: converters.map(c => ({ plugin: c.plugin, params: c.params })),
       };
       if (mode === "preset") base.scenario = scenarioId;
+      
+      // Add sampling if enabled
+      if (samplingEnabled) {
+        base.sampling = {
+          limit: samplingLimit ? parseInt(samplingLimit, 10) : null,
+          shuffle: samplingShuffle,
+          seed: samplingShuffle && samplingSeed ? parseInt(samplingSeed, 10) : null,
+        };
+      }
+      
       const r = await api.post("/api/runs", { name, runspec: base });
       await api.post(`/api/runs/${r.data.id}/start`);
       nav(`/runs/${r.data.id}`);
@@ -272,6 +286,58 @@ export default function NewRun() {
                 {datasets?.map((d: any) => <option key={d.id} value={d.id}>{d.name}</option>)}
               </Select>
             </Field>
+          </div>
+          
+          <div className="mt-5">
+            <div className="flex items-center gap-2 mb-3">
+              <input
+                type="checkbox"
+                id="sampling-toggle"
+                checked={samplingEnabled}
+                onChange={e => setSamplingEnabled(e.target.checked)}
+                className="h-4 w-4 text-brand-600 rounded border-gray-300"
+              />
+              <label htmlFor="sampling-toggle" className="text-sm font-medium text-gray-700 cursor-pointer">
+                Dataset sampling (optional)
+              </label>
+            </div>
+            
+            {samplingEnabled && (
+              <div className="rounded-lg border border-gray-200 bg-gray-50/50 p-4 space-y-3">
+                <Field label="Limit" hint="Maximum number of items to process (blank = no limit)">
+                  <Input
+                    type="number"
+                    min="1"
+                    placeholder="e.g., 50"
+                    value={samplingLimit}
+                    onChange={e => setSamplingLimit(e.target.value)}
+                  />
+                </Field>
+                
+                <Field label="Shuffle">
+                  <label className="inline-flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={samplingShuffle}
+                      onChange={e => setSamplingShuffle(e.target.checked)}
+                      className="h-4 w-4 text-brand-600 rounded border-gray-300"
+                    />
+                    <span className="text-gray-600">Randomize dataset order</span>
+                  </label>
+                </Field>
+                
+                {samplingShuffle && (
+                  <Field label="Seed" hint="Random seed for deterministic shuffle (optional)">
+                    <Input
+                      type="number"
+                      placeholder="e.g., 42"
+                      value={samplingSeed}
+                      onChange={e => setSamplingSeed(e.target.value)}
+                    />
+                  </Field>
+                )}
+              </div>
+            )}
           </div>
         </CardBody>
       </Card>

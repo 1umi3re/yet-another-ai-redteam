@@ -8,6 +8,7 @@ from airedteam.storage.models import Run, Attempt, Score
 from airedteam.engine.run_engine import RunEngine
 from airedteam.engine.orchestrator import DefaultOrchestrator
 from airedteam.engine.factory import build_converter, build_scorer, build_executor, build_target, build_dataset
+from airedteam.engine.sampling import SampledDataset
 from airedteam.runspec.models import RunSpec
 
 
@@ -57,6 +58,15 @@ class RunService:
 
         targets = [build_target(r) for r in target_refs]
         dataset = build_dataset(ds_ref, blob_store=self._blob)
+        
+        # Apply sampling if configured
+        if spec.sampling is not None:
+            dataset = SampledDataset(
+                dataset,
+                limit=spec.sampling.limit,
+                shuffle=spec.sampling.shuffle,
+                seed=spec.sampling.seed
+            )
         
         # Resolve converter-level target references (translator) before building.
         converter_refs = []

@@ -9,6 +9,12 @@ class PluginRef(BaseModel):
     params: dict[str, Any] = Field(default_factory=dict)
 
 
+class Sampling(BaseModel):
+    limit: int | None = None
+    shuffle: bool = False
+    seed: int | None = None
+
+
 class RunSpec(BaseModel):
     version: int = 1
     name: str
@@ -18,3 +24,4 @@ class RunSpec(BaseModel):
     executor: PluginRef
     scorers: list[PluginRef] = Field(default_factory=list)
     concurrency: int = 4
+    sampling: Sampling | None = None
