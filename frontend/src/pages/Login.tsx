@@ -2,29 +2,62 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
+import { Card, CardBody } from "../components/ui/Card";
+import { Button } from "../components/ui/Button";
+import { Input } from "../components/ui/Form";
+import { Shield } from "lucide-react";
+import { toast } from "sonner";
 
 export default function Login() {
   const [pw, setPw] = useState("");
-  const [err, setErr] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const setToken = useAuth(s => s.setToken);
   const nav = useNavigate();
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    setErr(null);
+    setLoading(true);
     try {
       const r = await api.post("/api/login", { password: pw });
       setToken(r.data.token);
-      nav("/runs");
-    } catch { setErr("Invalid password"); }
+      nav("/dashboard");
+    } catch {
+      toast.error("Invalid password");
+    } finally {
+      setLoading(false);
+    }
   }
   return (
-    <div className="max-w-sm mx-auto mt-24 p-6 border rounded space-y-3">
-      <h1 className="text-xl font-bold">airedteam login</h1>
-      <form onSubmit={submit} className="space-y-2">
-        <input type="password" className="w-full border rounded px-2 py-1" placeholder="admin password" value={pw} onChange={e => setPw(e.target.value)} />
-        <button className="px-3 py-1 bg-black text-white rounded" type="submit">Sign in</button>
-      </form>
-      {err && <div className="text-red-600 text-sm">{err}</div>}
+    <div className="min-h-screen bg-gradient-to-br from-brand-50 via-gray-50 to-white flex items-center justify-center p-6">
+      <div className="w-full max-w-sm">
+        <div className="flex items-center gap-3 mb-6 justify-center">
+          <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center text-white shadow-soft">
+            <Shield className="h-5 w-5" />
+          </div>
+          <div>
+            <div className="text-lg font-bold tracking-tight">airedteam</div>
+            <div className="text-xs text-gray-500 -mt-0.5">AI red-team console</div>
+          </div>
+        </div>
+        <Card>
+          <CardBody>
+            <h1 className="text-base font-semibold mb-1">Sign in</h1>
+            <p className="text-sm text-gray-500 mb-5">Enter your admin password to continue.</p>
+            <form onSubmit={submit} className="space-y-3">
+              <Input
+                type="password"
+                autoFocus
+                placeholder="admin password"
+                value={pw}
+                onChange={e => setPw(e.target.value)}
+              />
+              <Button type="submit" loading={loading} className="w-full justify-center">Sign in</Button>
+            </form>
+          </CardBody>
+        </Card>
+        <p className="text-xs text-gray-400 text-center mt-4">
+          Configure AIREDTEAM_ADMIN_PASSWORD in your .env
+        </p>
+      </div>
     </div>
   );
 }

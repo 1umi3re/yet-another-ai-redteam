@@ -1,23 +1,58 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/auth";
+import { Shield, Target, Database, PlayCircle, ListChecks, LogOut, Sparkles } from "lucide-react";
+import clsx from "clsx";
+
+const nav = [
+  { to: "/dashboard", label: "Dashboard", icon: Sparkles },
+  { to: "/targets",   label: "Targets",   icon: Target },
+  { to: "/datasets",  label: "Datasets",  icon: Database },
+  { to: "/runs/new",  label: "New run",   icon: PlayCircle },
+  { to: "/runs",      label: "Runs",      icon: ListChecks },
+];
 
 export default function Layout() {
   const setToken = useAuth(s => s.setToken);
-  const nav = useNavigate();
-  const link = "px-3 py-1 rounded hover:bg-gray-200";
+  const navigate = useNavigate();
   return (
-    <div className="min-h-screen flex flex-col">
-      <header className="border-b p-3 flex gap-2 items-center">
-        <span className="font-bold mr-4">airedteam</span>
-        <NavLink to="/targets" className={link}>Targets</NavLink>
-        <NavLink to="/datasets" className={link}>Datasets</NavLink>
-        <NavLink to="/runs" className={link}>Runs</NavLink>
-        <NavLink to="/runs/new" className={link}>New run</NavLink>
-        <div className="ml-auto">
-          <button className={link} onClick={() => { setToken(null); nav("/login"); }}>Logout</button>
+    <div className="min-h-screen flex bg-gray-50">
+      <aside className="w-60 shrink-0 bg-white border-r border-gray-200 flex flex-col">
+        <div className="h-16 flex items-center gap-2 px-5 border-b border-gray-100">
+          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center text-white shadow-soft">
+            <Shield className="h-4 w-4" />
+          </div>
+          <div>
+            <div className="text-sm font-bold tracking-tight">airedteam</div>
+            <div className="text-[10px] text-gray-500 -mt-0.5">AI red-team console</div>
+          </div>
         </div>
-      </header>
-      <main className="flex-1 p-4"><Outlet /></main>
+        <nav className="p-3 space-y-0.5 flex-1">
+          {nav.map(({ to, label, icon: Icon }) => (
+            <NavLink key={to} to={to} className={({ isActive }) => clsx(
+              "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition",
+              isActive ? "bg-brand-50 text-brand-700 font-medium" : "text-gray-700 hover:bg-gray-100"
+            )}>
+              <Icon className="h-4 w-4" />
+              {label}
+            </NavLink>
+          ))}
+        </nav>
+        <div className="p-3 border-t border-gray-100">
+          <button
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-700 hover:bg-gray-100"
+            onClick={() => { setToken(null); navigate("/login"); }}
+          >
+            <LogOut className="h-4 w-4" /> Sign out
+          </button>
+        </div>
+      </aside>
+      <main className="flex-1 min-w-0 flex flex-col">
+        <div className="flex-1 overflow-auto">
+          <div className="max-w-6xl mx-auto px-8 py-8">
+            <Outlet />
+          </div>
+        </div>
+      </main>
     </div>
   );
 }
