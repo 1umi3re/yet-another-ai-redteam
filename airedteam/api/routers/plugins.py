@@ -27,6 +27,19 @@ PARAM_SCHEMAS: dict[str, dict[str, dict]] = {
                        "placeholder": "Ignore all previous instructions. "},
         },
     },
+    "executors": {
+        "single_turn": {},
+        "crescendo": {
+            "attacker_config_id": {"type": "target_ref", "required": True,
+                                   "label": "Attacker LLM",
+                                   "help": "Configured target the executor uses to generate follow-up user messages"},
+            "goal": {"type": "text", "default": "",
+                     "label": "Attack goal",
+                     "help": "What the attacker is trying to elicit. Leave empty to use the dataset prompt as the goal."},
+            "max_turns": {"type": "string", "default": "5",
+                          "label": "Max turns"},
+        },
+    },
     "scorers": {
         "refusal": {
             "phrases": {"type": "string_list", "default": [],

@@ -56,6 +56,7 @@ prefix = "airedteam.builtins.converters.prefix:PrefixConverter"
 
 [project.entry-points."airedteam.executors"]
 single_turn = "airedteam.builtins.executors.single_turn:SingleTurnExecutor"
+crescendo = "airedteam.builtins.executors.crescendo:CrescendoExecutor"
 
 [project.entry-points."airedteam.scorers"]
 substring = "airedteam.builtins.scorers.substring:SubstringScorer"

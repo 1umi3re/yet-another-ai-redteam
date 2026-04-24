@@ -36,6 +36,12 @@ class RunService:
                 return await self._datasets.resolve_for_runtime(ref.config_id)
         return {"plugin": ref.plugin, "params": ref.params}
 
+    def _build_target_from_cfg(self, runtime_cfg: dict):
+        """Build a Target instance from a resolved target-config dict
+        (as returned by TargetConfigService.resolve_for_runtime).
+        """
+        return build_target(runtime_cfg)
+
     async def execute_run(self, run_id: str) -> None:
         async with self._sf() as s:
             run = await s.get(Run, run_id)
@@ -52,7 +58,16 @@ class RunService:
         targets = [build_target(r) for r in target_refs]
         dataset = build_dataset(ds_ref, blob_store=self._blob)
         converters = [build_converter(c.model_dump()) for c in spec.converters]
-        executor = build_executor(spec.executor.model_dump())
+        
+        # Resolve executor-level target references (attacker) before building.
+        executor_ref = spec.executor.model_dump()
+        executor_params = dict(executor_ref.get("params") or {})
+        if executor_ref.get("plugin") == "crescendo" and "attacker_config_id" in executor_params:
+            aid = executor_params.pop("attacker_config_id")
+            tgt_cfg = await self._targets.resolve_for_runtime(aid)
+            executor_params["attacker"] = self._build_target_from_cfg(tgt_cfg)
+        executor = build_executor({"plugin": executor_ref["plugin"], "params": executor_params})
+        
         scorers = []
         for sc in spec.scorers:
             ref = sc.model_dump()
@@ -65,7 +80,7 @@ class RunService:
                         "(id of a configured target to use as the judge)"
                     )
                 judge_ref = await self._targets.resolve_for_runtime(judge_cfg_id)
-                params["judge"] = build_target(judge_ref)
+                params["judge"] = self._build_target_from_cfg(judge_ref)
             scorers.append(build_scorer({"plugin": ref["plugin"], "params": params}))
 
         attempt_id_by_index: dict[int, str] = {}
