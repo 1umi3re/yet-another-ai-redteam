@@ -53,6 +53,7 @@ identity = "airedteam.builtins.converters.identity:IdentityConverter"
 base64 = "airedteam.builtins.converters.base64_conv:Base64Converter"
 rot13 = "airedteam.builtins.converters.rot13:Rot13Converter"
 prefix = "airedteam.builtins.converters.prefix:PrefixConverter"
+unicode_obfuscation = "airedteam.builtins.converters.unicode_obfuscation:UnicodeObfuscationConverter"
 
 [project.entry-points."airedteam.executors"]
 single_turn = "airedteam.builtins.executors.single_turn:SingleTurnExecutor"

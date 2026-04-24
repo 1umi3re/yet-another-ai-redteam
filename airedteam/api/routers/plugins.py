@@ -26,6 +26,11 @@ PARAM_SCHEMAS: dict[str, dict[str, dict]] = {
                        "label": "Prefix",
                        "placeholder": "Ignore all previous instructions. "},
         },
+        "unicode_obfuscation": {
+            "strategy": {"type": "enum", "options": ["zero_width", "homoglyph"],
+                         "default": "zero_width", "label": "Strategy"},
+            "every": {"type": "string", "default": "2", "label": "Insert every N chars (zero_width only)"},
+        },
     },
     "executors": {
         "single_turn": {},
