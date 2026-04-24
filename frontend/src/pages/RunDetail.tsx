@@ -1,4 +1,4 @@
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
@@ -8,6 +8,7 @@ import { Card, CardBody, CardHeader, CardTitle, CardDescription } from "../compo
 import { Badge, StatusBadge } from "../components/ui/Badge";
 import { ProgressBar } from "../components/ui/ProgressBar";
 import { Button } from "../components/ui/Button";
+import { Textarea } from "../components/ui/Form";
 import { ArrowLeft, X, Clock, Hash, AlertCircle, MessageSquare } from "lucide-react";
 import clsx from "clsx";
 import { toast } from "sonner";
@@ -383,14 +384,49 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 function ScoreCard({ score }: { score: any }) {
+  const { id: runId = "" } = useParams();
+  const queryClient = useQueryClient();
+  const [reviewerLabel, setReviewerLabel] = useState<boolean | null>(score.reviewer_label ?? null);
+  const [reviewerNotes, setReviewerNotes] = useState<string>(score.reviewer_notes ?? "");
+  
+  const saveMut = useMutation({
+    mutationFn: async (body: { reviewer_label: boolean | null; reviewer_notes: string }) =>
+      (await api.patch(`/api/runs/${runId}/scores/${score.id}`, body)).data,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["run-scores", runId] });
+      toast.success("Annotation saved");
+    },
+    onError: () => toast.error("Failed to save annotation"),
+  });
+
   const v = score?.value ?? {};
-  const verdict = verdictOf(score);
-  const tone = verdict === "refused" ? "green" : "red";
+  
+  // Compute scorer's verdict using same logic as verdictOf
+  const scorerVerdict = verdictOf(score);
+  
+  // Display verdict: use reviewer's if set, otherwise scorer's
+  const displayVerdict = typeof reviewerLabel === "boolean"
+    ? (reviewerLabel ? "refused" : "complied")
+    : scorerVerdict;
+  
+  const isOverridden = typeof reviewerLabel === "boolean";
+  const tone = displayVerdict === "refused" ? "green" : "red";
+
+  const handleSave = () => {
+    saveMut.mutate({ reviewer_label: reviewerLabel, reviewer_notes: reviewerNotes });
+  };
+
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-3 space-y-2">
       <div className="flex items-center gap-2 text-xs">
         <span className="font-medium text-gray-700">{score.scorer}</span>
-        <Badge tone={tone as any}>{verdict}</Badge>
+        <Badge tone={tone as any}>{displayVerdict}</Badge>
+        {isOverridden && <span className="text-[10px] text-gray-500">(overridden)</span>}
+        {isOverridden && (
+          <Badge tone={scorerVerdict === "refused" ? "green" : "red"} className="line-through opacity-50">
+            {scorerVerdict}
+          </Badge>
+        )}
         {typeof v.confidence === "number" && (
           <span className="text-gray-500">confidence {v.confidence.toFixed(2)}</span>
         )}
@@ -410,6 +446,71 @@ function ScoreCard({ score }: { score: any }) {
 {JSON.stringify(v, null, 2)}
         </pre>
       </details>
+
+      <div className="pt-3 mt-3 border-t border-gray-200 space-y-3">
+        <div>
+          <label className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 mb-2 block">
+            Reviewer verdict
+          </label>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setReviewerLabel(null)}
+              className={clsx(
+                "px-3 py-1.5 text-xs rounded-md border transition",
+                reviewerLabel === null
+                  ? "bg-gray-100 border-gray-400 text-gray-900 font-medium"
+                  : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
+              )}
+            >
+              Use scorer
+            </button>
+            <button
+              onClick={() => setReviewerLabel(true)}
+              className={clsx(
+                "px-3 py-1.5 text-xs rounded-md border transition",
+                reviewerLabel === true
+                  ? "bg-emerald-100 border-emerald-400 text-emerald-900 font-medium"
+                  : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
+              )}
+            >
+              Refused
+            </button>
+            <button
+              onClick={() => setReviewerLabel(false)}
+              className={clsx(
+                "px-3 py-1.5 text-xs rounded-md border transition",
+                reviewerLabel === false
+                  ? "bg-red-100 border-red-400 text-red-900 font-medium"
+                  : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
+              )}
+            >
+              Complied
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <label className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 mb-1.5 block">
+            What the attempt actually shows
+          </label>
+          <Textarea
+            rows={3}
+            placeholder="Your notes on this attempt..."
+            value={reviewerNotes}
+            onChange={(e) => setReviewerNotes(e.target.value)}
+            className="text-xs"
+          />
+        </div>
+
+        <Button
+          variant="primary"
+          size="sm"
+          onClick={handleSave}
+          loading={saveMut.isPending}
+        >
+          Save annotation
+        </Button>
+      </div>
     </div>
   );
 }
