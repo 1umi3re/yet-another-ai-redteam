@@ -1,14 +1,100 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { api } from "../lib/api";
 import { Card, CardBody, CardHeader, CardTitle, CardDescription } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
-import { Input, Select, Field } from "../components/ui/Form";
+import { Input, Select, Field, Textarea } from "../components/ui/Form";
 import { Badge } from "../components/ui/Badge";
-import { PlayCircle, Sparkles, Wrench } from "lucide-react";
+import { PlayCircle, Sparkles, Wrench, X } from "lucide-react";
 import clsx from "clsx";
 import { toast } from "sonner";
+
+type ParamSchema = {
+  type: "bool" | "string" | "text" | "string_list" | "enum" | "target_ref";
+  required?: boolean;
+  default?: any;
+  label?: string;
+  help?: string;
+  placeholder?: string;
+  options?: string[];
+};
+type PluginSchemas = Record<string, Record<string, ParamSchema>>;
+type ConfiguredPlugin = { plugin: string; params: Record<string, any> };
+
+function defaultsFor(schema: Record<string, ParamSchema> | undefined): Record<string, any> {
+  if (!schema) return {};
+  const out: Record<string, any> = {};
+  for (const [k, s] of Object.entries(schema)) {
+    if (s.default !== undefined) out[k] = s.default;
+    else if (s.type === "bool") out[k] = false;
+    else if (s.type === "string_list") out[k] = [];
+    else out[k] = "";
+  }
+  return out;
+}
+
+function ParamField({
+  name, schema, value, onChange, targets,
+}: {
+  name: string; schema: ParamSchema; value: any;
+  onChange: (v: any) => void;
+  targets: any[];
+}) {
+  const label = (schema.label ?? name) + (schema.required ? " *" : "");
+  const common = { label, hint: schema.help } as const;
+  switch (schema.type) {
+    case "bool":
+      return (
+        <Field {...common}>
+          <label className="inline-flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={!!value} onChange={e => onChange(e.target.checked)} />
+            <span className="text-gray-600">{schema.help ?? "Enabled"}</span>
+          </label>
+        </Field>
+      );
+    case "enum":
+      return (
+        <Field {...common}>
+          <Select value={value ?? ""} onChange={e => onChange(e.target.value)}>
+            {(schema.options ?? []).map(o => <option key={o} value={o}>{o}</option>)}
+          </Select>
+        </Field>
+      );
+    case "target_ref":
+      return (
+        <Field {...common}>
+          <Select value={value ?? ""} onChange={e => onChange(e.target.value)}>
+            <option value="">-- pick target --</option>
+            {targets.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </Select>
+        </Field>
+      );
+    case "text":
+      return (
+        <Field {...common}>
+          <Textarea rows={4} placeholder={schema.placeholder}
+            value={value ?? ""} onChange={e => onChange(e.target.value)} />
+        </Field>
+      );
+    case "string_list":
+      return (
+        <Field {...common} hint={(schema.help ?? "") + " (one per line)"}>
+          <Textarea rows={3} placeholder={schema.placeholder}
+            value={Array.isArray(value) ? value.join("\n") : ""}
+            onChange={e => onChange(e.target.value.split("\n").map(s => s.trim()).filter(Boolean))} />
+        </Field>
+      );
+    case "string":
+    default:
+      return (
+        <Field {...common}>
+          <Input placeholder={schema.placeholder} value={value ?? ""}
+            onChange={e => onChange(e.target.value)} />
+        </Field>
+      );
+  }
+}
 
 export default function NewRun() {
   const nav = useNavigate();
@@ -17,35 +103,83 @@ export default function NewRun() {
   const { data: scenarios } = useQuery({ queryKey: ["scenarios"], queryFn: async () => (await api.get("/api/scenarios")).data });
   const { data: plugins } = useQuery({ queryKey: ["plugins"], queryFn: async () => (await api.get("/api/plugins")).data });
 
+  const convSchemas: PluginSchemas = plugins?.params?.converters ?? {};
+  const scorerSchemas: PluginSchemas = plugins?.params?.scorers ?? {};
+
   const [mode, setMode] = useState<"preset" | "custom">("preset");
   const [name, setName] = useState("My run");
   const [scenarioId, setScenarioId] = useState("");
   const [targetId, setTargetId] = useState("");
   const [datasetId, setDatasetId] = useState("");
-  const [scorer, setScorer] = useState("refusal");
-  const [converters, setConverters] = useState<string[]>([]);
+  const [scorer, setScorer] = useState<ConfiguredPlugin>({ plugin: "refusal", params: {} });
+  const [converters, setConverters] = useState<ConfiguredPlugin[]>([]);
+
+  const scorerSchema = scorerSchemas[scorer.plugin];
+
+  const toggleConverter = (c: string) => {
+    setConverters(prev => {
+      const existing = prev.findIndex(p => p.plugin === c);
+      if (existing >= 0) return prev.filter((_, i) => i !== existing);
+      return [...prev, { plugin: c, params: defaultsFor(convSchemas[c]) }];
+    });
+  };
+
+  const updateConverterParam = (idx: number, key: string, v: any) => {
+    setConverters(prev => prev.map((p, i) => i === idx ? { ...p, params: { ...p.params, [key]: v } } : p));
+  };
+
+  const setScorerPlugin = (p: string) => {
+    setScorer({ plugin: p, params: defaultsFor(scorerSchemas[p]) });
+  };
+  const updateScorerParam = (key: string, v: any) => {
+    setScorer(prev => ({ ...prev, params: { ...prev.params, [key]: v } }));
+  };
+
+  const paramValidation = useMemo(() => {
+    const missing: string[] = [];
+    if (mode === "custom") {
+      for (const [k, s] of Object.entries(scorerSchema ?? {})) {
+        if (s.required) {
+          const v = scorer.params[k];
+          const empty = v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0);
+          if (empty) missing.push(`scorer.${k}`);
+        }
+      }
+      for (const [i, c] of converters.entries()) {
+        const cs = convSchemas[c.plugin] ?? {};
+        for (const [k, s] of Object.entries(cs)) {
+          if (s.required) {
+            const v = c.params[k];
+            const empty = v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0);
+            if (empty) missing.push(`converters[${i}].${k}`);
+          }
+        }
+      }
+    }
+    return missing;
+  }, [mode, scorer, scorerSchema, converters, convSchemas]);
 
   const submit = useMutation({
     mutationFn: async () => {
-      const runspec =
-        mode === "preset"
-          ? { name, scenario: scenarioId, targets: [{ config_id: targetId }],
-              dataset: { config_id: datasetId },
-              executor: { plugin: "single_turn" }, scorers: [{ plugin: scorer }],
-              converters: converters.map(c => ({ plugin: c })) }
-          : { name, targets: [{ config_id: targetId }],
-              dataset: { config_id: datasetId },
-              executor: { plugin: "single_turn" },
-              scorers: [{ plugin: scorer }],
-              converters: converters.map(c => ({ plugin: c })) };
-      const r = await api.post("/api/runs", { name, runspec });
+      const base: any = {
+        name,
+        targets: [{ config_id: targetId }],
+        dataset: { config_id: datasetId },
+        executor: { plugin: "single_turn" },
+        scorers: [{ plugin: scorer.plugin, params: scorer.params }],
+        converters: converters.map(c => ({ plugin: c.plugin, params: c.params })),
+      };
+      if (mode === "preset") base.scenario = scenarioId;
+      const r = await api.post("/api/runs", { name, runspec: base });
       await api.post(`/api/runs/${r.data.id}/start`);
       nav(`/runs/${r.data.id}`);
     },
     onError: (e: any) => toast.error(e?.response?.data?.detail ?? "Failed to start run"),
   });
 
-  const canSubmit = !!targetId && !!datasetId && (mode === "custom" || !!scenarioId);
+  const canSubmit = !!targetId && !!datasetId
+    && (mode === "custom" || !!scenarioId)
+    && paramValidation.length === 0;
 
   return (
     <div className="max-w-3xl space-y-6">
@@ -131,20 +265,31 @@ export default function NewRun() {
             <CardTitle>3. Pipeline</CardTitle>
             <CardDescription>Converters mutate the prompt before it hits the target. Scorer classifies the response.</CardDescription>
           </CardHeader>
-          <CardBody>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <CardBody className="space-y-6">
+            <div>
               <Field label="Scorer">
-                <Select value={scorer} onChange={e => setScorer(e.target.value)}>
+                <Select value={scorer.plugin} onChange={e => setScorerPlugin(e.target.value)}>
                   {plugins?.scorers?.map((s: string) => <option key={s} value={s}>{s}</option>)}
                 </Select>
               </Field>
+              {scorerSchema && Object.keys(scorerSchema).length > 0 && (
+                <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50/50 p-4 space-y-3">
+                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Scorer params</div>
+                  {Object.entries(scorerSchema).map(([k, s]) => (
+                    <ParamField key={k} name={k} schema={s} targets={targets ?? []}
+                      value={scorer.params[k]} onChange={v => updateScorerParam(k, v)} />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div>
               <Field label="Converters" hint="Click to toggle. Executed in order.">
                 <div className="flex flex-wrap gap-2">
                   {plugins?.converters?.length ? plugins.converters.map((c: string) => {
-                    const on = converters.includes(c);
+                    const on = converters.some(p => p.plugin === c);
                     return (
-                      <button key={c} type="button"
-                        onClick={() => setConverters(on ? converters.filter(x => x !== c) : [...converters, c])}
+                      <button key={c} type="button" onClick={() => toggleConverter(c)}
                         className={clsx(
                           "px-2.5 py-1 text-xs rounded-full border transition",
                           on ? "bg-brand-600 border-brand-600 text-white" : "bg-white border-gray-200 text-gray-700 hover:border-gray-300",
@@ -154,9 +299,36 @@ export default function NewRun() {
                   }) : <Badge>No converters available</Badge>}
                 </div>
               </Field>
+              {converters.length > 0 && (
+                <div className="mt-3 space-y-3">
+                  {converters.map((c, i) => {
+                    const cs = convSchemas[c.plugin] ?? {};
+                    if (Object.keys(cs).length === 0) return null;
+                    return (
+                      <div key={c.plugin} className="rounded-lg border border-gray-200 bg-gray-50/50 p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">{c.plugin} params</div>
+                          <button type="button" onClick={() => toggleConverter(c.plugin)}
+                            className="text-gray-400 hover:text-gray-600"><X className="h-4 w-4" /></button>
+                        </div>
+                        {Object.entries(cs).map(([k, s]) => (
+                          <ParamField key={k} name={k} schema={s} targets={targets ?? []}
+                            value={c.params[k]} onChange={v => updateConverterParam(i, k, v)} />
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </CardBody>
         </Card>
+      )}
+
+      {paramValidation.length > 0 && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Missing required fields: {paramValidation.join(", ")}
+        </div>
       )}
 
       <div className="flex justify-end">

@@ -52,7 +52,20 @@ class RunService:
         dataset = build_dataset(ds_ref, blob_store=self._blob)
         converters = [build_converter(c.model_dump()) for c in spec.converters]
         executor = build_executor(spec.executor.model_dump())
-        scorers = [build_scorer(sc.model_dump()) for sc in spec.scorers]
+        scorers = []
+        for sc in spec.scorers:
+            ref = sc.model_dump()
+            params = dict(ref.get("params") or {})
+            if ref.get("plugin") == "llm_judge":
+                judge_cfg_id = params.pop("judge_config_id", None)
+                if not judge_cfg_id:
+                    raise ValueError(
+                        "llm_judge scorer requires params.judge_config_id "
+                        "(id of a configured target to use as the judge)"
+                    )
+                judge_ref = await self._targets.resolve_for_runtime(judge_cfg_id)
+                params["judge"] = build_target(judge_ref)
+            scorers.append(build_scorer({"plugin": ref["plugin"], "params": params}))
 
         attempt_id_by_index: dict[int, str] = {}
 

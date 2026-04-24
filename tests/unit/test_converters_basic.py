@@ -12,7 +12,15 @@ async def test_identity():
 
 
 @pytest.mark.asyncio
-async def test_base64_encodes():
-    c = Base64Converter()
+async def test_base64_raw_encodes():
+    c = Base64Converter(wrap=False)
     out = await c.convert(Prompt(text="hello"))
     assert out.text == base64.b64encode(b"hello").decode()
+
+
+@pytest.mark.asyncio
+async def test_base64_default_wraps_with_instruction():
+    c = Base64Converter()
+    out = await c.convert(Prompt(text="hello"))
+    assert "base64" in out.text.lower()
+    assert base64.b64encode(b"hello").decode() in out.text

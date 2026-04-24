@@ -11,3 +11,9 @@ async def test_regex_match():
     s = RegexScorer(pattern=r"step\s+\d+:", flags="i")
     assert (await s.score(_ar("Step 1: do it"))).value["label"] is True
     assert (await s.score(_ar("nothing"))).value["label"] is False
+
+
+def test_regex_requires_pattern():
+    import pytest as _pt
+    with _pt.raises(ValueError):
+        RegexScorer(pattern="")

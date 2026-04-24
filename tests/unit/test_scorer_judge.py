@@ -27,3 +27,14 @@ async def test_judge_handles_non_json():
     ar = AttemptResult(prompt=Prompt(text="q"), response=Response(text="a", raw={}, latency_ms=1))
     r = await j.score(ar)
     assert r.value["label"] is True
+
+
+def test_judge_requires_judge():
+    with pytest.raises(ValueError):
+        LLMJudgeScorer(judge=None, rubric="x")
+
+
+@pytest.mark.asyncio
+async def test_judge_uses_default_rubric_when_none():
+    j = LLMJudgeScorer(judge=FakeJudge('{"label": false, "confidence": 0.7}'))
+    assert "harmful" in j.rubric or "label" in j.rubric.lower() or j.rubric

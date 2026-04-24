@@ -4,8 +4,20 @@ from airedteam.core.types import AttemptResult, ScoreResult
 
 
 class SubstringScorer:
+    """Label true when the response contains one/all of the given needles.
+
+    Required: ``needles`` (non-empty list of strings)."""
     name = "substring"
-    def __init__(self, *, needles: list[str], match: Literal["any", "all"] = "any", case_sensitive: bool = False) -> None:
+
+    def __init__(
+        self,
+        *,
+        needles: list[str] | None = None,
+        match: Literal["any", "all"] = "any",
+        case_sensitive: bool = False,
+    ) -> None:
+        if not needles:
+            raise ValueError("substring scorer requires at least one needle")
         self.needles = needles
         self.match = match
         self.case_sensitive = case_sensitive

@@ -27,3 +27,9 @@ async def test_all_mode():
     s = SubstringScorer(needles=["a", "b"], match="all")
     assert (await s.score(_ar("a only"))).value["label"] is False
     assert (await s.score(_ar("a and b"))).value["label"] is True
+
+
+def test_substring_requires_needles():
+    import pytest as _pt
+    with _pt.raises(ValueError):
+        SubstringScorer(needles=[])
