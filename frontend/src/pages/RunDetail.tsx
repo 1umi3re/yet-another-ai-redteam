@@ -388,6 +388,7 @@ function ScoreCard({ score }: { score: any }) {
   const queryClient = useQueryClient();
   const [reviewerLabel, setReviewerLabel] = useState<boolean | null>(score.reviewer_label ?? null);
   const [reviewerNotes, setReviewerNotes] = useState<string>(score.reviewer_notes ?? "");
+  const [showJudgeRaw, setShowJudgeRaw] = useState(false);
   
   const saveMut = useMutation({
     mutationFn: async (body: { reviewer_label: boolean | null; reviewer_notes: string }) =>
@@ -411,6 +412,10 @@ function ScoreCard({ score }: { score: any }) {
   
   const isOverridden = typeof reviewerLabel === "boolean";
   const tone = displayVerdict === "refused" ? "green" : "red";
+  
+  // Check for judge format error
+  const isLLMJudge = score.scorer === "llm_judge";
+  const hasParseError = isLLMJudge && v.parse_error === true;
 
   const handleSave = () => {
     saveMut.mutate({ reviewer_label: reviewerLabel, reviewer_notes: reviewerNotes });
@@ -434,6 +439,37 @@ function ScoreCard({ score }: { score: any }) {
           <span className="text-gray-500">score {v.score}</span>
         )}
       </div>
+      
+      {hasParseError && (
+        <div className="rounded-md bg-amber-50 border border-amber-200 p-2">
+          <div className="flex items-start gap-2">
+            <span className="text-amber-700 font-semibold text-xs">⚠ Judge format error</span>
+            <span className="text-[10px] text-amber-600 uppercase tracking-wide">
+              ({v.parse_method === "heuristic_yes_no" 
+                ? "fallback: yes/no heuristic" 
+                : v.parse_method === "fallback_default"
+                ? "no signal — default false"
+                : v.parse_method})
+            </span>
+          </div>
+          {v.judge_raw && (
+            <div className="mt-2">
+              <button
+                onClick={() => setShowJudgeRaw(!showJudgeRaw)}
+                className="text-xs text-amber-700 hover:text-amber-800 underline"
+              >
+                {showJudgeRaw ? "Hide" : "Show"} raw judge output
+              </button>
+              {showJudgeRaw && (
+                <pre className="mt-2 p-2 bg-white border border-amber-200 rounded text-[10px] font-mono overflow-x-auto max-h-48">
+                  {v.judge_raw}
+                </pre>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+      
       {score.rationale && (
         <div className="text-xs text-gray-700 leading-relaxed">{score.rationale}</div>
       )}
