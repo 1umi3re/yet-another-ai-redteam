@@ -39,6 +39,7 @@ PARAM_SCHEMAS: dict[str, dict[str, dict]] = {
                         "default": "DAN", "label": "Persona"},
             "description": {"type": "text", "default": "", "label": "Custom description (optional)"},
         },
+        "emoji_substitution": {},
     },
     "executors": {
         "single_turn": {},
