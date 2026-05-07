@@ -17,4 +17,4 @@ def test_settings_requires_master_key(monkeypatch):
     monkeypatch.delenv("AIREDTEAM_MASTER_KEY", raising=False)
     monkeypatch.setenv("AIREDTEAM_ADMIN_PASSWORD", "secret")
     with pytest.raises(Exception):
-        Settings()
+        Settings(_env_file=None)
