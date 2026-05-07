@@ -1,6 +1,6 @@
 from __future__ import annotations
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 from airedteam.storage import models
 from airedteam.core.types import Message
 from airedteam.engine.factory import build_target
@@ -107,7 +107,7 @@ class ManualService:
             run = await s.get(models.Run, run_id)
             if run is not None:
                 run.status = "completed"
-                run.finished_at = datetime.utcnow()
+                run.finished_at = datetime.now(UTC).replace(tzinfo=None)
                 await s.commit()
 
     async def _read_conversation(self, att) -> list[dict]:

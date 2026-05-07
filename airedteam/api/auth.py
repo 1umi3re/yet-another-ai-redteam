@@ -1,12 +1,12 @@
 from __future__ import annotations
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from jose import jwt, JWTError
 
 ALG = "HS256"
 
 
 def issue_token(*, secret: str, admin_id: str, ttl_minutes: int) -> str:
-    payload = {"sub": admin_id, "exp": datetime.utcnow() + timedelta(minutes=ttl_minutes)}
+    payload = {"sub": admin_id, "exp": datetime.now(UTC) + timedelta(minutes=ttl_minutes)}
     return jwt.encode(payload, secret, algorithm=ALG)
 
 

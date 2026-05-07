@@ -137,7 +137,7 @@ class AnnotationIn(BaseModel):
 @router.patch("/runs/{rid}/scores/{sid}")
 async def annotate_score(rid: str, sid: str, ann: AnnotationIn,
                          admin=Depends(require_admin), state: AppState = Depends(get_state)):
-    from datetime import datetime
+    from datetime import UTC, datetime
     async with state.session_factory() as s:
         sc = await s.get(Score, sid)
         if sc is None:
@@ -148,7 +148,7 @@ async def annotate_score(rid: str, sid: str, ann: AnnotationIn,
         sc.reviewer_label = ann.reviewer_label
         sc.reviewer_notes = ann.reviewer_notes
         sc.reviewer_id = admin if isinstance(admin, str) else getattr(admin, "id", "admin")
-        sc.reviewed_at = datetime.utcnow()
+        sc.reviewed_at = datetime.now(UTC).replace(tzinfo=None)
         await s.commit()
         return {
             "id": sc.id,

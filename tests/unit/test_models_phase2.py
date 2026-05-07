@@ -1,5 +1,5 @@
 import pytest
-from datetime import datetime
+from datetime import UTC, datetime
 from airedteam.storage.db import make_engine, make_sessionmaker
 from airedteam.storage import models
 
@@ -17,7 +17,7 @@ async def test_new_columns_roundtrip(tmp_path):
         a = models.Attempt(run_id=r.id, target_id="t", target_name="t", prompt_text="p")
         s.add(a)
         await s.commit()
-        now = datetime.utcnow()
+        now = datetime.now(UTC).replace(tzinfo=None)
         sc = models.Score(attempt_id=a.id, scorer="refusal", value_json={"label": True},
                           reviewer_label=False, reviewer_notes="actually complied",
                           reviewer_id="admin", reviewed_at=now)

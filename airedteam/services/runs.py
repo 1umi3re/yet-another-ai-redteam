@@ -2,7 +2,7 @@ from __future__ import annotations
 import json
 import uuid
 import yaml
-from datetime import datetime
+from datetime import UTC, datetime
 from sqlalchemy import update
 from airedteam.storage.models import Run, Attempt, Score
 from airedteam.engine.run_engine import RunEngine
@@ -50,7 +50,7 @@ class RunService:
                 raise KeyError(run_id)
             spec = RunSpec.model_validate(yaml.safe_load(run.runspec_yaml))
             run.status = "running"
-            run.started_at = datetime.utcnow()
+            run.started_at = datetime.now(UTC).replace(tzinfo=None)
             await s.commit()
 
         target_refs = [await self._resolve_plugin_ref(t, "target") for t in spec.targets]
@@ -183,10 +183,10 @@ class RunService:
                 orchestrator=DefaultOrchestrator(),
             )
             async with self._sf() as s:
-                await s.execute(update(Run).where(Run.id == run_id).values(status="completed", finished_at=datetime.utcnow()))
+                await s.execute(update(Run).where(Run.id == run_id).values(status="completed", finished_at=datetime.now(UTC).replace(tzinfo=None)))
                 await s.commit()
         except Exception as e:
             async with self._sf() as s:
-                await s.execute(update(Run).where(Run.id == run_id).values(status="failed", finished_at=datetime.utcnow(), error=str(e)))
+                await s.execute(update(Run).where(Run.id == run_id).values(status="failed", finished_at=datetime.now(UTC).replace(tzinfo=None), error=str(e)))
                 await s.commit()
             raise

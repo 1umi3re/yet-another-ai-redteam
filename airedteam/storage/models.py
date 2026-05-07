@@ -1,6 +1,6 @@
 from __future__ import annotations
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from sqlalchemy import (
     String, Integer, DateTime, ForeignKey, JSON, LargeBinary, Text, Index, Boolean
 )
@@ -9,6 +9,10 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 def _uuid() -> str:
     return str(uuid.uuid4())
+
+
+def _utcnow() -> datetime:
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 class Base(DeclarativeBase):
@@ -22,7 +26,7 @@ class TargetConfig(Base):
     plugin: Mapped[str] = mapped_column(String(100))
     params_json: Mapped[dict] = mapped_column(JSON, default=dict)
     secret_ciphertext: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
 
 class DatasetMeta(Base):
@@ -33,7 +37,7 @@ class DatasetMeta(Base):
     params_json: Mapped[dict] = mapped_column(JSON, default=dict)
     blob_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     item_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
 
 class Run(Base):
@@ -47,7 +51,7 @@ class Run(Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     kind: Mapped[str] = mapped_column(String(20), default="automated")
     attempts = relationship("Attempt", back_populates="run", cascade="all, delete-orphan")
 
@@ -69,7 +73,7 @@ class Attempt(Base):
     tokens_out: Mapped[int | None] = mapped_column(Integer, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="completed")
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     run = relationship("Run", back_populates="attempts")
     scores = relationship("Score", back_populates="attempt", cascade="all, delete-orphan")
 
@@ -81,7 +85,7 @@ class Score(Base):
     scorer: Mapped[str] = mapped_column(String(100))
     value_json: Mapped[dict] = mapped_column(JSON)
     rationale: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     reviewer_label: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     reviewer_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     reviewer_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
