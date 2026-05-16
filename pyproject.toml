@@ -42,6 +42,7 @@ airedteam = "airedteam.cli:main"
 
 [project.entry-points."airedteam.targets"]
 openai_compat = "airedteam.builtins.targets.openai_compat:OpenAICompatTarget"
+openai_compat_new_session = "airedteam.builtins.targets.openai_compat:OpenAICompatNewSessionTarget"
 anthropic_compat = "airedteam.builtins.targets.anthropic_compat:AnthropicCompatTarget"
 
 [project.entry-points."airedteam.datasets"]

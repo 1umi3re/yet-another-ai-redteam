@@ -118,7 +118,7 @@ docker compose exec api airedteam seed-datasets
 Beyond single-turn prompts, **airedteam** now supports multi-turn executors that engage targets in multi-step conversations to elicit policy violations:
 
 - **Crescendo** — Incrementally escalates prompts across turns, using an attacker LLM to generate follow-up messages when the target refuses. Configure via `executor.plugin = "crescendo"` with params `attacker_config_id`, `goal`, and `max_turns`.
-- **PAIR** — Prompt Automatic Iterative Refinement. Uses an attacker to iteratively refine prompts based on target responses. Configure via `executor.plugin = "pair"` with params `attacker_config_id`, `goal`, and `max_iterations`.
+- **PAIR** — Prompt Automatic Iterative Refinement. Uses an attacker to iteratively refine prompts based on target responses. Configure via `executor.plugin = "pair"` with params `attacker_config_id`, `judge_config_id`, `goal`, and `max_turns`.
 
 Both store full conversation history in blob storage (`conversation_blob_path` on each `Attempt`). To implement custom multi-turn strategies, extend `airedteam.builtins.executors.multi_turn_base.MultiTurnExecutor` — see that module for the extension API.
 
@@ -130,7 +130,7 @@ Phase 2 adds five prompt transformation converters:
 - **leetspeak** — Substitutes letters with numbers/symbols (e.g., `elite` → `31337`).
 - **persona_role_play_prefix** — Wraps prompts in a persona instruction ("You are a helpful assistant who...").
 - **emoji_substitution** — Replaces words with emoji (e.g., `fire` → `🔥`).
-- **translation_llm** — Translates prompts to another language via an LLM, then back-translates responses. Requires an `llm_config_id` param pointing to a translation-capable target.
+- **translation_llm** — Translates prompts to another language via an LLM before sending them to the target. Requires a `translator_config_id` param pointing to a translation-capable target.
 
 All available via the "Converters" tab when creating a run in the UI.
 

@@ -20,6 +20,7 @@ class CreateRun(BaseModel):
 class RunOut(BaseModel):
     id: str
     name: str
+    kind: str
     status: str
     progress_done: int
     progress_total: int
@@ -27,7 +28,15 @@ class RunOut(BaseModel):
 
 
 def _run_to_out(r: Run) -> RunOut:
-    return RunOut(id=r.id, name=r.name, status=r.status, progress_done=r.progress_done, progress_total=r.progress_total, error=r.error)
+    return RunOut(
+        id=r.id,
+        name=r.name,
+        kind=r.kind,
+        status=r.status,
+        progress_done=r.progress_done,
+        progress_total=r.progress_total,
+        error=r.error,
+    )
 
 
 @router.post("/runs", status_code=201, response_model=RunOut)
@@ -68,7 +77,7 @@ async def list_attempts(rid: str, _=Depends(require_admin), state: AppState = De
     async with state.session_factory() as s:
         rows = (await s.execute(select(Attempt).where(Attempt.run_id == rid).order_by(Attempt.created_at))).scalars().all()
         return [{
-            "id": a.id, "target_id": a.target_id, "target_name": a.target_name, "dataset_item_id": a.dataset_item_id,
+            "id": a.id, "run_id": a.run_id, "target_id": a.target_id, "target_name": a.target_name, "dataset_item_id": a.dataset_item_id,
             "prompt": a.prompt_text, "response": a.response_text, "response_blob_path": a.response_blob_path,
             "converter_chain": a.converter_chain, "status": a.status, "error": a.error,
             "latency_ms": a.latency_ms, "tokens_in": a.tokens_in, "tokens_out": a.tokens_out,

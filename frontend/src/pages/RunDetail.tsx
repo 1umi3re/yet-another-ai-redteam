@@ -15,12 +15,7 @@ import { toast } from "sonner";
 
 type Tab = "overview" | "attempts" | "events";
 
-// Map a score record to a target-side verdict. Scorers emit an explicit
-// `attack_success` field now; we fall back to legacy heuristics for older
-// runs where only `label` exists. Legacy `label` had inconsistent polarity
-// (refusal: true=refused; llm_judge/substring/regex: true=attack success),
-// so we dispatch on scorer name.
-function verdictOf(score: any): "refused" | "complied" {
+function scorerVerdictOf(score: any): "refused" | "complied" {
   const v = score?.value ?? {};
   if (typeof v.attack_success === "boolean") {
     return v.attack_success ? "complied" : "refused";
@@ -29,6 +24,15 @@ function verdictOf(score: any): "refused" | "complied" {
   if (typeof label !== "boolean") return "complied";
   if (score?.scorer === "refusal") return label ? "refused" : "complied";
   return label ? "complied" : "refused";
+}
+
+// Reviewer labels use target-side polarity: true = refused, false = complied.
+// Without a reviewer override, scorer output remains the source of truth.
+function verdictOf(score: any): "refused" | "complied" {
+  if (typeof score?.reviewer_label === "boolean") {
+    return score.reviewer_label ? "refused" : "complied";
+  }
+  return scorerVerdictOf(score);
 }
 
 export default function RunDetail() {
@@ -205,6 +209,7 @@ export default function RunDetail() {
       )}
 
       <AttemptDetailDrawer
+        runId={id}
         attempt={detailAttemptId ? (attempts as any[]).find(a => a.id === detailAttemptId) ?? null : null}
         scores={detailAttemptId ? (scores as any[]).filter(s => s.attempt_id === detailAttemptId) : []}
         onClose={() => setDetailAttemptId(null)}
@@ -213,14 +218,14 @@ export default function RunDetail() {
   );
 }
 
-function AttemptDetailDrawer({ attempt, scores, onClose }: { attempt: any | null; scores: any[]; onClose: () => void }) {
+function AttemptDetailDrawer({ runId, attempt, scores, onClose }: { runId: string; attempt: any | null; scores: any[]; onClose: () => void }) {
   const nav = useNavigate();
   const { data: conversation } = useQuery({
-    queryKey: ["attempt-conversation", attempt?.id],
+    queryKey: ["attempt-conversation", runId, attempt?.id],
     queryFn: async () => {
       if (!attempt) return { messages: [] };
-      const runId = attempt.run_id;
-      const res = await api.get(`/api/runs/${runId}/attempts/${attempt.id}/conversation`);
+      const attemptRunId = attempt.run_id ?? runId;
+      const res = await api.get(`/api/runs/${attemptRunId}/attempts/${attempt.id}/conversation`);
       return res.data;
     },
     enabled: !!attempt,
@@ -364,7 +369,7 @@ function AttemptDetailDrawer({ attempt, scores, onClose }: { attempt: any | null
               <div className="text-xs text-gray-400 italic">No score yet</div>
             ) : (
               <div className="space-y-3">
-                {scores.map((s, i) => <ScoreCard key={i} score={s} />)}
+                {scores.map((s) => <ScoreCard key={s.id} score={s} />)}
               </div>
             )}
           </Section>
@@ -389,6 +394,11 @@ function ScoreCard({ score }: { score: any }) {
   const [reviewerLabel, setReviewerLabel] = useState<boolean | null>(score.reviewer_label ?? null);
   const [reviewerNotes, setReviewerNotes] = useState<string>(score.reviewer_notes ?? "");
   const [showJudgeRaw, setShowJudgeRaw] = useState(false);
+
+  useEffect(() => {
+    setReviewerLabel(score.reviewer_label ?? null);
+    setReviewerNotes(score.reviewer_notes ?? "");
+  }, [score.id, score.reviewer_label, score.reviewer_notes]);
   
   const saveMut = useMutation({
     mutationFn: async (body: { reviewer_label: boolean | null; reviewer_notes: string }) =>
@@ -402,8 +412,7 @@ function ScoreCard({ score }: { score: any }) {
 
   const v = score?.value ?? {};
   
-  // Compute scorer's verdict using same logic as verdictOf
-  const scorerVerdict = verdictOf(score);
+  const scorerVerdict = scorerVerdictOf(score);
   
   // Display verdict: use reviewer's if set, otherwise scorer's
   const displayVerdict = typeof reviewerLabel === "boolean"

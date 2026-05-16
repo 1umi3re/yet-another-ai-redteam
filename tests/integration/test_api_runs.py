@@ -49,6 +49,7 @@ async def test_create_and_run_via_api(monkeypatch, tmp_path):
                 "scorers":[{"plugin":"refusal"}],
             }})
         assert cr.status_code == 201
+        assert cr.json()["kind"] == "automated"
         rid = cr.json()["id"]
         st = await c.post(f"/api/runs/{rid}/start", headers=h)
         assert st.status_code == 202
@@ -58,8 +59,10 @@ async def test_create_and_run_via_api(monkeypatch, tmp_path):
                 break
             await asyncio.sleep(0.05)
         assert s["status"] == "completed"
+        assert s["kind"] == "automated"
         attempts = (await c.get(f"/api/runs/{rid}/attempts", headers=h)).json()
         assert len(attempts) == 1
+        assert attempts[0]["run_id"] == rid
         scores = (await c.get(f"/api/runs/{rid}/scores", headers=h)).json()
         assert scores[0]["value"]["label"] is True
 
@@ -130,6 +133,7 @@ async def test_get_conversation_multi_turn_api(monkeypatch, tmp_path):
             await asyncio.sleep(0.05)
         assert s["status"] == "completed"
         attempts = (await c.get(f"/api/runs/{rid}/attempts", headers=h)).json()
+        assert attempts[0]["run_id"] == rid
         aid = attempts[0]["id"]
         
         conv = await c.get(f"/api/runs/{rid}/attempts/{aid}/conversation", headers=h)

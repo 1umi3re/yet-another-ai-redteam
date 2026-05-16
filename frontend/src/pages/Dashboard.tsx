@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { Card, CardBody, CardHeader, CardTitle } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
-import { StatusBadge } from "../components/ui/Badge";
+import { Badge, StatusBadge } from "../components/ui/Badge";
 import { ProgressBar } from "../components/ui/ProgressBar";
 import { EmptyState } from "../components/ui/EmptyState";
 import { Target, Database, ListChecks, CheckCircle2, PlayCircle, ArrowUpRight } from "lucide-react";
@@ -66,7 +66,12 @@ export default function Dashboard() {
               <tbody className="divide-y divide-gray-100">
                 {recent.map(r => (
                   <tr key={r.id} className="hover:bg-gray-50/70">
-                    <td className="px-5 py-3 font-medium">{r.name}</td>
+                    <td className="px-5 py-3 font-medium">
+                      <div className="flex items-center gap-2">
+                        <span>{r.name}</span>
+                        {r.kind === "manual" && <Badge tone="blue">Manual</Badge>}
+                      </div>
+                    </td>
                     <td className="px-5 py-3"><StatusBadge status={r.status} /></td>
                     <td className="px-5 py-3"><ProgressBar done={r.progress_done ?? 0} total={r.progress_total ?? 0} /></td>
                     <td className="px-5 py-3 text-right">

@@ -2,7 +2,7 @@ import json
 import pytest
 import respx
 import httpx
-from airedteam.builtins.targets.openai_compat import OpenAICompatTarget
+from airedteam.builtins.targets.openai_compat import OpenAICompatNewSessionTarget, OpenAICompatTarget
 from airedteam.core.types import Prompt
 
 
@@ -50,5 +50,24 @@ async def test_generate_preserves_system_prompt_and_temperature():
     body = json.loads(route.calls.last.request.content)
     assert body["temperature"] == 0.7
     assert body["messages"][0] == {"role": "system", "content": "be helpful"}
+    assert body["messages"][-1] == {"role": "user", "content": "hi"}
+    await t.aclose()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_new_session_target_generate_adds_new_session_flag():
+    route = respx.post("https://oai.example.com/v1/chat/completions").mock(
+        return_value=httpx.Response(200, json={
+            "choices": [{"message": {"content": "ok"}}],
+            "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+        })
+    )
+    t = OpenAICompatNewSessionTarget(
+        name="t", base_url="https://oai.example.com/v1", model="m", api_key="k",
+    )
+    await t.generate(Prompt(text="hi"))
+    body = json.loads(route.calls.last.request.content)
+    assert body["new_session"] is True
     assert body["messages"][-1] == {"role": "user", "content": "hi"}
     await t.aclose()

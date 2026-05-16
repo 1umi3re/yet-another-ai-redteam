@@ -81,6 +81,7 @@ export default function Targets() {
             <Field label="Plugin">
               <Select value={form.plugin} onChange={e => setForm({ ...form, plugin: e.target.value })}>
                 <option value="openai_compat">openai_compat</option>
+                <option value="openai_compat_new_session">openai_compat_new_session</option>
                 <option value="anthropic_compat">anthropic_compat</option>
               </Select>
             </Field>

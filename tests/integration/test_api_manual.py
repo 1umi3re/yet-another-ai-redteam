@@ -69,6 +69,11 @@ async def test_manual_session_full_flow(monkeypatch, tmp_path):
         assert r1.status_code == 200
         rid = r1.json()["run_id"]
         assert rid
+
+        listed = await c.get("/api/runs", headers=h)
+        assert listed.status_code == 200
+        manual_run = next(r for r in listed.json() if r["id"] == rid)
+        assert manual_run["kind"] == "manual"
         
         # Create conversation (no seed)
         r2 = await c.post(f"/api/manual/runs/{rid}/conversations", headers=h, json={})

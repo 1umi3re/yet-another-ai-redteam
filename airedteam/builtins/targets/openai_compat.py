@@ -47,3 +47,10 @@ class OpenAICompatTarget(BaseTarget):
 
     async def aclose(self) -> None:
         await self._client.aclose()
+
+
+class OpenAICompatNewSessionTarget(OpenAICompatTarget):
+    async def _post_chat_completions(self, payload: dict) -> Response:
+        payload = dict(payload)
+        payload["new_session"] = True
+        return await super()._post_chat_completions(payload)

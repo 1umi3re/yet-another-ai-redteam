@@ -8,7 +8,10 @@ services:
     ports: ["5432:5432"]
     volumes: ["pgdata:/var/lib/postgresql/data"]
   api:
-    build: { context: ., dockerfile: docker/api.Dockerfile }
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+      network: host
     environment:
       AIREDTEAM_DATABASE_URL: postgresql+asyncpg://airedteam:airedteam@postgres:5432/airedteam
       AIREDTEAM_DATABASE_URL_SYNC: postgresql+psycopg2://airedteam:airedteam@postgres:5432/airedteam
