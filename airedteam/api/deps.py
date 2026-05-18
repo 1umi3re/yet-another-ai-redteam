@@ -10,6 +10,8 @@ from airedteam.services.target_configs import TargetConfigService
 from airedteam.services.datasets import DatasetService
 from airedteam.services.runs import RunService
 from airedteam.services.manual import ManualService
+from airedteam.services.prompt_assets import PromptAssetService
+from airedteam.services.converters import ConverterChainService
 from .auth import verify_token
 
 
@@ -22,6 +24,8 @@ class AppState:
     bus: ProgressBus
     targets: TargetConfigService
     datasets: DatasetService
+    converters: ConverterChainService
+    prompt_assets: PromptAssetService
     runs: RunService
     manual: ManualService
 
@@ -35,11 +39,17 @@ def build_state(settings: Settings | None = None) -> AppState:
     bus = ProgressBus()
     targets = TargetConfigService(SessionLocal, box)
     datasets = DatasetService(SessionLocal, blob)
+    converters = ConverterChainService(targets)
+    prompt_assets = PromptAssetService(SessionLocal, blob)
     runs = RunService(SessionLocal, blob, box, targets, datasets, bus,
+                      prompt_assets=prompt_assets,
                       response_inline_max_bytes=s.response_inline_max_bytes,
                       max_concurrency=s.max_concurrency)
-    manual = ManualService(SessionLocal, blob, targets)
-    return AppState(s, SessionLocal, blob, box, bus, targets, datasets, runs, manual)
+    manual = ManualService(SessionLocal, blob, targets, converters, prompt_assets)
+    return AppState(
+        s, SessionLocal, blob, box, bus, targets, datasets, converters,
+        prompt_assets, runs, manual,
+    )
 
 
 _STATE: AppState | None = None

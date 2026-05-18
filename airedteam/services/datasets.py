@@ -4,6 +4,7 @@ import uuid
 from sqlalchemy import select
 from airedteam.storage.models import DatasetMeta
 from airedteam.storage.blobs import BlobStore
+from airedteam.engine.factory import build_dataset
 
 
 class DatasetService:
@@ -45,3 +46,17 @@ class DatasetService:
         if ds is None:
             raise KeyError(ds_id)
         return {"plugin": ds.plugin, "params": dict(ds.params_json or {})}
+
+    async def list_items(self, ds_id: str, *, limit: int = 100) -> list[dict]:
+        ds_ref = await self.resolve_for_runtime(ds_id)
+        dataset = build_dataset(ds_ref, blob_store=self._blob)
+        out: list[dict] = []
+        async for prompt in dataset:
+            out.append({
+                "id": str(prompt.metadata.get("id", len(out))),
+                "text": prompt.text,
+                "metadata": dict(prompt.metadata),
+            })
+            if len(out) >= limit:
+                break
+        return out

@@ -11,6 +11,8 @@ from airedteam.api.routers import plugins as plugins_router
 from airedteam.api.routers import scenarios as scenarios_router
 from airedteam.api.routers import runs as runs_router
 from airedteam.api.routers import manual as manual_router
+from airedteam.api.routers import prompt_assets as prompt_assets_router
+from airedteam.api.routers import converters as converters_router
 
 
 @asynccontextmanager
@@ -38,4 +40,6 @@ def create_app() -> FastAPI:
     app.include_router(scenarios_router.router, prefix="/api", tags=["scenarios"])
     app.include_router(runs_router.router, prefix="/api", tags=["runs"])
     app.include_router(manual_router.router, prefix="/api", tags=["manual"])
+    app.include_router(prompt_assets_router.router, prefix="/api", tags=["prompt-assets"])
+    app.include_router(converters_router.router, prefix="/api", tags=["converters"])
     return app

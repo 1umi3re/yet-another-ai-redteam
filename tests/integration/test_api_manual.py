@@ -157,6 +157,208 @@ async def test_manual_run_validation(monkeypatch, tmp_path):
 
 @pytest.mark.asyncio
 @respx.mock
+async def test_manual_turn_applies_converters_and_stores_original(monkeypatch, tmp_path):
+    target_mock = respx.post("https://m.example.com/v1/chat/completions").mock(
+        return_value=httpx.Response(200, json={
+            "choices": [{"message": {"content": "Saw encoded input"}}],
+            "usage": {"prompt_tokens": 5, "completion_tokens": 3},
+        }))
+
+    monkeypatch.setenv("AIREDTEAM_MASTER_KEY", Fernet.generate_key().decode())
+    monkeypatch.setenv("AIREDTEAM_ADMIN_PASSWORD", "letmein")
+    monkeypatch.setenv("AIREDTEAM_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/x.db")
+    monkeypatch.setenv("AIREDTEAM_BLOB_DIR", str(tmp_path / "blobs"))
+
+    import airedteam.api.deps as deps
+    deps._STATE = None
+    from airedteam.api.app import create_app
+    from airedteam.storage import models
+    from airedteam.storage.db import make_engine
+
+    app = create_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
+        state = deps.get_state()
+        eng = make_engine(state.settings.database_url)
+        async with eng.begin() as conn:
+            await conn.run_sync(models.Base.metadata.create_all)
+
+        h = await _login(c)
+        t = await c.post("/api/targets", headers=h, json={
+            "name": "manual_target",
+            "plugin": "openai_compat",
+            "params": {
+                "name": "manual_target",
+                "base_url": "https://m.example.com/v1",
+                "model": "gpt-test",
+            },
+            "secret": {"api_key": "sk-test"},
+        })
+        tid = t.json()["id"]
+        run = await c.post("/api/manual/runs", headers=h, json={
+            "name": "Manual Run 1",
+            "target_id": tid,
+        })
+        rid = run.json()["run_id"]
+        conv = await c.post(f"/api/manual/runs/{rid}/conversations", headers=h, json={})
+        aid = conv.json()["attempt_id"]
+
+        turn = await c.post(f"/api/manual/runs/{rid}/conversations/{aid}/turn", headers=h, json={
+            "text": "hello",
+            "converters": [{"plugin": "base64", "params": {"wrap": False}}],
+        })
+
+        assert turn.status_code == 200
+        messages = turn.json()["conversation"]
+        assert messages[0]["text"] == "aGVsbG8="
+        assert messages[0]["metadata"]["original_text"] == "hello"
+        assert messages[0]["metadata"]["transformed_text"] == "aGVsbG8="
+        assert messages[0]["metadata"]["converter_chain"] == ["base64"]
+        assert target_mock.called
+        body = json.loads(target_mock.calls[0].request.content)
+        assert "aGVsbG8=" in str(body)
+        assert "hello" not in str(body)
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_manual_running_session_can_resume_and_run_lists_target(monkeypatch, tmp_path):
+    respx.post("https://m.example.com/v1/chat/completions").mock(
+        return_value=httpx.Response(200, json={
+            "choices": [{"message": {"content": "Hello back!"}}],
+            "usage": {"prompt_tokens": 5, "completion_tokens": 3},
+        }))
+
+    monkeypatch.setenv("AIREDTEAM_MASTER_KEY", Fernet.generate_key().decode())
+    monkeypatch.setenv("AIREDTEAM_ADMIN_PASSWORD", "letmein")
+    monkeypatch.setenv("AIREDTEAM_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/x.db")
+    monkeypatch.setenv("AIREDTEAM_BLOB_DIR", str(tmp_path / "blobs"))
+
+    import airedteam.api.deps as deps
+    deps._STATE = None
+    from airedteam.api.app import create_app
+    from airedteam.storage import models
+    from airedteam.storage.db import make_engine
+
+    app = create_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
+        state = deps.get_state()
+        eng = make_engine(state.settings.database_url)
+        async with eng.begin() as conn:
+            await conn.run_sync(models.Base.metadata.create_all)
+
+        h = await _login(c)
+        t = await c.post("/api/targets", headers=h, json={
+            "name": "manual_target",
+            "plugin": "openai_compat",
+            "params": {
+                "name": "manual_target",
+                "base_url": "https://m.example.com/v1",
+                "model": "gpt-test",
+            },
+            "secret": {"api_key": "sk-test"},
+        })
+        tid = t.json()["id"]
+        run = await c.post("/api/manual/runs", headers=h, json={
+            "name": "Manual Run 1",
+            "target_id": tid,
+        })
+        rid = run.json()["run_id"]
+        conv = await c.post(f"/api/manual/runs/{rid}/conversations", headers=h, json={})
+        aid = conv.json()["attempt_id"]
+        await c.post(f"/api/manual/runs/{rid}/conversations/{aid}/turn", headers=h, json={
+            "text": "Hello!"
+        })
+
+        listed = await c.get("/api/runs", headers=h)
+        row = next(r for r in listed.json() if r["id"] == rid)
+        assert row["target_ids"] == [tid]
+        assert row["target_names"] == ["manual_target"]
+
+        resumed = await c.get(f"/api/manual/runs/{rid}/session", headers=h)
+        assert resumed.status_code == 200
+        assert resumed.json()["run_id"] == rid
+        assert resumed.json()["attempt_id"] == aid
+        assert resumed.json()["target_name"] == "manual_target"
+        assert resumed.json()["status"] == "running"
+        assert resumed.json()["evaluated"] is False
+        assert resumed.json()["scores"] == []
+        assert resumed.json()["conversation"][0]["text"] == "Hello!"
+
+        finished = await c.post(f"/api/manual/runs/{rid}/finish", headers=h)
+        assert finished.status_code == 200
+        resumed_finished = await c.get(f"/api/manual/runs/{rid}/session", headers=h)
+        assert resumed_finished.json()["status"] == "completed"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_manual_conversation_can_be_evaluated(monkeypatch, tmp_path):
+    respx.post("https://m.example.com/v1/chat/completions").mock(
+        return_value=httpx.Response(200, json={
+            "choices": [{"message": {"content": "I cannot help with that."}}],
+            "usage": {"prompt_tokens": 5, "completion_tokens": 3},
+        }))
+
+    monkeypatch.setenv("AIREDTEAM_MASTER_KEY", Fernet.generate_key().decode())
+    monkeypatch.setenv("AIREDTEAM_ADMIN_PASSWORD", "letmein")
+    monkeypatch.setenv("AIREDTEAM_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/x.db")
+    monkeypatch.setenv("AIREDTEAM_BLOB_DIR", str(tmp_path / "blobs"))
+
+    import airedteam.api.deps as deps
+    deps._STATE = None
+    from airedteam.api.app import create_app
+    from airedteam.storage import models
+    from airedteam.storage.db import make_engine
+
+    app = create_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
+        state = deps.get_state()
+        eng = make_engine(state.settings.database_url)
+        async with eng.begin() as conn:
+            await conn.run_sync(models.Base.metadata.create_all)
+
+        h = await _login(c)
+        t = await c.post("/api/targets", headers=h, json={
+            "name": "manual_target",
+            "plugin": "openai_compat",
+            "params": {
+                "name": "manual_target",
+                "base_url": "https://m.example.com/v1",
+                "model": "gpt-test",
+            },
+            "secret": {"api_key": "sk-test"},
+        })
+        tid = t.json()["id"]
+        run = await c.post("/api/manual/runs", headers=h, json={
+            "name": "Manual Run 1",
+            "target_id": tid,
+        })
+        rid = run.json()["run_id"]
+        conv = await c.post(f"/api/manual/runs/{rid}/conversations", headers=h, json={})
+        aid = conv.json()["attempt_id"]
+        await c.post(f"/api/manual/runs/{rid}/conversations/{aid}/turn", headers=h, json={
+            "text": "bad request"
+        })
+
+        evaluated = await c.post(
+            f"/api/manual/runs/{rid}/conversations/{aid}/evaluate",
+            headers=h,
+            json={"plugin": "refusal", "params": {}},
+        )
+
+        assert evaluated.status_code == 200
+        assert evaluated.json()["evaluated"] is True
+        score = evaluated.json()["score"]
+        assert score["scorer"] == "refusal"
+        assert score["value"]["label"] is True
+
+        session = await c.get(f"/api/manual/runs/{rid}/session", headers=h)
+        assert session.json()["evaluated"] is True
+        assert session.json()["scores"][0]["id"] == score["id"]
+
+
+@pytest.mark.asyncio
+@respx.mock
 async def test_replay_automated_attempt_into_manual_session(monkeypatch, tmp_path):
     """Test seeding a manual conversation from an automated attempt."""
     respx.post("https://m.example.com/v1/chat/completions").mock(

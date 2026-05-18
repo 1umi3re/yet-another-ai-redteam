@@ -6,7 +6,7 @@ import { Button } from "../components/ui/Button";
 import { Badge, StatusBadge } from "../components/ui/Badge";
 import { ProgressBar } from "../components/ui/ProgressBar";
 import { EmptyState } from "../components/ui/EmptyState";
-import { ListChecks, PlayCircle, ArrowUpRight } from "lucide-react";
+import { ListChecks, PlayCircle, ArrowUpRight, MessageSquare } from "lucide-react";
 
 export default function Runs() {
   const { data, isLoading } = useQuery({
@@ -40,6 +40,7 @@ export default function Runs() {
               <thead className="bg-gray-50 text-gray-600 text-xs uppercase tracking-wider">
                 <tr>
                   <th className="text-left px-5 py-2.5">Name</th>
+                  <th className="text-left px-5 py-2.5">Target</th>
                   <th className="text-left px-5 py-2.5">Status</th>
                   <th className="text-left px-5 py-2.5 w-64">Progress</th>
                   <th className="px-5 py-2.5"></th>
@@ -54,9 +55,17 @@ export default function Runs() {
                         {r.kind === "manual" && <Badge tone="blue">Manual</Badge>}
                       </div>
                     </td>
+                    <td className="px-5 py-3 text-gray-700">
+                      {(r.target_names ?? []).length ? r.target_names.join(", ") : <span className="text-gray-400">-</span>}
+                    </td>
                     <td className="px-5 py-3"><StatusBadge status={r.status} /></td>
                     <td className="px-5 py-3"><ProgressBar done={r.progress_done ?? 0} total={r.progress_total ?? 0} /></td>
-                    <td className="px-5 py-3 text-right">
+                    <td className="px-5 py-3 text-right whitespace-nowrap">
+                      {r.kind === "manual" && r.status === "running" && (
+                        <Link to={`/manual?run=${r.id}`} className="mr-2">
+                          <Button variant="secondary" size="sm" icon={<MessageSquare className="h-3.5 w-3.5" />}>Continue</Button>
+                        </Link>
+                      )}
                       <Link to={`/runs/${r.id}`}>
                         <Button variant="ghost" size="sm" icon={<ArrowUpRight className="h-3.5 w-3.5" />}>Open</Button>
                       </Link>

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
+from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, Query
 from pydantic import BaseModel
 from airedteam.api.deps import AppState, get_state, require_admin
 
@@ -44,3 +44,19 @@ async def create_hf(req: CreateHF, _=Depends(require_admin), state: AppState = D
 @router.get("/datasets", response_model=list[DatasetOut])
 async def list_datasets(_=Depends(require_admin), state: AppState = Depends(get_state)):
     return [_to_out(r) for r in await state.datasets.list()]
+
+
+@router.get("/datasets/{dataset_id}/items")
+async def list_dataset_items(
+    dataset_id: str,
+    limit: int = Query(default=100, ge=1, le=500),
+    _=Depends(require_admin),
+    state: AppState = Depends(get_state),
+):
+    try:
+        items = await state.datasets.list_items(dataset_id, limit=limit)
+    except KeyError:
+        raise HTTPException(404)
+    except Exception as e:
+        raise HTTPException(400, str(e))
+    return {"items": items, "total_returned": len(items)}
