@@ -82,6 +82,7 @@ async def test_crescendo_end_to_end(tmp_path):
         assert len(attempts) == 1
         a = attempts[0]
         assert a.conversation_blob_path is not None
+        assert a.prompt_snapshot_blob_path is not None
         assert a.response_text == "target-2"
 
     payload = json.loads((await blob.get(a.conversation_blob_path)).decode("utf-8"))
@@ -89,3 +90,5 @@ async def test_crescendo_end_to_end(tmp_path):
     assert roles == ["user", "assistant", "user", "assistant"]
     assert payload["messages"][0]["text"] == "seed"
     assert payload["messages"][2]["text"] == "please reconsider"
+    snap = json.loads((await blob.get(a.prompt_snapshot_blob_path)).decode("utf-8"))
+    assert snap["snapshots"][0]["asset_id"] == "crescendo.attacker.v1"

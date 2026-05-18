@@ -47,6 +47,7 @@ class MultiTurnExecutor:
         state: dict[str, Any] = {
             "turn": 0,
             "conversation": [],
+            "prompt_snapshots": [],
             "seed": prompt,
             "first_user": cur,
         }
@@ -80,6 +81,7 @@ class MultiTurnExecutor:
                 status="completed",
                 converter_chain=chain,
                 conversation=list(state["conversation"]),
+                prompt_snapshots=list(state["prompt_snapshots"]),
             )
         except Exception as e:
             return AttemptResult(
@@ -89,4 +91,5 @@ class MultiTurnExecutor:
                 error=f"{type(e).__name__}: {e}",
                 converter_chain=chain,
                 conversation=list(state["conversation"]),
+                prompt_snapshots=list(state["prompt_snapshots"]),
             )

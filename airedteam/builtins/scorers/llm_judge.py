@@ -58,28 +58,61 @@ class LLMJudgeScorer:
     ``judge_config_id`` RunSpec param (see factory)."""
     name = "llm_judge"
 
-    def __init__(self, *, judge: Target, rubric: str | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        judge: Target,
+        rubric: str | None = None,
+        prompt_assets=None,
+        prompt_override_id: str | None = None,
+        transcript_prompt_override_id: str | None = None,
+        use_builtin_prompt: bool = False,
+    ) -> None:
         if judge is None:
             raise ValueError(
                 "llm_judge requires a 'judge_config_id' pointing at a configured target"
             )
         self._judge = judge
         self.rubric = rubric or DEFAULT_RUBRIC
+        self._prompt_assets = prompt_assets
+        self._prompt_override_id = prompt_override_id
+        self._transcript_prompt_override_id = transcript_prompt_override_id
+        self._use_builtin_prompt = use_builtin_prompt
 
     async def score(self, attempt: AttemptResult) -> ScoreResult:
+        snapshot = None
         if attempt.conversation:
             transcript = "\n".join(
                 f"{m.role.upper()}: {m.text}" for m in attempt.conversation
             )
-            prompt_text = JUDGE_TEMPLATE_TRANSCRIPT.format(
-                rubric=self.rubric, transcript=transcript,
-            )
+            if self._prompt_assets is not None:
+                snapshot = await self._prompt_assets.render(
+                    "llm_judge.transcript.v1",
+                    {"rubric": self.rubric, "transcript": transcript},
+                    override_id=self._transcript_prompt_override_id,
+                    use_builtin=self._use_builtin_prompt,
+                )
+                prompt_text = snapshot["rendered_text"]
+            else:
+                prompt_text = JUDGE_TEMPLATE_TRANSCRIPT.format(
+                    rubric=self.rubric, transcript=transcript,
+                )
         else:
-            prompt_text = JUDGE_TEMPLATE_SINGLE.format(
-                rubric=self.rubric,
-                prompt=attempt.prompt.text,
-                response=(attempt.response.text if attempt.response else ""),
-            )
+            variables = {
+                "rubric": self.rubric,
+                "prompt": attempt.prompt.text,
+                "response": (attempt.response.text if attempt.response else ""),
+            }
+            if self._prompt_assets is not None:
+                snapshot = await self._prompt_assets.render(
+                    "llm_judge.single.v1",
+                    variables,
+                    override_id=self._prompt_override_id,
+                    use_builtin=self._use_builtin_prompt,
+                )
+                prompt_text = snapshot["rendered_text"]
+            else:
+                prompt_text = JUDGE_TEMPLATE_SINGLE.format(**variables)
         resp = await self._judge.generate(Prompt(text=prompt_text))
         raw = resp.text.strip()
         outcome = self._parse(raw)
@@ -100,6 +133,7 @@ class LLMJudgeScorer:
                 "judge_raw": raw,  # Full raw output, not truncated
             },
             rationale=rationale,
+            prompt_snapshot=snapshot,
         )
 
     @staticmethod

@@ -39,6 +39,7 @@ class AttemptResult:
     error: str | None = None
     converter_chain: list[str] = field(default_factory=list)
     conversation: list[Message] | None = None
+    prompt_snapshots: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -46,3 +47,4 @@ class ScoreResult:
     scorer: str
     value: Any
     rationale: str | None = None
+    prompt_snapshot: dict[str, Any] | None = None

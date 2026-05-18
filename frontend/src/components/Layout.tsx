@@ -1,6 +1,6 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/auth";
-import { Shield, Target, Database, PlayCircle, ListChecks, LogOut, Sparkles, MessageSquare } from "lucide-react";
+import { Shield, Target, Database, PlayCircle, ListChecks, LogOut, Sparkles, MessageSquare, FileText } from "lucide-react";
 import clsx from "clsx";
 
 const nav = [
@@ -10,6 +10,7 @@ const nav = [
   { to: "/runs/new",  label: "New run",   icon: PlayCircle },
   { to: "/runs",      label: "Runs",      icon: ListChecks },
   { to: "/manual",    label: "Manual Console", icon: MessageSquare },
+  { to: "/prompt-assets", label: "Prompt Assets", icon: FileText },
 ];
 
 export default function Layout() {

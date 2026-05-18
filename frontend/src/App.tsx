@@ -7,6 +7,7 @@ import Runs from "./pages/Runs";
 import RunDetail from "./pages/RunDetail";
 import NewRun from "./pages/NewRun";
 import ManualConsole from "./pages/ManualConsole";
+import PromptAssets from "./pages/PromptAssets";
 import Layout from "./components/Layout";
 import { useAuth } from "./lib/auth";
 
@@ -28,6 +29,7 @@ export default function App() {
         <Route path="/runs/new" element={<NewRun />} />
         <Route path="/runs/:id" element={<RunDetail />} />
         <Route path="/manual" element={<ManualConsole />} />
+        <Route path="/prompt-assets" element={<PromptAssets />} />
       </Route>
     </Routes>
   );

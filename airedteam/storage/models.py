@@ -40,6 +40,17 @@ class DatasetMeta(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
 
+class PromptAssetOverride(Base):
+    __tablename__ = "prompt_asset_overrides"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    asset_id: Mapped[str] = mapped_column(String(200), index=True)
+    name: Mapped[str] = mapped_column(String(200))
+    template_text: Mapped[str] = mapped_column(Text)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+
 class Run(Base):
     __tablename__ = "runs"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
@@ -68,6 +79,7 @@ class Attempt(Base):
     response_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     response_blob_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     conversation_blob_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    prompt_snapshot_blob_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     tokens_in: Mapped[int | None] = mapped_column(Integer, nullable=True)
     tokens_out: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -85,6 +97,7 @@ class Score(Base):
     scorer: Mapped[str] = mapped_column(String(100))
     value_json: Mapped[dict] = mapped_column(JSON)
     rationale: Mapped[str | None] = mapped_column(Text, nullable=True)
+    prompt_snapshot_blob_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     reviewer_label: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     reviewer_notes: Mapped[str | None] = mapped_column(Text, nullable=True)

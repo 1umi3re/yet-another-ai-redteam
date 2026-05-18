@@ -30,6 +30,8 @@ class CrescendoExecutor(MultiTurnExecutor):
     def __init__(
         self, *, attacker: Target | None, goal: str = "",
         max_turns: int = 5, attacker_system: str = ATTACKER_SYSTEM_PROMPT,
+        prompt_assets=None, attacker_prompt_override_id: str | None = None,
+        use_builtin_prompt: bool = False,
     ) -> None:
         if attacker is None:
             raise ValueError(
@@ -43,14 +45,27 @@ class CrescendoExecutor(MultiTurnExecutor):
         except (TypeError, ValueError):
             self.max_turns = 5
         self.attacker_system = attacker_system
+        self._prompt_assets = prompt_assets
+        self._attacker_prompt_override_id = attacker_prompt_override_id
+        self._use_builtin_prompt = use_builtin_prompt
 
     async def next_user_message(self, state, last_response):
         transcript = _render_transcript(state["conversation"])
         goal = self.goal or state["seed"].text
-        prompt = (
-            f"{self.attacker_system}\n\nGOAL:\n{goal}\n\n"
-            f"CONVERSATION SO FAR:\n{transcript}\n\n"
-            f"NEXT USER MESSAGE:"
-        )
+        if self._prompt_assets is not None:
+            snapshot = await self._prompt_assets.render(
+                "crescendo.attacker.v1",
+                {"goal": goal, "transcript": transcript},
+                override_id=self._attacker_prompt_override_id,
+                use_builtin=self._use_builtin_prompt,
+            )
+            state.setdefault("prompt_snapshots", []).append(snapshot)
+            prompt = snapshot["rendered_text"]
+        else:
+            prompt = (
+                f"{self.attacker_system}\n\nGOAL:\n{goal}\n\n"
+                f"CONVERSATION SO FAR:\n{transcript}\n\n"
+                f"NEXT USER MESSAGE:"
+            )
         r = await self._attacker.generate(Prompt(text=prompt))
         return Message(role="user", text=r.text.strip())

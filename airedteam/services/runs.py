@@ -10,16 +10,30 @@ from airedteam.engine.orchestrator import DefaultOrchestrator
 from airedteam.engine.factory import build_converter, build_scorer, build_executor, build_target, build_dataset
 from airedteam.engine.sampling import SampledDataset
 from airedteam.runspec.models import RunSpec
+from airedteam.services.prompt_assets import PromptAssetService
 
 
 class RunService:
-    def __init__(self, session_factory, blob_store, secret_box, target_configs, datasets, progress_bus, *, response_inline_max_bytes: int = 8192, max_concurrency: int = 8) -> None:
+    def __init__(
+        self,
+        session_factory,
+        blob_store,
+        secret_box,
+        target_configs,
+        datasets,
+        progress_bus,
+        *,
+        prompt_assets=None,
+        response_inline_max_bytes: int = 8192,
+        max_concurrency: int = 8,
+    ) -> None:
         self._sf = session_factory
         self._blob = blob_store
         self._box = secret_box
         self._targets = target_configs
         self._datasets = datasets
         self._bus = progress_bus
+        self._prompt_assets = prompt_assets or PromptAssetService(session_factory, blob_store)
         self._inline_max = response_inline_max_bytes
         self._max_conc = max_concurrency
 
@@ -92,6 +106,8 @@ class RunService:
             jid = executor_params.pop("judge_config_id")
             jcfg = await self._targets.resolve_for_runtime(jid)
             executor_params["judge"] = self._build_target_from_cfg(jcfg)
+        if plugin_name in ("crescendo", "pair"):
+            executor_params["prompt_assets"] = self._prompt_assets
         executor = build_executor({"plugin": plugin_name, "params": executor_params})
         
         scorers = []
@@ -107,6 +123,7 @@ class RunService:
                     )
                 judge_ref = await self._targets.resolve_for_runtime(judge_cfg_id)
                 params["judge"] = self._build_target_from_cfg(judge_ref)
+                params["prompt_assets"] = self._prompt_assets
             scorers.append(build_scorer({"plugin": ref["plugin"], "params": params}))
 
         attempt_id_by_index: dict[int, str] = {}
@@ -132,6 +149,11 @@ class RunService:
                     ]
                 }).encode("utf-8")
                 await self._blob.put(conv_path, payload)
+            prompt_snapshot_path: str | None = None
+            if ar.prompt_snapshots:
+                prompt_snapshot_path = await self._prompt_assets.write_snapshot(
+                    run_id, f"attempt-{attempt_id}", {"snapshots": ar.prompt_snapshots}
+                )
 
             async with self._sf() as s:
                 a = Attempt(
@@ -145,6 +167,7 @@ class RunService:
                     response_text=stored_text,
                     response_blob_path=blob_path,
                     conversation_blob_path=conv_path,
+                    prompt_snapshot_blob_path=prompt_snapshot_path,
                     latency_ms=(ar.response.latency_ms if ar.response else None),
                     tokens_in=(ar.response.tokens_in if ar.response else None),
                     tokens_out=(ar.response.tokens_out if ar.response else None),
@@ -163,7 +186,20 @@ class RunService:
                 return
             value = sr.value if isinstance(sr.value, dict) else {"value": sr.value}
             async with self._sf() as s:
-                s.add(Score(attempt_id=attempt_id, scorer=sr.scorer, value_json=value, rationale=sr.rationale))
+                score_id = str(uuid.uuid4())
+                prompt_snapshot_path = None
+                if sr.prompt_snapshot:
+                    prompt_snapshot_path = await self._prompt_assets.write_snapshot(
+                        run_id, f"score-{score_id}", sr.prompt_snapshot
+                    )
+                s.add(Score(
+                    id=score_id,
+                    attempt_id=attempt_id,
+                    scorer=sr.scorer,
+                    value_json=value,
+                    rationale=sr.rationale,
+                    prompt_snapshot_blob_path=prompt_snapshot_path,
+                ))
                 await s.commit()
 
         try:

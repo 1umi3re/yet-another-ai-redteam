@@ -98,6 +98,9 @@ export default function RunDetail() {
           <div className="flex items-center gap-3 mt-2">
             {run && <StatusBadge status={run.status} />}
             <span className="text-xs text-gray-500 font-mono">{id.slice(0, 8)}</span>
+            {!!run?.target_names?.length && (
+              <span className="text-xs text-gray-600">{run.target_names.join(", ")}</span>
+            )}
           </div>
           {run?.error && <div className="mt-2 text-xs text-red-600">{run.error}</div>}
         </div>
@@ -229,6 +232,16 @@ function AttemptDetailDrawer({ runId, attempt, scores, onClose }: { runId: strin
       return res.data;
     },
     enabled: !!attempt,
+  });
+  const { data: promptSnapshot } = useQuery({
+    queryKey: ["attempt-prompt-snapshot", runId, attempt?.id],
+    queryFn: async () => {
+      if (!attempt) return null;
+      const attemptRunId = attempt.run_id ?? runId;
+      const res = await api.get(`/api/runs/${attemptRunId}/attempts/${attempt.id}/prompt-snapshot`);
+      return res.data;
+    },
+    enabled: !!attempt?.prompt_snapshot_blob_path,
   });
 
   const replayMut = useMutation({
@@ -373,6 +386,14 @@ function AttemptDetailDrawer({ runId, attempt, scores, onClose }: { runId: strin
               </div>
             )}
           </Section>
+
+          {promptSnapshot && (
+            <Section title="Executor Prompt Snapshots">
+              <pre className="text-xs whitespace-pre-wrap break-words font-mono bg-gray-50 border border-gray-200 rounded-lg p-3 text-gray-800 max-h-80 overflow-auto">
+{JSON.stringify(promptSnapshot, null, 2)}
+              </pre>
+            </Section>
+          )}
         </div>
       </div>
     </div>
@@ -394,6 +415,11 @@ function ScoreCard({ score }: { score: any }) {
   const [reviewerLabel, setReviewerLabel] = useState<boolean | null>(score.reviewer_label ?? null);
   const [reviewerNotes, setReviewerNotes] = useState<string>(score.reviewer_notes ?? "");
   const [showJudgeRaw, setShowJudgeRaw] = useState(false);
+  const { data: promptSnapshot } = useQuery({
+    queryKey: ["score-prompt-snapshot", runId, score.id],
+    queryFn: async () => (await api.get(`/api/runs/${runId}/scores/${score.id}/prompt-snapshot`)).data,
+    enabled: !!score.prompt_snapshot_blob_path,
+  });
 
   useEffect(() => {
     setReviewerLabel(score.reviewer_label ?? null);
@@ -491,6 +517,14 @@ function ScoreCard({ score }: { score: any }) {
 {JSON.stringify(v, null, 2)}
         </pre>
       </details>
+      {promptSnapshot && (
+        <details className="text-[11px] text-gray-500">
+          <summary className="cursor-pointer hover:text-gray-700">Prompt snapshot</summary>
+          <pre className="mt-1 bg-gray-50 border border-gray-200 rounded p-2 font-mono overflow-auto max-h-48">
+{JSON.stringify(promptSnapshot, null, 2)}
+          </pre>
+        </details>
+      )}
 
       <div className="pt-3 mt-3 border-t border-gray-200 space-y-3">
         <div>
