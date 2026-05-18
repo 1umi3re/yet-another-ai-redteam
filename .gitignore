@@ -15,3 +15,5 @@ frontend/tsconfig.tsbuildinfo
 dist/
 build/
 *.egg-info/
+
+.superpowers/
