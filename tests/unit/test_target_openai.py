@@ -71,3 +71,25 @@ async def test_new_session_target_generate_adds_new_session_flag():
     assert body["new_session"] is True
     assert body["messages"][-1] == {"role": "user", "content": "hi"}
     await t.aclose()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_check_stream_support_posts_stream_true():
+    route = respx.post("https://oai.example.com/v1/chat/completions").mock(
+        return_value=httpx.Response(
+            200,
+            headers={"content-type": "text/event-stream"},
+            content=(
+                b'data: {"choices":[{"delta":{"content":"o"}}]}\n\n'
+                b'data: [DONE]\n\n'
+            ),
+        )
+    )
+    t = OpenAICompatTarget(name="t", base_url="https://oai.example.com/v1", model="m", api_key="k")
+    ok, err = await t.check_stream_support(Prompt(text="ping"))
+    body = json.loads(route.calls.last.request.content)
+    assert ok is True
+    assert err is None
+    assert body["stream"] is True
+    await t.aclose()

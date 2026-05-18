@@ -14,6 +14,8 @@ type CheckResult = {
   ok: boolean;
   latency_ms: number | null;
   response_preview: string | null;
+  stream_ok: boolean | null;
+  stream_error: string | null;
   error: string | null;
   model_echo: string | null;
 };
@@ -163,6 +165,8 @@ export default function Targets() {
                                 <div className="flex items-center gap-2 text-green-700">
                                   <CheckCircle2 className="h-4 w-4" />
                                   <span className="font-medium">✓ OK ({result.latency_ms} ms)</span>
+                                  {result.stream_ok === true && <Badge tone="green">stream</Badge>}
+                                  {result.stream_ok === false && <Badge tone="amber">no stream</Badge>}
                                   {result.response_preview && (
                                     <button
                                       className="ml-2 text-xs text-gray-500 hover:text-gray-700 underline"
@@ -179,6 +183,11 @@ export default function Targets() {
                                     <span className="font-medium">✗ Error: </span>
                                     <span className="text-sm">{result.error}</span>
                                   </div>
+                                </div>
+                              )}
+                              {result.ok && result.stream_ok === false && result.stream_error && (
+                                <div className="mt-1 text-xs text-amber-700">
+                                  Stream check failed: {result.stream_error}
                                 </div>
                               )}
                               {expanded && result.response_preview && (

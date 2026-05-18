@@ -15,10 +15,20 @@ async def _login(c):
 async def test_target_check_success(monkeypatch, tmp_path):
     """Test successful target connectivity check."""
     respx.post("https://check.example.com/v1/chat/completions").mock(
-        return_value=httpx.Response(200, json={
-            "choices": [{"message": {"content": "pong - all systems operational"}}],
-            "usage": {"prompt_tokens": 5, "completion_tokens": 4}
-        })
+        side_effect=[
+            httpx.Response(200, json={
+                "choices": [{"message": {"content": "pong - all systems operational"}}],
+                "usage": {"prompt_tokens": 5, "completion_tokens": 4}
+            }),
+            httpx.Response(
+                200,
+                headers={"content-type": "text/event-stream"},
+                content=(
+                    b'data: {"choices":[{"delta":{"content":"p"}}]}\n\n'
+                    b'data: [DONE]\n\n'
+                ),
+            ),
+        ]
     )
     
     monkeypatch.setenv("AIREDTEAM_MASTER_KEY", Fernet.generate_key().decode())
@@ -65,6 +75,8 @@ async def test_target_check_success(monkeypatch, tmp_path):
         assert result["latency_ms"] >= 0
         assert result["response_preview"] is not None
         assert "pong" in result["response_preview"]
+        assert result["stream_ok"] is True
+        assert result["stream_error"] is None
         assert result["error"] is None
         assert result["model_echo"] == "gpt-test"
 

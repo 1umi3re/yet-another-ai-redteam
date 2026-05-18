@@ -30,6 +30,8 @@ class CheckResult(BaseModel):
     ok: bool
     latency_ms: int | None = None
     response_preview: str | None = None
+    stream_ok: bool | None = None
+    stream_error: str | None = None
     error: str | None = None
     model_echo: str | None = None
 
@@ -66,8 +68,15 @@ async def _check_target_connectivity(runtime_cfg: dict) -> CheckResult:
         ping_prompt = Prompt(text="Reply with the single word: pong")
         response = await asyncio.wait_for(
             target.generate(ping_prompt),
-            timeout=30.0
+            timeout=180.0
         )
+        stream_ok = None
+        stream_error = None
+        if hasattr(target, "check_stream_support"):
+            stream_ok, stream_error = await asyncio.wait_for(
+                target.check_stream_support(Prompt(text="Reply with the single word: pong")),
+                timeout=180.0,
+            )
         
         elapsed_ms = int((time.perf_counter() - start) * 1000)
         preview = response.text[:200] if response.text else None
@@ -77,12 +86,14 @@ async def _check_target_connectivity(runtime_cfg: dict) -> CheckResult:
             ok=True,
             latency_ms=elapsed_ms,
             response_preview=preview,
+            stream_ok=stream_ok,
+            stream_error=stream_error,
             model_echo=model_echo
         )
     except asyncio.TimeoutError:
         return CheckResult(
             ok=False,
-            error="TimeoutError: Request exceeded 30 seconds"
+            error="TimeoutError: Request exceeded 180 seconds"
         )
     except Exception as e:
         return CheckResult(
