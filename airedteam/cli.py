@@ -35,18 +35,26 @@ def run_cmd(runspec_yaml: str, name: str) -> None:
         click.echo(json.dumps({"run_id": run.id}))
 
 @main.command("seed-datasets")
-def seed_datasets() -> None:
-    """Seed bundled AdvBench + HarmBench sample datasets into the DB."""
+@click.option("--sample", is_flag=True, help="Seed the small smoke-test samples instead of full datasets.")
+def seed_datasets(sample: bool) -> None:
+    """Seed bundled AdvBench + HarmBench datasets into the DB."""
     from importlib import resources
     from airedteam.api.deps import build_state
 
     state = build_state()
 
     async def _go():
-        samples = [
-            ("AdvBench (sample)", "advbench_sample.json"),
-            ("HarmBench (sample)", "harmbench_sample.json"),
-        ]
+        samples = (
+            [
+                ("AdvBench (sample)", "advbench_sample.json"),
+                ("HarmBench (sample)", "harmbench_sample.json"),
+            ]
+            if sample
+            else [
+                ("AdvBench", "advbench_full.json"),
+                ("HarmBench", "harmbench_full.json"),
+            ]
+        )
         for name, filename in samples:
             data = resources.files("airedteam.builtins.datasets.samples").joinpath(filename).read_bytes()
             ds = await state.datasets.create_json_upload(name=name, file_bytes=data)

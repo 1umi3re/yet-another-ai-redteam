@@ -85,6 +85,8 @@ packages = ["airedteam"]
 "airedteam/builtins/scenarios/owasp_llm_top10_jailbreak.json" = "airedteam/builtins/scenarios/owasp_llm_top10_jailbreak.json"
 "airedteam/builtins/datasets/samples/advbench_sample.json" = "airedteam/builtins/datasets/samples/advbench_sample.json"
 "airedteam/builtins/datasets/samples/harmbench_sample.json" = "airedteam/builtins/datasets/samples/harmbench_sample.json"
+"airedteam/builtins/datasets/samples/advbench_full.json" = "airedteam/builtins/datasets/samples/advbench_full.json"
+"airedteam/builtins/datasets/samples/harmbench_full.json" = "airedteam/builtins/datasets/samples/harmbench_full.json"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
