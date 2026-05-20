@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     master_key: str = Field(..., min_length=44, max_length=44)
     admin_password: str = Field(..., min_length=1)
     jwt_secret: str = "change-me-jwt"
-    jwt_ttl_minutes: int = 60 * 12
+    jwt_ttl_minutes: int = 60 * 24 * 7
     max_concurrency: int = 8
     sse_progress_hz: float = 1.0
     response_inline_max_bytes: int = 8 * 1024

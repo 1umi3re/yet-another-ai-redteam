@@ -48,7 +48,7 @@ python -c "import secrets; print(secrets.token_urlsafe(48))"
 
 ```
 AIREDTEAM_JWT_SECRET=<paste output>
-AIREDTEAM_JWT_TTL_MINUTES=720   # optional, token lifetime (default 12h)
+AIREDTEAM_JWT_TTL_MINUTES=10080 # optional, token lifetime (default 7d)
 ```
 
 ### Docker compose

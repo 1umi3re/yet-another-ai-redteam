@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { Card, CardBody, CardHeader, CardTitle } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
@@ -22,6 +22,28 @@ type SessionState = {
   messages: Array<{ role: string; text: string; metadata?: Record<string, any> }>;
 };
 
+const CONVERTER_CATEGORY_ORDER = [
+  "encoding",
+  "obfuscation",
+  "prompt_framing",
+  "llm_rewrite",
+  "perturbation",
+  "multimodal",
+  "utility",
+  "other",
+] as const;
+
+const CONVERTER_CATEGORY_LABELS: Record<string, string> = {
+  encoding: "Encoding",
+  obfuscation: "Obfuscation",
+  prompt_framing: "Prompt framing",
+  llm_rewrite: "LLM rewrite",
+  perturbation: "Perturbation",
+  multimodal: "Multimodal",
+  utility: "Utility",
+  other: "Other",
+};
+
 export default function ManualConsole() {
   const { t } = useI18n();
   const nav = useNavigate();
@@ -37,6 +59,8 @@ export default function ManualConsole() {
   const [preview, setPreview] = useState<any>(null);
   const [selectedDatasetId, setSelectedDatasetId] = useState("");
   const [selectedPromptId, setSelectedPromptId] = useState("");
+  const [converterSearch, setConverterSearch] = useState("");
+  const [converterCategory, setConverterCategory] = useState("all");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const urlBootstrappedRef = useRef(false);
 
@@ -65,6 +89,43 @@ export default function ManualConsole() {
   const convSchemas: PluginSchemas = plugins?.params?.converters ?? {};
   const scorerSchemas: PluginSchemas = plugins?.params?.scorers ?? {};
   const scorerSchema = scorerSchemas[scorer.plugin] ?? {};
+  const availableConverters: string[] = plugins?.converters ?? [];
+  const converterCategories: Record<string, string> = plugins?.converter_categories ?? {};
+  const selectedConverterNames = useMemo(
+    () => new Set(converters.map(c => c.plugin)),
+    [converters],
+  );
+  const converterCategoryOptions = useMemo(() => {
+    const present = new Set(availableConverters.map(plugin => converterCategories[plugin] ?? "other"));
+    const ordered = CONVERTER_CATEGORY_ORDER.filter(category => present.has(category));
+    const extra = [...present].filter(category => !ordered.includes(category as any)).sort();
+    return ["all", "selected", ...ordered, ...extra];
+  }, [availableConverters, converterCategories]);
+  const converterCategoryCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: availableConverters.length, selected: converters.length };
+    for (const plugin of availableConverters) {
+      const category = converterCategories[plugin] ?? "other";
+      counts[category] = (counts[category] ?? 0) + 1;
+    }
+    return counts;
+  }, [availableConverters, converterCategories, converters.length]);
+  const filteredConverters = useMemo(() => {
+    const search = converterSearch.trim().toLowerCase();
+    return availableConverters.filter(plugin => {
+      if (converterCategory === "selected" && !selectedConverterNames.has(plugin)) return false;
+      if (converterCategory !== "all" && converterCategory !== "selected") {
+        const category = converterCategories[plugin] ?? "other";
+        if (category !== converterCategory) return false;
+      }
+      return !search || plugin.toLowerCase().includes(search);
+    });
+  }, [availableConverters, converterCategories, converterCategory, converterSearch, selectedConverterNames]);
+
+  const converterCategoryLabel = (category: string) => {
+    if (category === "all") return t("All");
+    if (category === "selected") return t("Selected");
+    return t(CONVERTER_CATEGORY_LABELS[category] ?? category);
+  };
 
   const createRunMut = useMutation({
     mutationFn: async (body: { name: string; target_id: string }) =>
@@ -465,30 +526,88 @@ export default function ManualConsole() {
 
             <div className="rounded-lg border border-gray-200 bg-gray-50/50 p-3 space-y-3">
               <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">{t("Converters")}</div>
-              <Field label={t("Plugins")}>
-                <div className="flex flex-wrap gap-2">
-                  {plugins?.converters?.map((plugin: string) => {
-                    const active = converters.some(c => c.plugin === plugin);
-                    return (
-                      <button key={plugin} type="button" onClick={() => toggleConverter(plugin)}
-                        className={clsx(
-                          "px-2.5 py-1 text-xs rounded-full border transition",
-                          active ? "bg-brand-600 border-brand-600 text-white" : "bg-white border-gray-200 text-gray-700 hover:border-gray-300",
-                        )}
-                      >
-                        {plugin}
-                      </button>
-                    );
+              <Field label={t("Search converters")}>
+                <Input
+                  value={converterSearch}
+                  onChange={e => setConverterSearch(e.target.value)}
+                  placeholder={t("Filter by name...")}
+                />
+              </Field>
+
+              <div className="flex flex-wrap gap-1.5">
+                {converterCategoryOptions.map(category => (
+                  <button
+                    key={category}
+                    type="button"
+                    onClick={() => setConverterCategory(category)}
+                    className={clsx(
+                      "rounded-full border px-2.5 py-1 text-[11px] font-medium transition",
+                      converterCategory === category
+                        ? "border-brand-600 bg-brand-600 text-white"
+                        : "border-gray-200 bg-white text-gray-600 hover:border-gray-300",
+                    )}
+                  >
+                    {converterCategoryLabel(category)}
+                    <span className={clsx(
+                      "ml-1 tabular-nums",
+                      converterCategory === category ? "text-brand-100" : "text-gray-400",
+                    )}>
+                      {converterCategoryCounts[category] ?? 0}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              <div>
+                <div className="mb-1 text-[11px] text-gray-500">
+                  {t("Showing {{count}} of {{total}} converters", {
+                    count: filteredConverters.length,
+                    total: availableConverters.length,
                   })}
                 </div>
-              </Field>
+                <div className="max-h-56 overflow-y-auto rounded-lg border border-gray-200 bg-white p-2">
+                  {filteredConverters.length ? (
+                    <div className="grid grid-cols-1 gap-1">
+                      {filteredConverters.map(plugin => {
+                        const active = selectedConverterNames.has(plugin);
+                        const category = converterCategories[plugin] ?? "other";
+                        return (
+                          <button
+                            key={plugin}
+                            type="button"
+                            onClick={() => toggleConverter(plugin)}
+                            className={clsx(
+                              "flex items-center justify-between gap-3 rounded-md border px-2.5 py-2 text-left text-xs transition",
+                              active
+                                ? "border-brand-500 bg-brand-50 text-brand-800"
+                                : "border-transparent text-gray-700 hover:border-gray-200 hover:bg-gray-50",
+                            )}
+                          >
+                            <span className="font-mono">{plugin}</span>
+                            <span className="shrink-0 text-[10px] uppercase tracking-wide text-gray-400">
+                              {converterCategoryLabel(category)}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="py-6 text-center text-xs text-gray-500">{t("No converters match.")}</div>
+                  )}
+                </div>
+              </div>
 
               {converters.map((converter, idx) => {
                 const schema = convSchemas[converter.plugin] ?? {};
                 return (
                   <div key={converter.plugin} className="rounded-lg border border-gray-200 bg-white p-3 space-y-3">
                     <div className="flex items-center justify-between">
-                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">{converter.plugin}</div>
+                      <div>
+                        <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">{converter.plugin}</div>
+                        <div className="mt-0.5 text-[10px] text-gray-400">
+                          {converterCategoryLabel(converterCategories[converter.plugin] ?? "other")}
+                        </div>
+                      </div>
                       <button type="button" className="text-gray-400 hover:text-gray-600"
                         onClick={() => toggleConverter(converter.plugin)}>
                         <X className="h-4 w-4" />

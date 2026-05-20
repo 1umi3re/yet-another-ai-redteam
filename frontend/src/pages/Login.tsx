@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { Card, CardBody } from "../components/ui/Card";
@@ -15,14 +15,26 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const setToken = useAuth(s => s.setToken);
   const nav = useNavigate();
+  const [searchParams] = useSearchParams();
   const { t } = useI18n();
+  const requestedNext = searchParams.get("next");
+  const next = requestedNext?.startsWith("/") ? requestedNext : "/dashboard";
+  const expiredToastShown = useRef(false);
+
+  useEffect(() => {
+    if (searchParams.get("expired") === "1" && !expiredToastShown.current) {
+      expiredToastShown.current = true;
+      toast.error(t("Your session expired. Please sign in again."));
+    }
+  }, [searchParams, t]);
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     try {
       const r = await api.post("/api/login", { password: pw });
       setToken(r.data.token);
-      nav("/dashboard");
+      nav(next, { replace: true });
     } catch {
       toast.error(t("Invalid password"));
     } finally {

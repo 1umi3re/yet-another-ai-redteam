@@ -1,3 +1,5 @@
+from importlib.metadata import entry_points
+
 from fastapi import APIRouter, Depends
 from airedteam.core.registry import default_registry
 from airedteam.api.deps import require_admin
@@ -600,10 +602,23 @@ PARAM_SCHEMAS: dict[str, dict[str, dict]] = {
 }
 
 
+def converter_categories() -> dict[str, str]:
+    categories: dict[str, str] = {}
+    for ep in entry_points(group="airedteam.converters"):
+        module = ep.value.split(":", 1)[0]
+        parts = module.split(".")
+        if parts[:3] == ["airedteam", "builtins", "converters"] and len(parts) >= 5:
+            categories[ep.name] = parts[3]
+        else:
+            categories[ep.name] = "other"
+    return categories
+
+
 @router.get("/plugins")
 async def plugins(_=Depends(require_admin)):
     r = default_registry()
     groups = ("targets", "datasets", "converters", "executors", "scorers")
     out: dict[str, object] = {g: r.list(g) for g in groups}
     out["params"] = PARAM_SCHEMAS
+    out["converter_categories"] = converter_categories()
     return out

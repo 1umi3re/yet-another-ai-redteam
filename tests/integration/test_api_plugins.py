@@ -75,6 +75,9 @@ async def test_list_plugins_and_scenarios(monkeypatch, tmp_path):
             assert converter in body["converters"]
             assert converter in body["params"]["converters"]
         assert body["params"]["converters"]["llm_variation"]["converter_config_id"]["type"] == "target_ref"
+        assert body["converter_categories"]["base64"] == "encoding"
+        assert body["converter_categories"]["leetspeak"] == "obfuscation"
+        assert body["converter_categories"]["prefix"] == "prompt_framing"
         assert "best_of_n" in body["executors"]
         assert body["params"]["executors"]["best_of_n"]["attempts"]["default"] == "5"
         assert "jailbreak_iterative" in body["executors"]

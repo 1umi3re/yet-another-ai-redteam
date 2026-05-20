@@ -7,9 +7,10 @@ def test_settings_defaults(monkeypatch, tmp_path):
     monkeypatch.setenv("AIREDTEAM_MASTER_KEY", "0" * 44)
     monkeypatch.setenv("AIREDTEAM_ADMIN_PASSWORD", "secret")
     monkeypatch.setenv("AIREDTEAM_BLOB_DIR", str(tmp_path))
-    s = Settings()
+    s = Settings(_env_file=None)
     assert s.database_url.startswith("sqlite")
     assert s.max_concurrency >= 1
+    assert s.jwt_ttl_minutes == 60 * 24 * 7
     assert s.blob_dir == tmp_path
 
 
