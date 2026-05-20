@@ -145,7 +145,12 @@ class PAIRExecutor(MultiTurnExecutor):
         try:
             while True:
                 if state["turn"] == 0:
-                    user = Message(role="user", text=cur.text)
+                    user = Message(
+                        role="user",
+                        text=cur.text,
+                        metadata=cur.metadata,
+                        artifacts=cur.artifacts,
+                    )
                 else:
                     user = await self.next_user_message(state, last_response)
                 conversation.append(user)
@@ -156,13 +161,13 @@ class PAIRExecutor(MultiTurnExecutor):
                 if await self.should_stop(state, last_response):
                     break
             return AttemptResult(
-                prompt=Prompt(text=cur.text), response=last_response, status="completed",
+                prompt=cur, response=last_response, status="completed",
                 converter_chain=chain, conversation=list(conversation),
                 prompt_snapshots=list(state["prompt_snapshots"]),
             )
         except Exception as e:
             return AttemptResult(
-                prompt=Prompt(text=cur.text), response=last_response,
+                prompt=cur, response=last_response,
                 status="failed", error=f"{type(e).__name__}: {e}",
                 converter_chain=chain, conversation=list(conversation),
                 prompt_snapshots=list(state["prompt_snapshots"]),

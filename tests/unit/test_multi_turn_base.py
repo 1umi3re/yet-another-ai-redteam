@@ -1,6 +1,6 @@
 from __future__ import annotations
 import pytest
-from airedteam.core.types import Prompt, Response, Message, AttemptResult
+from airedteam.core.types import Prompt, Response, Message, PromptArtifact
 from airedteam.core.plugins import BaseTarget
 from airedteam.builtins.executors.multi_turn_base import MultiTurnExecutor
 
@@ -51,3 +51,27 @@ async def test_multi_turn_base_respects_converters_on_first_turn_only():
     assert ar.converter_chain == ["upper"]
     assert tgt.calls[0][0].text == "SEED"
     assert tgt.calls[1][-1].text == "follow up"
+
+
+@pytest.mark.asyncio
+async def test_multi_turn_base_preserves_artifacts_on_first_turn(tmp_path):
+    artifact_path = tmp_path / "prompt.svg"
+    artifact_path.write_text("<svg/>")
+    artifact = PromptArtifact(
+        path=str(artifact_path),
+        kind="image",
+        media_type="image/svg+xml",
+    )
+
+    class AddArtifact:
+        name = "artifact"
+
+        async def convert(self, p: Prompt):
+            return Prompt(text="artifact prompt", metadata={"converted": True}, artifacts=[artifact])
+
+    tgt = ScriptedTarget(["a", "b"])
+    ex = TwoStepExec()
+    ar = await ex.run(Prompt(text="seed"), tgt, [AddArtifact()])
+    assert ar.prompt.artifacts == [artifact]
+    assert ar.conversation[0].artifacts == [artifact]
+    assert tgt.calls[0][0].artifacts == [artifact]

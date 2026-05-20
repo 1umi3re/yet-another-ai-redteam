@@ -57,7 +57,12 @@ class MultiTurnExecutor:
         try:
             while True:
                 if state["turn"] == 0:
-                    user = Message(role="user", text=cur.text)
+                    user = Message(
+                        role="user",
+                        text=cur.text,
+                        metadata=cur.metadata,
+                        artifacts=cur.artifacts,
+                    )
                 else:
                     nxt = await self.next_user_message(state, last_response)
                     if nxt is None:
@@ -76,7 +81,7 @@ class MultiTurnExecutor:
                     break
 
             return AttemptResult(
-                prompt=Prompt(text=state["first_user"].text, metadata=prompt.metadata),
+                prompt=state["first_user"],
                 response=last_response,
                 status="completed",
                 converter_chain=chain,
@@ -85,7 +90,7 @@ class MultiTurnExecutor:
             )
         except Exception as e:
             return AttemptResult(
-                prompt=Prompt(text=(last_user.text if last_user else cur.text)),
+                prompt=(state["first_user"] if last_user else cur),
                 response=last_response,
                 status="failed",
                 error=f"{type(e).__name__}: {e}",

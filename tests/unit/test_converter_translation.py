@@ -2,7 +2,7 @@ from __future__ import annotations
 import pytest
 from airedteam.core.types import Prompt, Response
 from airedteam.core.plugins import BaseTarget
-from airedteam.builtins.converters.translation_llm import TranslationLLMConverter
+from airedteam.builtins.converters.llm_rewrite.translation_llm import TranslationLLMConverter
 
 
 class FakeTranslator(BaseTarget):

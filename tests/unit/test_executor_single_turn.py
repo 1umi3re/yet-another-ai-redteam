@@ -1,6 +1,6 @@
 import pytest
 from airedteam.builtins.executors.single_turn import SingleTurnExecutor
-from airedteam.builtins.converters.base64_conv import Base64Converter
+from airedteam.builtins.converters.encoding.base64_conv import Base64Converter
 from airedteam.core.types import Prompt, Response
 
 

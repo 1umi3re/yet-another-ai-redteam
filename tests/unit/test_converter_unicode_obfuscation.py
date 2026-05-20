@@ -1,7 +1,7 @@
 from __future__ import annotations
 import pytest
 from airedteam.core.types import Prompt
-from airedteam.builtins.converters.unicode_obfuscation import UnicodeObfuscationConverter
+from airedteam.builtins.converters.encoding.unicode_obfuscation import UnicodeObfuscationConverter
 
 
 @pytest.mark.asyncio

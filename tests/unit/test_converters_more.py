@@ -1,6 +1,6 @@
 import pytest, codecs
-from airedteam.builtins.converters.rot13 import Rot13Converter
-from airedteam.builtins.converters.prefix import PrefixConverter
+from airedteam.builtins.converters.encoding.rot13 import Rot13Converter
+from airedteam.builtins.converters.prompt_framing.prefix import PrefixConverter
 from airedteam.core.types import Prompt
 
 

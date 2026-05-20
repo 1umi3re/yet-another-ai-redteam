@@ -1,7 +1,7 @@
 from __future__ import annotations
 import pytest
 from airedteam.core.types import Prompt
-from airedteam.builtins.converters.leetspeak import LeetspeakConverter
+from airedteam.builtins.converters.obfuscation.leetspeak import LeetspeakConverter
 
 
 @pytest.mark.asyncio

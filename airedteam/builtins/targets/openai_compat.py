@@ -3,6 +3,7 @@ import time
 import httpx
 from airedteam.core.types import Prompt, Response, Message
 from airedteam.core.plugins import BaseTarget
+from airedteam.builtins.targets.artifact_content import openai_content
 
 
 class OpenAICompatTarget(BaseTarget):
@@ -32,7 +33,7 @@ class OpenAICompatTarget(BaseTarget):
         msgs = []
         if self.system_prompt:
             msgs.append({"role": "system", "content": self.system_prompt})
-        msgs.append({"role": "user", "content": prompt.text})
+        msgs.append({"role": "user", "content": openai_content(prompt.text, prompt.artifacts)})
         body: dict = {"model": self.model, "messages": msgs}
         if self.temperature is not None:
             body["temperature"] = self.temperature
@@ -42,7 +43,7 @@ class OpenAICompatTarget(BaseTarget):
         msgs = []
         if self.system_prompt:
             msgs.append({"role": "system", "content": self.system_prompt})
-        msgs.append({"role": "user", "content": prompt.text})
+        msgs.append({"role": "user", "content": openai_content(prompt.text, prompt.artifacts)})
         body: dict = {"model": self.model, "messages": msgs, "stream": True}
         if self.temperature is not None:
             body["temperature"] = self.temperature
@@ -73,7 +74,10 @@ class OpenAICompatTarget(BaseTarget):
             return False, f"{type(e).__name__}: {e}"
 
     async def chat(self, messages: list[Message]) -> Response:
-        msgs = [{"role": m.role, "content": m.text} for m in messages]
+        msgs = [
+            {"role": m.role, "content": openai_content(m.text, m.artifacts)}
+            for m in messages
+        ]
         body: dict = {"model": self.model, "messages": msgs}
         if self.temperature is not None:
             body["temperature"] = self.temperature

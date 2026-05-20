@@ -1,4 +1,5 @@
 from __future__ import annotations
+from dataclasses import asdict
 import json
 import uuid
 import yaml
@@ -11,6 +12,39 @@ from airedteam.engine.factory import build_converter, build_scorer, build_execut
 from airedteam.engine.sampling import SampledDataset
 from airedteam.runspec.models import RunSpec
 from airedteam.services.prompt_assets import PromptAssetService
+
+
+def _message_payload(message) -> dict:
+    payload = {
+        "role": message.role,
+        "text": message.text,
+        "metadata": dict(message.metadata),
+    }
+    if getattr(message, "artifacts", None):
+        payload["artifacts"] = [asdict(artifact) for artifact in message.artifacts]
+    return payload
+
+
+_LLM_CONVERTERS = {
+    "llm_variation",
+    "llm_tone",
+    "llm_persuasion",
+    "llm_generic",
+    "tense",
+    "llm_malicious_question",
+    "llm_toxic_sentence",
+    "llm_random_translation",
+    "llm_scientific_translation",
+    "paraphrase_fast",
+    "paraphrase_pegasus",
+    "meta_agent",
+}
+
+_TRANSLATION_CONVERTERS = {
+    "translation_llm",
+    "low_resource_language",
+    "multilingual",
+}
 
 
 class RunService:
@@ -82,15 +116,19 @@ class RunService:
                 seed=spec.sampling.seed
             )
         
-        # Resolve converter-level target references (translator) before building.
+        # Resolve converter-level target references before building.
         converter_refs = []
         for conv in spec.converters:
             ref = conv.model_dump()
             params = dict(ref.get("params") or {})
-            if ref.get("plugin") == "translation_llm" and "translator_config_id" in params:
+            if ref.get("plugin") in _TRANSLATION_CONVERTERS and "translator_config_id" in params:
                 tcid = params.pop("translator_config_id")
                 tgt_cfg = await self._targets.resolve_for_runtime(tcid)
                 params["translator"] = self._build_target_from_cfg(tgt_cfg)
+            if ref.get("plugin") in _LLM_CONVERTERS and "converter_config_id" in params:
+                cid = params.pop("converter_config_id")
+                tgt_cfg = await self._targets.resolve_for_runtime(cid)
+                params["converter"] = self._build_target_from_cfg(tgt_cfg)
             converter_refs.append({"plugin": ref["plugin"], "params": params})
         converters = [build_converter(r) for r in converter_refs]
         
@@ -98,15 +136,15 @@ class RunService:
         executor_ref = spec.executor.model_dump()
         executor_params = dict(executor_ref.get("params") or {})
         plugin_name = executor_ref.get("plugin")
-        if plugin_name in ("crescendo", "pair") and "attacker_config_id" in executor_params:
+        if plugin_name in ("crescendo", "pair", "jailbreak_iterative") and "attacker_config_id" in executor_params:
             aid = executor_params.pop("attacker_config_id")
             tgt_cfg = await self._targets.resolve_for_runtime(aid)
             executor_params["attacker"] = self._build_target_from_cfg(tgt_cfg)
-        if plugin_name == "pair" and "judge_config_id" in executor_params:
+        if plugin_name in ("pair", "jailbreak_iterative") and "judge_config_id" in executor_params:
             jid = executor_params.pop("judge_config_id")
             jcfg = await self._targets.resolve_for_runtime(jid)
             executor_params["judge"] = self._build_target_from_cfg(jcfg)
-        if plugin_name in ("crescendo", "pair"):
+        if plugin_name in ("crescendo", "pair", "jailbreak_iterative"):
             executor_params["prompt_assets"] = self._prompt_assets
         executor = build_executor({"plugin": plugin_name, "params": executor_params})
         
@@ -143,10 +181,7 @@ class RunService:
             if ar.conversation:
                 conv_path = f"runs/{run_id}/conversations/{attempt_id}.json"
                 payload = json.dumps({
-                    "messages": [
-                        {"role": m.role, "text": m.text, "metadata": dict(m.metadata)}
-                        for m in ar.conversation
-                    ]
+                    "messages": [_message_payload(m) for m in ar.conversation]
                 }).encode("utf-8")
                 await self._blob.put(conv_path, payload)
             prompt_snapshot_path: str | None = None

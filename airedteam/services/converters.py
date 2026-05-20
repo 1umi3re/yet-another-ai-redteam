@@ -7,6 +7,28 @@ from airedteam.core.types import Prompt
 from airedteam.engine.factory import build_converter, build_target
 
 
+_LLM_CONVERTERS = {
+    "llm_variation",
+    "llm_tone",
+    "llm_persuasion",
+    "llm_generic",
+    "tense",
+    "llm_malicious_question",
+    "llm_toxic_sentence",
+    "llm_random_translation",
+    "llm_scientific_translation",
+    "paraphrase_fast",
+    "paraphrase_pegasus",
+    "meta_agent",
+}
+
+_TRANSLATION_CONVERTERS = {
+    "translation_llm",
+    "low_resource_language",
+    "multilingual",
+}
+
+
 @dataclass(frozen=True)
 class ConverterPreview:
     original_text: str
@@ -31,12 +53,18 @@ class ConverterChainService:
                 if not plugin:
                     raise ValueError(f"converter ref missing 'plugin': {ref}")
                 params = dict(ref.get("params") or {})
-                if plugin == "translation_llm" and "translator_config_id" in params:
+                if plugin in _TRANSLATION_CONVERTERS and "translator_config_id" in params:
                     translator_id = params.pop("translator_config_id")
                     target_cfg = await self._targets.resolve_for_runtime(translator_id)
                     translator = build_target(target_cfg)
                     closeables.append(translator)
                     params["translator"] = translator
+                if plugin in _LLM_CONVERTERS and "converter_config_id" in params:
+                    converter_id = params.pop("converter_config_id")
+                    target_cfg = await self._targets.resolve_for_runtime(converter_id)
+                    converter_target = build_target(target_cfg)
+                    closeables.append(converter_target)
+                    params["converter"] = converter_target
                 converter = build_converter({"plugin": plugin, "params": params})
                 converters.append({
                     "plugin": plugin,

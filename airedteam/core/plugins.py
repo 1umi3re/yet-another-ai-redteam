@@ -26,10 +26,12 @@ class BaseTarget:
 
     async def chat(self, messages: list[Message]) -> Response:
         parts: list[str] = []
+        artifacts = []
         for m in messages:
             parts.append(f"{m.role.upper()}: {m.text}")
+            artifacts.extend(m.artifacts)
         assembled = "\n\n".join(parts) + "\n\nASSISTANT:"
-        return await self.generate(Prompt(text=assembled))
+        return await self.generate(Prompt(text=assembled, artifacts=artifacts))
 
     async def aclose(self) -> None:
         return None

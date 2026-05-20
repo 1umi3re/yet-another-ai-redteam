@@ -3,6 +3,7 @@ import time
 import httpx
 from airedteam.core.types import Prompt, Response, Message
 from airedteam.core.plugins import BaseTarget
+from airedteam.builtins.targets.artifact_content import anthropic_content
 
 
 class AnthropicCompatTarget(BaseTarget):
@@ -33,7 +34,7 @@ class AnthropicCompatTarget(BaseTarget):
         body: dict = {
             "model": self.model,
             "max_tokens": self.max_tokens,
-            "messages": [{"role": "user", "content": prompt.text}],
+            "messages": [{"role": "user", "content": anthropic_content(prompt.text, prompt.artifacts)}],
         }
         if self.system_prompt:
             body["system"] = self.system_prompt
@@ -41,7 +42,11 @@ class AnthropicCompatTarget(BaseTarget):
 
     async def chat(self, messages: list[Message]) -> Response:
         system_msgs = [m.text for m in messages if m.role == "system"]
-        other_msgs = [{"role": m.role, "content": m.text} for m in messages if m.role != "system"]
+        other_msgs = [
+            {"role": m.role, "content": anthropic_content(m.text, m.artifacts)}
+            for m in messages
+            if m.role != "system"
+        ]
         body: dict = {
             "model": self.model,
             "max_tokens": self.max_tokens,

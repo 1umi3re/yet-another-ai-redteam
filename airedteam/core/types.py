@@ -4,6 +4,16 @@ from typing import Any, Literal
 
 
 MessageRole = Literal["system", "user", "assistant"]
+PromptArtifactKind = Literal["image", "audio", "video", "binary"]
+
+
+@dataclass(frozen=True)
+class PromptArtifact:
+    path: str
+    kind: PromptArtifactKind
+    media_type: str
+    name: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -11,12 +21,14 @@ class Message:
     role: MessageRole
     text: str
     metadata: dict[str, Any] = field(default_factory=dict)
+    artifacts: list[PromptArtifact] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
 class Prompt:
     text: str
     metadata: dict[str, Any] = field(default_factory=dict)
+    artifacts: list[PromptArtifact] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
