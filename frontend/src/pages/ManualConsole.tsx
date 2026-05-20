@@ -9,6 +9,7 @@ import { ConfiguredPlugin, defaultsFor, ParamField, PluginSchemas } from "../com
 import { MessageSquare, Plus, CheckCircle, Send, Eye, Wand2, X, ClipboardCheck } from "lucide-react";
 import clsx from "clsx";
 import { toast } from "sonner";
+import { useI18n } from "../lib/i18n";
 
 type SessionState = {
   run_id: string;
@@ -22,6 +23,7 @@ type SessionState = {
 };
 
 export default function ManualConsole() {
+  const { t } = useI18n();
   const nav = useNavigate();
   const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
@@ -70,7 +72,7 @@ export default function ManualConsole() {
     onSuccess: (data) => {
       startConversationMut.mutate({ run_id: data.run_id, seed_attempt_id: null });
     },
-    onError: () => toast.error("Failed to create run"),
+    onError: () => toast.error(t("Failed to create run")),
   });
 
   const startConversationMut = useMutation({
@@ -86,7 +88,7 @@ export default function ManualConsole() {
         messages: data.conversation || [],
       });
     },
-    onError: () => toast.error("Failed to start conversation"),
+    onError: () => toast.error(t("Failed to start conversation")),
   });
 
   const sendTurnMut = useMutation({
@@ -106,14 +108,14 @@ export default function ManualConsole() {
       setUserInput("");
       setPreview(null);
     },
-    onError: () => toast.error("Failed to send message"),
+    onError: () => toast.error(t("Failed to send message")),
   });
 
   const previewMut = useMutation({
     mutationFn: async () =>
       (await api.post("/api/converters/preview", { text: userInput, converters })).data,
     onSuccess: setPreview,
-    onError: (e: any) => toast.error(e?.response?.data?.detail ?? "Failed to preview converters"),
+    onError: (e: any) => toast.error(e?.response?.data?.detail ?? t("Failed to preview converters")),
   });
 
   const evaluateMut = useMutation({
@@ -125,9 +127,9 @@ export default function ManualConsole() {
         evaluated: data.evaluated,
         scores: data.scores || [data.score],
       } : null);
-      toast.success("Conversation evaluated");
+      toast.success(t("Conversation evaluated"));
     },
-    onError: (e: any) => toast.error(e?.response?.data?.detail ?? "Failed to evaluate conversation"),
+    onError: (e: any) => toast.error(e?.response?.data?.detail ?? t("Failed to evaluate conversation")),
   });
 
   const finishRunMut = useMutation({
@@ -137,7 +139,7 @@ export default function ManualConsole() {
       queryClient.invalidateQueries({ queryKey: ["runs"] });
       nav(`/runs/${run_id}`);
     },
-    onError: () => toast.error("Failed to finish run"),
+    onError: () => toast.error(t("Failed to finish run")),
   });
 
   const resumeMut = useMutation({
@@ -155,7 +157,7 @@ export default function ManualConsole() {
         messages: data.conversation || [],
       });
     },
-    onError: () => toast.error("Failed to resume manual session"),
+    onError: () => toast.error(t("Failed to resume manual session")),
   });
 
   // Handle query param replay. Runs once when URL params are present so the
@@ -180,7 +182,7 @@ export default function ManualConsole() {
             messages: res.data.messages || [],
           });
         })
-        .catch(() => toast.error("Failed to load conversation"));
+        .catch(() => toast.error(t("Failed to load conversation")));
     }
   }, [searchParams]);
 
@@ -191,10 +193,10 @@ export default function ManualConsole() {
 
   const handleStartSession = () => {
     if (!selectedTargetId) {
-      toast.error("Please select a target");
+      toast.error(t("Please select a target"));
       return;
     }
-    const name = runName.trim() || `Manual session ${new Date().toLocaleString()}`;
+    const name = runName.trim() || `${t("Manual Console")} ${new Date().toLocaleString()}`;
     createRunMut.mutate({ name, target_id: selectedTargetId });
   };
 
@@ -258,30 +260,30 @@ export default function ManualConsole() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
             <MessageSquare className="h-6 w-6" />
-            Manual Console
+            {t("Manual Console")}
           </h1>
-          <p className="text-sm text-gray-600 mt-1">Interact with targets in real-time</p>
+          <p className="text-sm text-gray-600 mt-1">{t("Interact with targets in real-time")}</p>
         </div>
 
         <Card>
           <CardHeader>
-            <CardTitle>Start a manual session</CardTitle>
+            <CardTitle>{t("Start a manual session")}</CardTitle>
           </CardHeader>
           <CardBody>
             <div className="space-y-4">
-              <Field label="Session name">
+              <Field label={t("Session name")}>
                 <Input
-                  placeholder="Manual session (leave blank for auto-generated name)"
+                  placeholder={t("Manual session (leave blank for auto-generated name)")}
                   value={runName}
                   onChange={e => setRunName(e.target.value)}
                 />
               </Field>
 
-              <Field label="Target *">
+              <Field label={t("Target *")}>
                 <Select value={selectedTargetId} onChange={e => setSelectedTargetId(e.target.value)}>
-                  <option value="">-- select target --</option>
-                  {targets.map((t: any) => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
+                  <option value="">{t("-- select target --")}</option>
+                  {targets.map((target: any) => (
+                    <option key={target.id} value={target.id}>{target.name}</option>
                   ))}
                 </Select>
               </Field>
@@ -291,7 +293,7 @@ export default function ManualConsole() {
                 onClick={handleStartSession}
                 loading={createRunMut.isPending || startConversationMut.isPending}
               >
-                Start session
+                {t("Start session")}
               </Button>
             </div>
           </CardBody>
@@ -300,7 +302,7 @@ export default function ManualConsole() {
         {runningManualRuns.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle>Continue running sessions</CardTitle>
+              <CardTitle>{t("Continue running sessions")}</CardTitle>
             </CardHeader>
             <CardBody className="space-y-2">
               {runningManualRuns.map((run: any) => (
@@ -311,7 +313,7 @@ export default function ManualConsole() {
                     <div>
                       <div className="text-sm font-medium text-gray-900">{run.name}</div>
                       <div className="text-xs text-gray-500 mt-0.5">
-                        {(run.target_names ?? []).join(", ") || "No target"}
+                        {(run.target_names ?? []).join(", ") || t("No target")}
                       </div>
                     </div>
                     <MessageSquare className="h-4 w-4 text-gray-400" />
@@ -331,29 +333,29 @@ export default function ManualConsole() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
             <MessageSquare className="h-6 w-6" />
-            Manual Console
+            {t("Manual Console")}
           </h1>
           <p className="text-xs text-gray-500 mt-1">
-            <span className="font-mono">Run ID: {sessionState.run_id.slice(0, 8)}</span>
-            {sessionState.target_name && <span className="ml-2">Target: {sessionState.target_name}</span>}
+            <span className="font-mono">{t("Run ID: {{id}}", { id: sessionState.run_id.slice(0, 8) })}</span>
+            {sessionState.target_name && <span className="ml-2">{t("Target: {{target}}", { target: sessionState.target_name })}</span>}
             <span className={clsx(
               "ml-2",
               sessionState.evaluated ? "text-emerald-700" : "text-amber-700",
             )}>
-              {sessionState.evaluated ? "Evaluated" : "Not evaluated"}
+              {sessionState.evaluated ? t("Evaluated") : t("Not evaluated")}
             </span>
-            {sessionState.status === "completed" && <span className="ml-2 text-emerald-700">Ended</span>}
+            {sessionState.status === "completed" && <span className="ml-2 text-emerald-700">{t("Ended")}</span>}
           </p>
         </div>
         <div className="flex gap-2">
           <Button variant="secondary" onClick={handleNewConversation}
             disabled={sessionState.status === "completed"}
             icon={<Plus className="h-4 w-4" />}>
-            New conversation
+            {t("New conversation")}
           </Button>
           {sessionState.status !== "completed" && (
             <Button variant="primary" onClick={handleFinishRun} icon={<CheckCircle className="h-4 w-4" />}>
-              End run
+              {t("End run")}
             </Button>
           )}
         </div>
@@ -365,7 +367,7 @@ export default function ManualConsole() {
             <div className="flex flex-col h-[600px]">
             <div className="flex-1 overflow-y-auto border border-gray-200 rounded-lg p-4 bg-gray-50 space-y-3">
               {sessionState.messages.length === 0 ? (
-                <div className="text-sm text-gray-400 text-center py-8">No messages yet. Start the conversation below.</div>
+                <div className="text-sm text-gray-400 text-center py-8">{t("No messages yet. Start the conversation below.")}</div>
               ) : (
                 sessionState.messages.map((msg, i) => (
                   <div key={i} className={clsx("flex", msg.role === "user" ? "justify-end" : "justify-start")}>
@@ -383,7 +385,7 @@ export default function ManualConsole() {
                       </pre>
                       {msg.role === "user" && msg.metadata?.original_text && (
                         <div className="mt-2 rounded border border-gray-200 bg-white/70 px-2 py-1 text-[11px] text-gray-500">
-                          Original: <span className="font-mono">{msg.metadata.original_text}</span>
+                          {t("Original")}: <span className="font-mono">{msg.metadata.original_text}</span>
                         </div>
                       )}
                     </div>
@@ -396,7 +398,7 @@ export default function ManualConsole() {
             <div className="flex gap-2 mt-3">
               <Textarea
                 rows={3}
-                placeholder="Type your message..."
+                placeholder={t("Type your message...")}
                 value={userInput}
                 onChange={e => setUserInput(e.target.value)}
                 onKeyDown={e => {
@@ -414,7 +416,7 @@ export default function ManualConsole() {
                 disabled={!userInput.trim() || sessionState.status === "completed"}
                 icon={<Send className="h-4 w-4" />}
               >
-                Send
+                {t("Send")}
               </Button>
             </div>
             </div>
@@ -423,24 +425,24 @@ export default function ManualConsole() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Session tools</CardTitle>
+            <CardTitle>{t("Session tools")}</CardTitle>
           </CardHeader>
           <CardBody className="space-y-4">
             <div className="rounded-lg border border-gray-200 bg-gray-50/50 p-3 space-y-3">
-              <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Benchmark prompt</div>
-              <Field label="Dataset">
+              <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">{t("Benchmark prompt")}</div>
+              <Field label={t("Dataset")}>
                 <Select value={selectedDatasetId} onChange={e => {
                   setSelectedDatasetId(e.target.value);
                   setSelectedPromptId("");
                 }}>
-                  <option value="">-- select dataset --</option>
+                  <option value="">{t("-- select dataset --")}</option>
                   {datasets.map((dataset: any) => (
                     <option key={dataset.id} value={dataset.id}>{dataset.name}</option>
                   ))}
                 </Select>
               </Field>
               {selectedDatasetId && (
-                <Field label="Prompt">
+                <Field label={t("Prompt")}>
                   <Select value={selectedPromptId} onChange={e => {
                     const id = e.target.value;
                     setSelectedPromptId(id);
@@ -450,7 +452,7 @@ export default function ManualConsole() {
                       setPreview(null);
                     }
                   }}>
-                    <option value="">-- load prompt --</option>
+                    <option value="">{t("-- load prompt --")}</option>
                     {datasetItems?.items?.map((item: any, idx: number) => (
                       <option key={`${item.id}-${idx}`} value={item.id}>
                         {item.id}: {item.text.slice(0, 80)}
@@ -462,8 +464,8 @@ export default function ManualConsole() {
             </div>
 
             <div className="rounded-lg border border-gray-200 bg-gray-50/50 p-3 space-y-3">
-              <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Converters</div>
-              <Field label="Plugins">
+              <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">{t("Converters")}</div>
+              <Field label={t("Plugins")}>
                 <div className="flex flex-wrap gap-2">
                   {plugins?.converters?.map((plugin: string) => {
                     const active = converters.some(c => c.plugin === plugin);
@@ -493,7 +495,7 @@ export default function ManualConsole() {
                       </button>
                     </div>
                     {Object.keys(schema).length === 0 ? (
-                      <div className="text-xs text-gray-500">No parameters</div>
+                      <div className="text-xs text-gray-500">{t("No parameters")}</div>
                     ) : Object.entries(schema).map(([key, schema]) => (
                       <ParamField key={key} name={key} schema={schema} targets={targets}
                         value={converter.params[key]}
@@ -508,7 +510,7 @@ export default function ManualConsole() {
                   loading={previewMut.isPending}
                   disabled={!userInput.trim() || converters.length === 0 || sessionState.status === "completed"}
                   onClick={() => previewMut.mutate()}>
-                  Preview
+                  {t("Preview")}
                 </Button>
                 <Button variant="secondary" size="sm" icon={<Wand2 className="h-4 w-4" />}
                   disabled={!preview?.transformed_text}
@@ -517,18 +519,18 @@ export default function ManualConsole() {
                     setConverters([]);
                     setPreview(null);
                   }}>
-                  Apply
+                  {t("Apply")}
                 </Button>
               </div>
 
               {preview && (
                 <div className="rounded-lg border border-gray-200 bg-white p-3">
-                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Preview</div>
+                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">{t("Preview")}</div>
                   <pre className="text-xs whitespace-pre-wrap break-words font-mono text-gray-800 max-h-72 overflow-auto">
 {preview.transformed_text}
                   </pre>
                   <div className="mt-2 text-[11px] text-gray-500">
-                    Chain: {preview.converter_chain.join(" -> ") || "none"}
+                    {t("Chain")}: {preview.converter_chain.join(" -> ") || t("none")}
                   </div>
                 </div>
               )}
@@ -537,20 +539,20 @@ export default function ManualConsole() {
             <div className="rounded-lg border border-gray-200 bg-gray-50/50 p-3 space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Evaluator</div>
+                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">{t("Evaluator")}</div>
                   <div className={clsx(
                     "mt-1 text-xs",
                     sessionState.evaluated ? "text-emerald-700" : "text-amber-700",
                   )}>
                     {sessionState.evaluated
-                      ? `${sessionState.scores?.length ?? 0} score${(sessionState.scores?.length ?? 0) === 1 ? "" : "s"}`
-                      : "No score for this conversation"}
+                      ? t((sessionState.scores?.length ?? 0) === 1 ? "{{count}} score" : "{{count}} scores", { count: sessionState.scores?.length ?? 0 })
+                      : t("No score for this conversation")}
                   </div>
                 </div>
                 <ClipboardCheck className="h-4 w-4 text-gray-400" />
               </div>
 
-              <Field label="Scorer">
+              <Field label={t("Scorer")}>
                 <Select value={scorer.plugin} onChange={e => setScorerPlugin(e.target.value)}>
                   {plugins?.scorers?.map((plugin: string) => (
                     <option key={plugin} value={plugin}>{plugin}</option>
@@ -572,7 +574,7 @@ export default function ManualConsole() {
                 loading={evaluateMut.isPending}
                 disabled={sessionState.messages.length === 0}
                 onClick={handleEvaluate}>
-                Evaluate
+                {t("Evaluate")}
               </Button>
 
               {!!sessionState.scores?.length && (
@@ -581,7 +583,7 @@ export default function ManualConsole() {
                     <div key={score.id} className="rounded border border-gray-200 bg-white px-2 py-2">
                       <div className="flex items-center justify-between gap-2 text-xs">
                         <span className="font-medium text-gray-700">{score.scorer}</span>
-                        <span className="text-gray-500">{score.value?.attack_success ? "complied" : "refused"}</span>
+                        <span className="text-gray-500">{score.value?.attack_success ? t("complied") : t("refused")}</span>
                       </div>
                       {score.rationale && (
                         <div className="mt-1 text-[11px] text-gray-600 line-clamp-3">{score.rationale}</div>

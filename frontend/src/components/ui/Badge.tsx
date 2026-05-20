@@ -1,5 +1,6 @@
 import clsx from "clsx";
 import { ReactNode } from "react";
+import { useI18n } from "../../lib/i18n";
 
 type Tone = "gray" | "green" | "red" | "amber" | "blue" | "indigo";
 
@@ -17,6 +18,7 @@ export function Badge({ tone = "gray", children, className }: { tone?: Tone; chi
 }
 
 export function StatusBadge({ status }: { status: string }) {
+  const { t } = useI18n();
   const map: Record<string, { tone: Tone; label: string }> = {
     pending:   { tone: "gray",   label: "Pending" },
     running:   { tone: "blue",   label: "Running" },
@@ -34,7 +36,7 @@ export function StatusBadge({ status }: { status: string }) {
         m.tone === "amber" && "bg-amber-500",
         m.tone === "gray" && "bg-gray-400",
       )} />
-      {m.label}
+      {t(m.label)}
     </Badge>
   );
 }

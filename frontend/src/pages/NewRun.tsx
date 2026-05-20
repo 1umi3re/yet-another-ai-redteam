@@ -10,8 +10,10 @@ import { PlayCircle, Sparkles, Wrench, X } from "lucide-react";
 import clsx from "clsx";
 import { toast } from "sonner";
 import { ConfiguredPlugin, defaultsFor, ParamField, PluginSchemas } from "../components/PluginParamsForm";
+import { useI18n } from "../lib/i18n";
 
 export default function NewRun() {
+  const { t } = useI18n();
   const nav = useNavigate();
   const { data: targets } = useQuery({ queryKey: ["targets"], queryFn: async () => (await api.get("/api/targets")).data });
   const { data: datasets } = useQuery({ queryKey: ["datasets"], queryFn: async () => (await api.get("/api/datasets")).data });
@@ -23,7 +25,7 @@ export default function NewRun() {
   const executorSchemas: PluginSchemas = plugins?.params?.executors ?? {};
 
   const [mode, setMode] = useState<"preset" | "custom">("preset");
-  const [name, setName] = useState("My run");
+  const [name, setName] = useState(t("My run"));
   const [scenarioId, setScenarioId] = useState("");
   const [targetId, setTargetId] = useState("");
   const [datasetId, setDatasetId] = useState("");
@@ -120,7 +122,7 @@ export default function NewRun() {
       await api.post(`/api/runs/${r.data.id}/start`);
       nav(`/runs/${r.data.id}`);
     },
-    onError: (e: any) => toast.error(e?.response?.data?.detail ?? "Failed to start run"),
+    onError: (e: any) => toast.error(e?.response?.data?.detail ?? t("Failed to start run")),
   });
 
   const canSubmit = !!targetId && !!datasetId
@@ -130,22 +132,22 @@ export default function NewRun() {
   return (
     <div className="max-w-3xl space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">New run</h1>
-        <p className="text-sm text-gray-500 mt-1">Pick a preset scenario or assemble your own pipeline.</p>
+        <h1 className="text-2xl font-bold tracking-tight">{t("New run")}</h1>
+        <p className="text-sm text-gray-500 mt-1">{t("Pick a preset scenario or assemble your own pipeline.")}</p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>1. Basics</CardTitle>
+          <CardTitle>{t("1. Basics")}</CardTitle>
         </CardHeader>
         <CardBody>
-          <Field label="Run name"><Input value={name} onChange={e => setName(e.target.value)} /></Field>
+          <Field label={t("Run name")}><Input value={name} onChange={e => setName(e.target.value)} /></Field>
           <div className="mt-5">
-            <div className="label">Mode</div>
+            <div className="label">{t("Mode")}</div>
             <div className="grid grid-cols-2 gap-3">
               {([
-                { id: "preset", title: "Preset scenario", desc: "Curated pipelines (OWASP, jailbreak, …)", icon: Sparkles },
-                { id: "custom", title: "Custom pipeline", desc: "Choose your own executor, converters, scorer", icon: Wrench },
+                { id: "preset", title: t("Preset scenario"), desc: t("Curated pipelines (OWASP, jailbreak, …)"), icon: Sparkles },
+                { id: "custom", title: t("Custom pipeline"), desc: t("Choose your own executor, converters, scorer"), icon: Wrench },
               ] as const).map(opt => {
                 const Icon = opt.icon;
                 const active = mode === opt.id;
@@ -171,13 +173,13 @@ export default function NewRun() {
       {mode === "preset" && (
         <Card>
           <CardHeader>
-            <CardTitle>2. Scenario</CardTitle>
-            <CardDescription>A pre-configured combination of executor, converters, and scorer.</CardDescription>
+            <CardTitle>{t("2. Scenario")}</CardTitle>
+            <CardDescription>{t("A pre-configured combination of executor, converters, and scorer.")}</CardDescription>
           </CardHeader>
           <CardBody>
-            <Field label="Scenario">
+            <Field label={t("Scenario")}>
               <Select value={scenarioId} onChange={e => setScenarioId(e.target.value)}>
-                <option value="">-- pick scenario --</option>
+                <option value="">{t("-- pick scenario --")}</option>
                 {scenarios?.map((s: any) => <option key={s.id} value={s.id}>{s.title}</option>)}
               </Select>
             </Field>
@@ -186,18 +188,18 @@ export default function NewRun() {
       )}
 
       <Card>
-        <CardHeader><CardTitle>{mode === "preset" ? "3" : "2"}. Target &amp; dataset</CardTitle></CardHeader>
+        <CardHeader><CardTitle>{mode === "preset" ? "3" : "2"}. {t("Target & dataset")}</CardTitle></CardHeader>
         <CardBody>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Field label="Target">
+            <Field label={t("Target")}>
               <Select value={targetId} onChange={e => setTargetId(e.target.value)}>
-                <option value="">-- pick target --</option>
+                <option value="">{t("-- pick target --")}</option>
                 {targets?.map((t: any) => <option key={t.id} value={t.id}>{t.name}</option>)}
               </Select>
             </Field>
-            <Field label="Dataset">
+            <Field label={t("Dataset")}>
               <Select value={datasetId} onChange={e => setDatasetId(e.target.value)}>
-                <option value="">-- pick dataset --</option>
+                <option value="">{t("-- pick dataset --")}</option>
                 {datasets?.map((d: any) => <option key={d.id} value={d.id}>{d.name}</option>)}
               </Select>
             </Field>
@@ -213,23 +215,23 @@ export default function NewRun() {
                 className="h-4 w-4 text-brand-600 rounded border-gray-300"
               />
               <label htmlFor="sampling-toggle" className="text-sm font-medium text-gray-700 cursor-pointer">
-                Dataset sampling (optional)
+                {t("Dataset sampling (optional)")}
               </label>
             </div>
             
             {samplingEnabled && (
               <div className="rounded-lg border border-gray-200 bg-gray-50/50 p-4 space-y-3">
-                <Field label="Limit" hint="Maximum number of items to process (blank = no limit)">
+                <Field label={t("Limit")} hint={t("Maximum number of items to process (blank = no limit)")}>
                   <Input
                     type="number"
                     min="1"
-                    placeholder="e.g., 50"
+                    placeholder={t("e.g., 50")}
                     value={samplingLimit}
                     onChange={e => setSamplingLimit(e.target.value)}
                   />
                 </Field>
                 
-                <Field label="Shuffle">
+                <Field label={t("Shuffle")}>
                   <label className="inline-flex items-center gap-2 text-sm">
                     <input
                       type="checkbox"
@@ -237,15 +239,15 @@ export default function NewRun() {
                       onChange={e => setSamplingShuffle(e.target.checked)}
                       className="h-4 w-4 text-brand-600 rounded border-gray-300"
                     />
-                    <span className="text-gray-600">Randomize dataset order</span>
+                    <span className="text-gray-600">{t("Randomize dataset order")}</span>
                   </label>
                 </Field>
                 
                 {samplingShuffle && (
-                  <Field label="Seed" hint="Random seed for deterministic shuffle (optional)">
+                  <Field label={t("Seed")} hint={t("Random seed for deterministic shuffle (optional)")}>
                     <Input
                       type="number"
-                      placeholder="e.g., 42"
+                      placeholder={t("e.g., 42")}
                       value={samplingSeed}
                       onChange={e => setSamplingSeed(e.target.value)}
                     />
@@ -260,19 +262,19 @@ export default function NewRun() {
       {mode === "custom" && (
         <Card>
           <CardHeader>
-            <CardTitle>3. Pipeline</CardTitle>
-            <CardDescription>Executor orchestrates multi-turn conversations. Converters mutate the prompt. Scorer classifies the response.</CardDescription>
+            <CardTitle>{t("3. Pipeline")}</CardTitle>
+            <CardDescription>{t("Executor orchestrates multi-turn conversations. Converters mutate the prompt. Scorer classifies the response.")}</CardDescription>
           </CardHeader>
           <CardBody className="space-y-6">
             <div>
-              <Field label="Executor">
+              <Field label={t("Executor")}>
                 <Select value={executor.plugin} onChange={e => setExecutorPlugin(e.target.value)}>
                   {plugins?.executors?.map((ex: string) => <option key={ex} value={ex}>{ex}</option>)}
                 </Select>
               </Field>
               {executorSchema && Object.keys(executorSchema).length > 0 && (
                 <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50/50 p-4 space-y-3">
-                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Executor params</div>
+                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">{t("Executor params")}</div>
                   {Object.entries(executorSchema).map(([k, s]) => (
                     <ParamField key={k} name={k} schema={s} targets={targets ?? []}
                       value={executor.params[k]} onChange={v => updateExecutorParam(k, v)} />
@@ -282,14 +284,14 @@ export default function NewRun() {
             </div>
 
             <div>
-              <Field label="Scorer">
+              <Field label={t("Scorer")}>
                 <Select value={scorer.plugin} onChange={e => setScorerPlugin(e.target.value)}>
                   {plugins?.scorers?.map((s: string) => <option key={s} value={s}>{s}</option>)}
                 </Select>
               </Field>
               {scorerSchema && Object.keys(scorerSchema).length > 0 && (
                 <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50/50 p-4 space-y-3">
-                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Scorer params</div>
+                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">{t("Scorer params")}</div>
                   {Object.entries(scorerSchema).map(([k, s]) => (
                     <ParamField key={k} name={k} schema={s} targets={targets ?? []}
                       value={scorer.params[k]} onChange={v => updateScorerParam(k, v)} />
@@ -299,7 +301,7 @@ export default function NewRun() {
             </div>
 
             <div>
-              <Field label="Converters" hint="Click to toggle. Executed in order.">
+              <Field label={t("Converters")} hint={t("Click to toggle. Executed in order.")}>
                 <div className="flex flex-wrap gap-2">
                   {plugins?.converters?.length ? plugins.converters.map((c: string) => {
                     const on = converters.some(p => p.plugin === c);
@@ -311,7 +313,7 @@ export default function NewRun() {
                         )}
                       >{c}</button>
                     );
-                  }) : <Badge>No converters available</Badge>}
+                  }) : <Badge>{t("No converters available")}</Badge>}
                 </div>
               </Field>
               {converters.length > 0 && (
@@ -322,7 +324,7 @@ export default function NewRun() {
                     return (
                       <div key={c.plugin} className="rounded-lg border border-gray-200 bg-gray-50/50 p-4 space-y-3">
                         <div className="flex items-center justify-between">
-                          <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">{c.plugin} params</div>
+                          <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">{c.plugin} {t("params")}</div>
                           <button type="button" onClick={() => toggleConverter(c.plugin)}
                             className="text-gray-400 hover:text-gray-600"><X className="h-4 w-4" /></button>
                         </div>
@@ -342,14 +344,14 @@ export default function NewRun() {
 
       {paramValidation.length > 0 && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Missing required fields: {paramValidation.join(", ")}
+          {t("Missing required fields: {{fields}}", { fields: paramValidation.join(", ") })}
         </div>
       )}
 
       <div className="flex justify-end">
         <Button icon={<PlayCircle className="h-4 w-4" />} loading={submit.isPending}
           disabled={!canSubmit} onClick={() => submit.mutate()}>
-          Create &amp; start
+          {t("Create & start")}
         </Button>
       </div>
     </div>

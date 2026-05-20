@@ -8,6 +8,7 @@ import { EmptyState } from "../components/ui/EmptyState";
 import { Badge } from "../components/ui/Badge";
 import { Target as TargetIcon, Plus, Trash2, CheckCircle2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
+import { useI18n } from "../lib/i18n";
 
 type T = { id: string; name: string; plugin: string; params: Record<string, any>; has_secret: boolean };
 type CheckResult = {
@@ -21,6 +22,7 @@ type CheckResult = {
 };
 
 export default function Targets() {
+  const { t } = useI18n();
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ["targets"],
@@ -39,15 +41,15 @@ export default function Targets() {
       secret: { api_key: form.api_key },
     }),
     onSuccess: () => {
-      toast.success("Target created");
+      toast.success(t("Target created"));
       setForm({ name: "", plugin: "openai_compat", base_url: "", model: "", api_key: "" });
       qc.invalidateQueries({ queryKey: ["targets"] });
     },
-    onError: (e: any) => toast.error(e?.response?.data?.detail ?? "Failed to create"),
+    onError: (e: any) => toast.error(e?.response?.data?.detail ?? t("Failed to create")),
   });
   const del = useMutation({
     mutationFn: async (id: string) => api.delete(`/api/targets/${id}`),
-    onSuccess: () => { toast.success("Deleted"); qc.invalidateQueries({ queryKey: ["targets"] }); },
+    onSuccess: () => { toast.success(t("Deleted")); qc.invalidateQueries({ queryKey: ["targets"] }); },
   });
   const check = useMutation({
     mutationFn: async (id: string) => {
@@ -57,40 +59,40 @@ export default function Targets() {
     onSuccess: ({ id, result }) => {
       setCheckResults((prev) => ({ ...prev, [id]: result }));
       if (result.ok) {
-        toast.success(`Target OK (${result.latency_ms}ms)`);
+        toast.success(t("Target OK ({{latency}}ms)", { latency: result.latency_ms ?? "-" }));
       } else {
-        toast.error(`Target check failed: ${result.error}`);
+        toast.error(t("Target check failed: {{error}}", { error: result.error ?? "" }));
       }
     },
-    onError: (e: any) => toast.error(e?.response?.data?.detail ?? "Check failed"),
+    onError: (e: any) => toast.error(e?.response?.data?.detail ?? t("Check failed")),
   });
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Targets</h1>
-        <p className="text-sm text-gray-500 mt-1">Configure AI applications to test against.</p>
+        <h1 className="text-2xl font-bold tracking-tight">{t("Targets")}</h1>
+        <p className="text-sm text-gray-500 mt-1">{t("Configure AI applications to test against.")}</p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>New target</CardTitle>
-          <CardDescription>OpenAI-compatible or Anthropic-compatible HTTP endpoint.</CardDescription>
+          <CardTitle>{t("New target")}</CardTitle>
+          <CardDescription>{t("OpenAI-compatible or Anthropic-compatible HTTP endpoint.")}</CardDescription>
         </CardHeader>
         <CardBody>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Field label="Name"><Input placeholder="e.g. gpt-4o-mini" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></Field>
-            <Field label="Plugin">
+            <Field label={t("Name")}><Input placeholder="e.g. gpt-4o-mini" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></Field>
+            <Field label={t("Plugin")}>
               <Select value={form.plugin} onChange={e => setForm({ ...form, plugin: e.target.value })}>
                 <option value="openai_compat">openai_compat</option>
                 <option value="openai_compat_new_session">openai_compat_new_session</option>
                 <option value="anthropic_compat">anthropic_compat</option>
               </Select>
             </Field>
-            <Field label="Base URL" hint="e.g. https://api.openai.com/v1"><Input value={form.base_url} onChange={e => setForm({ ...form, base_url: e.target.value })} /></Field>
-            <Field label="Model"><Input placeholder="e.g. gpt-4o-mini" value={form.model} onChange={e => setForm({ ...form, model: e.target.value })} /></Field>
+            <Field label={t("Base URL")} hint="e.g. https://api.openai.com/v1"><Input value={form.base_url} onChange={e => setForm({ ...form, base_url: e.target.value })} /></Field>
+            <Field label={t("Model")}><Input placeholder="e.g. gpt-4o-mini" value={form.model} onChange={e => setForm({ ...form, model: e.target.value })} /></Field>
             <div className="md:col-span-2">
-              <Field label="API key" hint="Stored encrypted. Never exposed via API.">
+              <Field label={t("API key")} hint={t("Stored encrypted. Never exposed via API.")}>
                 <Input type="password" value={form.api_key} onChange={e => setForm({ ...form, api_key: e.target.value })} />
               </Field>
             </div>
@@ -101,59 +103,59 @@ export default function Targets() {
               loading={create.isPending}
               onClick={() => create.mutate()}
               disabled={!form.name || !form.base_url || !form.model || !form.api_key}
-            >Create target</Button>
+            >{t("Create target")}</Button>
           </div>
         </CardBody>
       </Card>
 
       <Card>
-        <CardHeader><CardTitle>Configured targets</CardTitle></CardHeader>
+        <CardHeader><CardTitle>{t("Configured targets")}</CardTitle></CardHeader>
         {isLoading ? (
-          <CardBody className="text-sm text-gray-500">Loading…</CardBody>
+          <CardBody className="text-sm text-gray-500">{t("Loading…")}</CardBody>
         ) : !data?.length ? (
           <EmptyState
             icon={<TargetIcon className="h-10 w-10" />}
-            title="No targets yet"
-            description="Add your first AI endpoint above to start running tests."
+            title={t("No targets yet")}
+            description={t("Add your first AI endpoint above to start running tests.")}
           />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-gray-600 text-xs uppercase tracking-wider">
                 <tr>
-                  <th className="text-left px-5 py-2.5">Name</th>
-                  <th className="text-left px-5 py-2.5">Plugin</th>
-                  <th className="text-left px-5 py-2.5">Model</th>
-                  <th className="text-left px-5 py-2.5">Secret</th>
+                  <th className="text-left px-5 py-2.5">{t("Name")}</th>
+                  <th className="text-left px-5 py-2.5">{t("Plugin")}</th>
+                  <th className="text-left px-5 py-2.5">{t("Model")}</th>
+                  <th className="text-left px-5 py-2.5">{t("Secret")}</th>
                   <th className="px-5 py-2.5"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {data.map(t => {
-                  const result = checkResults[t.id];
-                  const expanded = expandedChecks[t.id];
+                {data.map(target => {
+                  const result = checkResults[target.id];
+                  const expanded = expandedChecks[target.id];
                   return (
-                    <Fragment key={t.id}>
+                    <Fragment key={target.id}>
                       <tr>
-                        <td className="px-5 py-3 font-medium">{t.name}</td>
-                        <td className="px-5 py-3"><Badge tone="indigo">{t.plugin}</Badge></td>
-                        <td className="px-5 py-3 font-mono text-xs text-gray-700">{t.params?.model}</td>
+                        <td className="px-5 py-3 font-medium">{target.name}</td>
+                        <td className="px-5 py-3"><Badge tone="indigo">{target.plugin}</Badge></td>
+                        <td className="px-5 py-3 font-mono text-xs text-gray-700">{target.params?.model}</td>
                         <td className="px-5 py-3">
-                          {t.has_secret ? <Badge tone="green">configured</Badge> : <Badge tone="amber">missing</Badge>}
+                          {target.has_secret ? <Badge tone="green">{t("configured")}</Badge> : <Badge tone="amber">{t("missing")}</Badge>}
                         </td>
                         <td className="px-5 py-3 text-right space-x-2">
                           <Button 
                             variant="ghost" 
                             size="sm" 
                             icon={<CheckCircle2 className="h-3.5 w-3.5" />}
-                            onClick={() => check.mutate(t.id)}
-                            loading={check.isPending && check.variables === t.id}
+                            onClick={() => check.mutate(target.id)}
+                            loading={check.isPending && check.variables === target.id}
                           >
-                            Test
+                            {t("Test")}
                           </Button>
                           <Button variant="ghost" size="sm" icon={<Trash2 className="h-3.5 w-3.5" />}
-                            onClick={() => { if (confirm("Delete this target?")) del.mutate(t.id); }}>
-                            Delete
+                            onClick={() => { if (confirm(t("Delete this target?"))) del.mutate(target.id); }}>
+                            {t("Delete")}
                           </Button>
                         </td>
                       </tr>
@@ -165,14 +167,14 @@ export default function Targets() {
                                 <div className="flex items-center gap-2 text-green-700">
                                   <CheckCircle2 className="h-4 w-4" />
                                   <span className="font-medium">✓ OK ({result.latency_ms} ms)</span>
-                                  {result.stream_ok === true && <Badge tone="green">stream</Badge>}
-                                  {result.stream_ok === false && <Badge tone="amber">no stream</Badge>}
+                                  {result.stream_ok === true && <Badge tone="green">{t("stream")}</Badge>}
+                                  {result.stream_ok === false && <Badge tone="amber">{t("no stream")}</Badge>}
                                   {result.response_preview && (
                                     <button
                                       className="ml-2 text-xs text-gray-500 hover:text-gray-700 underline"
-                                      onClick={() => setExpandedChecks(prev => ({ ...prev, [t.id]: !prev[t.id] }))}
+                                      onClick={() => setExpandedChecks(prev => ({ ...prev, [target.id]: !prev[target.id] }))}
                                     >
-                                      {expanded ? "hide" : "show"} response
+                                      {expanded ? t("hide") : t("show")} {t("response")}
                                     </button>
                                   )}
                                 </div>
@@ -180,14 +182,14 @@ export default function Targets() {
                                 <div className="flex items-start gap-2 text-red-700">
                                   <AlertCircle className="h-4 w-4 mt-0.5" />
                                   <div>
-                                    <span className="font-medium">✗ Error: </span>
+                                    <span className="font-medium">✗ {t("Error")}: </span>
                                     <span className="text-sm">{result.error}</span>
                                   </div>
                                 </div>
                               )}
                               {result.ok && result.stream_ok === false && result.stream_error && (
                                 <div className="mt-1 text-xs text-amber-700">
-                                  Stream check failed: {result.stream_error}
+                                  {t("Stream check failed: {{error}}", { error: result.stream_error })}
                                 </div>
                               )}
                               {expanded && result.response_preview && (

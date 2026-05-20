@@ -1,4 +1,5 @@
 import { Field, Input, Select, Textarea } from "./ui/Form";
+import { useI18n } from "../lib/i18n";
 
 export type ParamSchema = {
   type: "bool" | "string" | "text" | "string_list" | "enum" | "target_ref";
@@ -32,15 +33,16 @@ export function ParamField({
   onChange: (v: any) => void;
   targets: any[];
 }) {
-  const label = (schema.label ?? name) + (schema.required ? " *" : "");
-  const common = { label, hint: schema.help } as const;
+  const { t } = useI18n();
+  const label = t(schema.label ?? name) + (schema.required ? " *" : "");
+  const common = { label, hint: schema.help ? t(schema.help) : undefined } as const;
   switch (schema.type) {
     case "bool":
       return (
         <Field {...common}>
           <label className="inline-flex items-center gap-2 text-sm">
             <input type="checkbox" checked={!!value} onChange={e => onChange(e.target.checked)} />
-            <span className="text-gray-600">{schema.help ?? "Enabled"}</span>
+            <span className="text-gray-600">{schema.help ? t(schema.help) : t("Enabled")}</span>
           </label>
         </Field>
       );
@@ -56,7 +58,7 @@ export function ParamField({
       return (
         <Field {...common}>
           <Select value={value ?? ""} onChange={e => onChange(e.target.value)}>
-            <option value="">-- pick target --</option>
+            <option value="">{t("-- pick target --")}</option>
             {targets.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
           </Select>
         </Field>
@@ -70,7 +72,7 @@ export function ParamField({
       );
     case "string_list":
       return (
-        <Field {...common} hint={(schema.help ?? "") + " (one per line)"}>
+        <Field {...common} hint={`${schema.help ? t(schema.help) : ""} ${t("(one per line)")}`.trim()}>
           <Textarea rows={3} placeholder={schema.placeholder}
             value={Array.isArray(value) ? value.join("\n") : ""}
             onChange={e => onChange(e.target.value.split("\n").map(s => s.trim()).filter(Boolean))} />

@@ -9,6 +9,7 @@ import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Card, CardBody, CardHeader, CardTitle } from "../components/ui/Card";
 import { Field, Input, Textarea } from "../components/ui/Form";
+import { useI18n } from "../lib/i18n";
 
 type Override = {
   id: string;
@@ -30,6 +31,7 @@ type Asset = {
 };
 
 export default function PromptAssets() {
+  const { t } = useI18n();
   const qc = useQueryClient();
   const { data: assets = [] } = useQuery<Asset[]>({
     queryKey: ["prompt-assets"],
@@ -80,9 +82,9 @@ export default function PromptAssets() {
     onSuccess: (data) => {
       if (data?.id) setEditingId(data.id);
       refresh();
-      toast.success("Prompt override saved");
+      toast.success(t("Prompt override saved"));
     },
-    onError: (e: any) => toast.error(e?.response?.data?.detail ?? "Failed to save override"),
+    onError: (e: any) => toast.error(e?.response?.data?.detail ?? t("Failed to save override")),
   });
 
   const activeMut = useMutation({
@@ -90,14 +92,14 @@ export default function PromptAssets() {
       (await api.post(`/api/prompt-assets/${asset?.id}/active`, { override_id })).data,
     onSuccess: () => {
       refresh();
-      toast.success("Active prompt updated");
+      toast.success(t("Active prompt updated"));
     },
-    onError: () => toast.error("Failed to update active prompt"),
+    onError: () => toast.error(t("Failed to update active prompt")),
   });
 
   const startNew = () => {
     setEditingId(null);
-    setName(`${asset?.plugin ?? "Prompt"} override`);
+    setName(`${asset?.plugin ?? t("Prompt")} ${t("override")}`);
     setTemplate(asset?.template ?? "");
   };
 
@@ -110,14 +112,14 @@ export default function PromptAssets() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
           <FileText className="h-6 w-6" />
-          Prompt Assets
+          {t("Prompt Assets")}
         </h1>
-        <p className="text-sm text-gray-600 mt-1">Manage evaluator and executor prompt overrides.</p>
+        <p className="text-sm text-gray-600 mt-1">{t("Manage evaluator and executor prompt overrides.")}</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[340px_minmax(0,1fr)] gap-4">
         <Card>
-          <CardHeader><CardTitle>Assets</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{t("Assets")}</CardTitle></CardHeader>
           <CardBody className="space-y-2">
             {assets.map(a => (
               <button key={a.id} type="button" onClick={() => setSelectedId(a.id)}
@@ -127,7 +129,7 @@ export default function PromptAssets() {
                 )}>
                 <div className="flex items-center justify-between gap-2">
                   <div className="font-mono text-xs text-gray-900">{a.id}</div>
-                  {a.active_override && <Badge>override</Badge>}
+                  {a.active_override && <Badge>{t("override")}</Badge>}
                 </div>
                 <div className="mt-1 text-[11px] text-gray-500">{a.plugin} / {a.purpose}</div>
               </button>
@@ -147,16 +149,16 @@ export default function PromptAssets() {
                   <Badge>{asset.plugin}</Badge>
                   {asset.variables.map(v => <Badge key={v}>{`{${v}}`}</Badge>)}
                 </div>
-                <Field label="Built-in template">
+                <Field label={t("Built-in template")}>
                   <Textarea rows={10} readOnly value={asset.template} />
                 </Field>
                 <div className="flex gap-2">
                   <Button variant="secondary" size="sm" icon={<RotateCcw className="h-4 w-4" />}
                     onClick={() => activeMut.mutate(null)}>
-                    Use built-in
+                    {t("Use built-in")}
                   </Button>
                   <Button variant="secondary" size="sm" icon={<Plus className="h-4 w-4" />} onClick={startNew}>
-                    New override
+                    {t("New override")}
                   </Button>
                 </div>
               </CardBody>
@@ -164,7 +166,7 @@ export default function PromptAssets() {
 
             <div className="grid grid-cols-1 xl:grid-cols-[280px_minmax(0,1fr)] gap-4">
               <Card>
-                <CardHeader><CardTitle>Overrides</CardTitle></CardHeader>
+                <CardHeader><CardTitle>{t("Overrides")}</CardTitle></CardHeader>
                 <CardBody className="space-y-2">
                   {asset.overrides?.length ? asset.overrides.map(o => (
                     <button key={o.id} type="button" onClick={() => setEditingId(o.id)}
@@ -177,31 +179,31 @@ export default function PromptAssets() {
                         {o.is_active && <CheckCircle className="h-4 w-4 text-emerald-600" />}
                       </div>
                     </button>
-                  )) : <div className="text-sm text-gray-500">No overrides yet.</div>}
+                  )) : <div className="text-sm text-gray-500">{t("No overrides yet.")}</div>}
                 </CardBody>
               </Card>
 
               <Card>
-                <CardHeader><CardTitle>{editingId ? "Edit override" : "New override"}</CardTitle></CardHeader>
+                <CardHeader><CardTitle>{editingId ? t("Edit override") : t("New override")}</CardTitle></CardHeader>
                 <CardBody className="space-y-4">
-                  <Field label="Name">
+                  <Field label={t("Name")}>
                     <Input value={name} onChange={e => setName(e.target.value)} />
                   </Field>
-                  <Field label="Template">
+                  <Field label={t("Template")}>
                     <Textarea rows={14} value={template} onChange={e => setTemplate(e.target.value)} />
                   </Field>
                   <div className="flex flex-wrap justify-end gap-2">
                     {editingId && (
                       <Button variant="secondary" icon={<CheckCircle className="h-4 w-4" />}
                         onClick={() => activeMut.mutate(editingId)}>
-                        Make active
+                        {t("Make active")}
                       </Button>
                     )}
                     <Button icon={<Save className="h-4 w-4" />}
                       loading={saveMut.isPending}
                       disabled={!name.trim() || !template.trim()}
                       onClick={() => saveMut.mutate()}>
-                      Save
+                      {t("Save")}
                     </Button>
                   </div>
                 </CardBody>

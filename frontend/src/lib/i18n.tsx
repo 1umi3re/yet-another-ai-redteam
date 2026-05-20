@@ -1,0 +1,303 @@
+import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
+
+export type Language = "en" | "zh";
+
+type Values = Record<string, string | number>;
+type I18nContextValue = {
+  language: Language;
+  setLanguage: (language: Language) => void;
+  toggleLanguage: () => void;
+  t: (key: string, values?: Values) => string;
+};
+
+const STORAGE_KEY = "airedteam.language";
+
+const zh: Record<string, string> = {
+  "AI red-team console": "AI 红队控制台",
+  "Language": "语言",
+  "English": "英文",
+  "中文": "中文",
+  "Dashboard": "仪表盘",
+  "New run": "新建自动化测试任务",
+  "Runs": "测试任务",
+  "Manual Console": "人工测试控制台",
+  "Prompt Assets": "提示词资产",
+  "Sign out": "退出登录",
+  "Sign in": "登录",
+  "Enter your admin password to continue.": "输入管理员密码以继续",
+  "admin password": "管理员密码",
+  "Invalid password": "密码无效",
+  "Configure AIREDTEAM_ADMIN_PASSWORD in your .env": "在 .env 中配置 AIREDTEAM_ADMIN_PASSWORD",
+  "Overview of your red-team workspace.": "红队工作区概览",
+  "Targets": "LLM接入配置",
+  "Datasets": "数据集",
+  "Total runs": "测试任务总数",
+  "Completed": "已完成",
+  "{{count}} running": "{{count}} 个运行中",
+  "Recent runs": "最近测试任务",
+  "View all": "查看全部",
+  "No runs yet": "还没有测试任务",
+  "Create your first run to attack a configured target.": "创建你的第一次测试任务，对已配置的被测目标发起测试。",
+  "Name": "名称",
+  "Status": "状态",
+  "Progress": "进度",
+  "Manual": "手动",
+  "Open": "打开",
+  "Prompt collections used as the source material for attacks.": "作为攻击源材料的提示词合集",
+  "Upload JSON dataset": "上传 JSON 数据集",
+  "JSON file with an array of items. Each item should have a": "JSON 文件应包含 item 数组，每个 item 应有",
+  "field.": "字段。",
+  "Dataset name": "数据集名称",
+  "JSON file": "JSON 文件",
+  "e.g. my-jailbreaks": "例如 my-jailbreaks",
+  "Choose JSON file…": "选择 JSON 文件…",
+  "Upload": "上传",
+  "Dataset uploaded": "数据集已上传",
+  "Upload failed": "上传失败",
+  "Available datasets": "可用数据集",
+  "Built-in AdvBench/HarmBench samples appear here after running": "运行以下命令后，内置 AdvBench/HarmBench 样例会显示在这里：",
+  "Loading…": "加载中…",
+  "No datasets yet": "还没有数据集",
+  "Upload a JSON file or seed the built-in samples.": "上传 JSON 文件或初始化内置样例。",
+  "Plugin": "插件",
+  "Items": "条目",
+  "Configure AI applications to test against.": "配置要测试的 AI 应用",
+  "New target": "新建目标",
+  "OpenAI-compatible or Anthropic-compatible HTTP endpoint.": "兼容 OpenAI 或 Anthropic 格式的 HTTP 端点。",
+  "Base URL": "基础 URL",
+  "Model": "模型",
+  "API key": "API 密钥",
+  "Stored encrypted. Never exposed via API.": "密钥加密存储，不会通过 API 暴露",
+  "Create target": "创建目标",
+  "Target created": "目标已创建",
+  "Failed to create": "创建失败",
+  "Deleted": "已删除",
+  "Configured targets": "已配置目标",
+  "No targets yet": "还没有目标",
+  "Add your first AI endpoint above to start running tests.": "先在上方添加第一个 AI 端点，然后开始测试",
+  "Secret": "密钥",
+  "configured": "已配置",
+  "missing": "缺失",
+  "Test": "测试",
+  "Delete": "删除",
+  "Delete this target?": "删除这个被测目标？",
+  "Target OK ({{latency}}ms)": "目标正常（{{latency}}ms）",
+  "Target check failed: {{error}}": "目标检查失败：{{error}}",
+  "Check failed": "检查失败",
+  "stream": "流式",
+  "no stream": "无流式",
+  "hide": "隐藏",
+  "show": "显示",
+  "response": "响应",
+  "Error": "错误",
+  "Stream check failed: {{error}}": "流式检查失败：{{error}}",
+  "Attack executions against configured targets.": "针对已配置目标的攻击执行记录。",
+  "All runs": "全部测试任务",
+  "Target": "目标",
+  "Continue": "继续",
+  "Pick a preset scenario or assemble your own pipeline.": "选择预设场景，或自行组装流水线。",
+  "My run": "我的测试任务",
+  "1. Basics": "1. 基础信息",
+  "Run name": "运行名称",
+  "Mode": "模式",
+  "Preset scenario": "预设场景",
+  "Curated pipelines (OWASP, jailbreak, …)": "精选流水线（OWASP、越狱等）",
+  "Custom pipeline": "自定义流水线",
+  "Choose your own executor, converters, scorer": "自行选择执行器、转换器和评分器",
+  "2. Scenario": "2. 场景",
+  "Scenario": "场景",
+  "A pre-configured combination of executor, converters, and scorer.": "预先配置好的执行器、转换器和评分器组合。",
+  "-- pick scenario --": "-- 选择场景 --",
+  "Target & dataset": "目标和数据集",
+  "-- pick target --": "-- 选择目标 --",
+  "-- pick dataset --": "-- 选择数据集 --",
+  "Dataset sampling (optional)": "数据集采样（可选）",
+  "Limit": "限制",
+  "Maximum number of items to process (blank = no limit)": "最多处理条目数（留空表示不限制）",
+  "e.g., 50": "例如 50",
+  "Shuffle": "打乱",
+  "Randomize dataset order": "随机化数据集顺序",
+  "Seed": "种子",
+  "Random seed for deterministic shuffle (optional)": "用于确定性打乱的随机种子（可选）",
+  "e.g., 42": "例如 42",
+  "3. Pipeline": "3. 流水线",
+  "Pipeline": "流水线",
+  "Executor orchestrates multi-turn conversations. Converters mutate the prompt. Scorer classifies the response.": "执行器编排多轮对话；转换器变换提示词；评分器分类响应。",
+  "Executor": "执行器",
+  "Executor params": "执行器参数",
+  "Scorer": "评分器",
+  "Scorer params": "评分器参数",
+  "Converters": "转换器",
+  "Click to toggle. Executed in order.": "点击切换，按顺序执行。",
+  "No converters available": "没有可用转换器",
+  "params": "参数",
+  "Missing required fields: {{fields}}": "缺少必填字段：{{fields}}",
+  "Create & start": "创建并启动",
+  "Failed to start run": "启动运行失败",
+  "Interact with targets in real-time": "实时与目标交互",
+  "Start a manual session": "启动手动会话",
+  "Session name": "会话名称",
+  "Manual session (leave blank for auto-generated name)": "手动会话（留空自动生成名称）",
+  "Target *": "目标 *",
+  "-- select target --": "-- 选择目标 --",
+  "Start session": "启动会话",
+  "Please select a target": "请选择目标",
+  "Failed to create run": "创建测试任务失败",
+  "Failed to start conversation": "启动对话失败",
+  "Continue running sessions": "继续运行中的会话",
+  "No target": "无目标",
+  "Run ID: {{id}}": "测试任务 ID：{{id}}",
+  "Target: {{target}}": "目标：{{target}}",
+  "Evaluated": "已评估",
+  "Not evaluated": "未评估",
+  "Ended": "已结束",
+  "New conversation": "新对话",
+  "End run": "结束测试任务",
+  "No messages yet. Start the conversation below.": "还没有消息，请在下方开始对话。",
+  "Original": "原文",
+  "Type your message...": "输入消息...",
+  "Send": "发送",
+  "Session tools": "会话工具",
+  "Benchmark prompt": "基准提示词",
+  "Dataset": "数据集",
+  "-- select dataset --": "-- 选择数据集 --",
+  "Prompt": "提示词",
+  "-- load prompt --": "-- 加载提示词 --",
+  "Plugins": "插件",
+  "No parameters": "无参数",
+  "Preview": "预览",
+  "Apply": "应用",
+  "Chain": "链路",
+  "none": "无",
+  "Evaluator": "评估器",
+  "{{count}} score": "{{count}} 个评分",
+  "{{count}} scores": "{{count}} 个评分",
+  "No score for this conversation": "此对话还没有评分",
+  "Evaluate": "评估",
+  "Conversation evaluated": "对话已评估",
+  "Failed to evaluate conversation": "评估对话失败",
+  "Failed to send message": "发送消息失败",
+  "Failed to preview converters": "预览转换器失败",
+  "Failed to finish run": "结束运行失败",
+  "Failed to resume manual session": "恢复手动会话失败",
+  "Failed to load conversation": "加载对话失败",
+  "Back to runs": "返回运行列表",
+  "Run": "运行",
+  "Refusal rate": "拒答率",
+  "Refused": "已拒答",
+  "Complied": "已遵从",
+  "refused": "已拒答",
+  "complied": "已遵从",
+  "Overview": "概览",
+  "Attempts ({{count}})": "尝试（{{count}}）",
+  "Live events": "实时事件",
+  "Refused vs Complied by target": "按目标统计拒答与遵从",
+  "Green = model refused. Red = model complied with the attack prompt.": "绿色表示模型拒答；红色表示模型遵从攻击提示词。",
+  "No scored attempts yet.": "还没有已评分尝试。",
+  "Response": "响应",
+  "Score": "评分",
+  "View": "查看",
+  "No attempts yet.": "还没有尝试。",
+  "Streamed via Server-Sent Events. Last 200 messages.": "通过 Server-Sent Events 推送，显示最近 200 条消息。",
+  "(waiting for events…)": "（等待事件…）",
+  "Attempt": "尝试",
+  "converters": "转换器",
+  "Replay in Manual Console": "在手动控制台重放",
+  "Cannot replay: target_id not available": "无法重放：target_id 不可用",
+  "Replay of attempt {{id}}": "重放尝试 {{id}}",
+  "Failed to start replay": "启动重放失败",
+  "Conversation": "对话",
+  "Response stored as blob": "响应存储为 blob",
+  "No response": "无响应",
+  "blob": "blob",
+  "in": "输入",
+  "out": "输出",
+  "Scores ({{count}})": "评分（{{count}}）",
+  "No score yet": "还没有评分",
+  "Executor Prompt Snapshots": "执行器提示词快照",
+  "Raw value": "原始值",
+  "Prompt snapshot": "提示词快照",
+  "Reviewer verdict": "复核结论",
+  "Use scorer": "使用评分器",
+  "(overridden)": "（已重写）",
+  "What the attempt actually shows": "此尝试实际说明",
+  "Your notes on this attempt...": "记录你对此尝试的判断...",
+  "Save annotation": "保存标注",
+  "Annotation saved": "标注已保存",
+  "Failed to save annotation": "保存标注失败",
+  "confidence {{value}}": "置信度 {{value}}",
+  "score {{value}}": "分数 {{value}}",
+  "Judge format error": "评审格式错误",
+  "fallback: yes/no heuristic": "回退：yes/no 启发式",
+  "no signal — default false": "无信号，默认 false",
+  "raw judge output": "原始评审输出",
+  "Hide": "隐藏",
+  "Show": "显示",
+  "Manage evaluator and executor prompt overrides.": "管理评估器和执行器的提示词，并提供重写功能",
+  "Assets": "资产",
+  "override": "重写",
+  "Built-in template": "内置模板",
+  "Use built-in": "使用内置",
+  "New override": "新建重写",
+  "Overrides": "重写项",
+  "No overrides yet.": "还没有重写项。",
+  "Edit override": "编辑重写",
+  "Template": "模板",
+  "Make active": "设为启用",
+  "Save": "保存",
+  "Prompt override saved": "提示词重写已保存",
+  "Failed to save override": "保存重写失败",
+  "Active prompt updated": "启用提示词已更新",
+  "Failed to update active prompt": "更新启用提示词失败",
+  "Pending": "待处理",
+  "Running": "运行中",
+  "Failed": "失败",
+  "Cancelled": "已取消",
+  "Enabled": "启用",
+  "(one per line)": "（每行一个）",
+};
+
+const I18nContext = createContext<I18nContextValue | null>(null);
+
+function readInitialLanguage(): Language {
+  if (typeof window === "undefined") return "en";
+  const saved = window.localStorage.getItem(STORAGE_KEY);
+  return saved === "zh" ? "zh" : "en";
+}
+
+function format(template: string, values?: Values): string {
+  if (!values) return template;
+  return template.replace(/\{\{(\w+)\}\}/g, (_, key: string) => String(values[key] ?? ""));
+}
+
+export function I18nProvider({ children }: { children: ReactNode }) {
+  const [language, setLanguageState] = useState<Language>(readInitialLanguage);
+
+  const setLanguage = useCallback((next: Language) => {
+    setLanguageState(next);
+    window.localStorage.setItem(STORAGE_KEY, next);
+  }, []);
+
+  const toggleLanguage = useCallback(() => {
+    setLanguage(language === "en" ? "zh" : "en");
+  }, [language, setLanguage]);
+
+  const t = useCallback((key: string, values?: Values) => {
+    const template = language === "zh" ? (zh[key] ?? key) : key;
+    return format(template, values);
+  }, [language]);
+
+  useEffect(() => {
+    document.documentElement.lang = language === "zh" ? "zh-Hans" : "en";
+  }, [language]);
+
+  const value = useMemo(() => ({ language, setLanguage, toggleLanguage, t }), [language, setLanguage, toggleLanguage, t]);
+
+  return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
+}
+
+export function useI18n() {
+  const value = useContext(I18nContext);
+  if (!value) throw new Error("useI18n must be used within I18nProvider");
+  return value;
+}
