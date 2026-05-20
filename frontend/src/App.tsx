@@ -1,15 +1,17 @@
+import { lazy, Suspense } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
-import Login from "./pages/Login";
-import Dashboard from "./pages/Dashboard";
-import Targets from "./pages/Targets";
-import Datasets from "./pages/Datasets";
-import Runs from "./pages/Runs";
-import RunDetail from "./pages/RunDetail";
-import NewRun from "./pages/NewRun";
-import ManualConsole from "./pages/ManualConsole";
-import PromptAssets from "./pages/PromptAssets";
 import Layout from "./components/Layout";
 import { useAuth } from "./lib/auth";
+
+const Login = lazy(() => import("./pages/Login"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Targets = lazy(() => import("./pages/Targets"));
+const Datasets = lazy(() => import("./pages/Datasets"));
+const Runs = lazy(() => import("./pages/Runs"));
+const RunDetail = lazy(() => import("./pages/RunDetail"));
+const NewRun = lazy(() => import("./pages/NewRun"));
+const ManualConsole = lazy(() => import("./pages/ManualConsole"));
+const PromptAssets = lazy(() => import("./pages/PromptAssets"));
 
 function Protected({ children }: { children: JSX.Element }) {
   const t = useAuth(s => s.token);
@@ -18,19 +20,21 @@ function Protected({ children }: { children: JSX.Element }) {
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route element={<Protected><Layout /></Protected>}>
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/targets" element={<Targets />} />
-        <Route path="/datasets" element={<Datasets />} />
-        <Route path="/runs" element={<Runs />} />
-        <Route path="/runs/new" element={<NewRun />} />
-        <Route path="/runs/:id" element={<RunDetail />} />
-        <Route path="/manual" element={<ManualConsole />} />
-        <Route path="/prompt-assets" element={<PromptAssets />} />
-      </Route>
-    </Routes>
+    <Suspense fallback={null}>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route element={<Protected><Layout /></Protected>}>
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/targets" element={<Targets />} />
+          <Route path="/datasets" element={<Datasets />} />
+          <Route path="/runs" element={<Runs />} />
+          <Route path="/runs/new" element={<NewRun />} />
+          <Route path="/runs/:id" element={<RunDetail />} />
+          <Route path="/manual" element={<ManualConsole />} />
+          <Route path="/prompt-assets" element={<PromptAssets />} />
+        </Route>
+      </Routes>
+    </Suspense>
   );
 }

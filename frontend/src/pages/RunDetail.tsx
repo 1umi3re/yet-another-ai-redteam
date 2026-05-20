@@ -15,6 +15,9 @@ import { toast } from "sonner";
 
 type Tab = "overview" | "attempts" | "events";
 
+const TERMINAL_STATUSES = new Set(["completed", "failed", "cancelled"]);
+const isTerminalStatus = (s: string | undefined) => !!s && TERMINAL_STATUSES.has(s);
+
 function scorerVerdictOf(score: any): "refused" | "complied" {
   const v = score?.value ?? {};
   if (typeof v.attack_success === "boolean") {
@@ -45,17 +48,18 @@ export default function RunDetail() {
   const { data: run } = useQuery({
     queryKey: ["run", id],
     queryFn: async () => (await api.get(`/api/runs/${id}`)).data,
-    refetchInterval: 2000,
+    refetchInterval: (q) => isTerminalStatus(q.state.data?.status) ? false : 2000,
   });
+  const pollInterval: number | false = isTerminalStatus(run?.status) ? false : 2000;
   const { data: attempts = [] } = useQuery({
     queryKey: ["run-attempts", id],
     queryFn: async () => (await api.get(`/api/runs/${id}/attempts`)).data,
-    refetchInterval: 2000,
+    refetchInterval: pollInterval,
   });
   const { data: scores = [] } = useQuery({
     queryKey: ["run-scores", id],
     queryFn: async () => (await api.get(`/api/runs/${id}/scores`)).data,
-    refetchInterval: 2000,
+    refetchInterval: pollInterval,
   });
 
   useEffect(() => {
@@ -63,21 +67,30 @@ export default function RunDetail() {
     const url = `${api.defaults.baseURL}/api/runs/${id}/events?token=${encodeURIComponent(token)}`;
     const es = new EventSource(url);
     es.onmessage = (e) => setEvents(prev => [...prev.slice(-199), JSON.parse(e.data)]);
-    es.onerror = () => es.close();
+    // Intentionally no onerror handler — EventSource auto-reconnects on transient
+    // network errors. The cleanup below closes the stream on unmount.
     return () => es.close();
   }, [id, token]);
+
+  const scoreByAttempt = useMemo(() => {
+    const m = new Map<string, any>();
+    for (const s of scores as any[]) {
+      if (!m.has(s.attempt_id)) m.set(s.attempt_id, s);
+    }
+    return m;
+  }, [scores]);
 
   const chartData = useMemo(() => {
     const byTarget: Record<string, { target: string; refused: number; complied: number }> = {};
     for (const a of attempts as any[]) {
       byTarget[a.target_name] ||= { target: a.target_name, refused: 0, complied: 0 };
-      const sc = (scores as any[]).find((s: any) => s.attempt_id === a.id);
+      const sc = scoreByAttempt.get(a.id);
       if (!sc) continue;
       if (verdictOf(sc) === "refused") byTarget[a.target_name].refused++;
       else byTarget[a.target_name].complied++;
     }
     return Object.values(byTarget);
-  }, [attempts, scores]);
+  }, [attempts, scoreByAttempt]);
 
   const totals = useMemo(() => {
     let refused = 0, complied = 0;
@@ -169,7 +182,7 @@ export default function RunDetail() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {(attempts as any[]).map(a => {
-                  const sc = (scores as any[]).find((s: any) => s.attempt_id === a.id);
+                  const sc = scoreByAttempt.get(a.id);
                   const verdict = sc ? verdictOf(sc) : null;
                   return (
                     <tr key={a.id} className="align-top hover:bg-gray-50/60">

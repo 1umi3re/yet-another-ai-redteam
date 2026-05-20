@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { api } from "../lib/api";
 import { Card, CardBody, CardHeader, CardTitle, CardDescription } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
@@ -133,8 +133,8 @@ export default function Targets() {
                   const result = checkResults[t.id];
                   const expanded = expandedChecks[t.id];
                   return (
-                    <>
-                      <tr key={t.id}>
+                    <Fragment key={t.id}>
+                      <tr>
                         <td className="px-5 py-3 font-medium">{t.name}</td>
                         <td className="px-5 py-3"><Badge tone="indigo">{t.plugin}</Badge></td>
                         <td className="px-5 py-3 font-mono text-xs text-gray-700">{t.params?.model}</td>
@@ -158,7 +158,7 @@ export default function Targets() {
                         </td>
                       </tr>
                       {result && (
-                        <tr key={`${t.id}-result`}>
+                        <tr>
                           <td colSpan={5} className="px-5 py-2 bg-gray-50">
                             <div className="text-sm">
                               {result.ok ? (
@@ -199,7 +199,7 @@ export default function Targets() {
                           </td>
                         </tr>
                       )}
-                    </>
+                    </Fragment>
                   );
                 })}
               </tbody>

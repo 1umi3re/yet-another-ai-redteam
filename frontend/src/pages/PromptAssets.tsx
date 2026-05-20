@@ -55,12 +55,14 @@ export default function PromptAssets() {
     [asset, editingId],
   );
 
+  // Depend on the override's id (a stable primitive), not the memoized object —
+  // otherwise every asset refetch reseeds the form and wipes in-flight edits.
   useEffect(() => {
     if (selectedOverride) {
       setName(selectedOverride.name);
       setTemplate(selectedOverride.template);
     }
-  }, [selectedOverride]);
+  }, [selectedOverride?.id]);
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["prompt-assets"] });

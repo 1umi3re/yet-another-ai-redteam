@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { Card, CardBody, CardHeader, CardTitle } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
@@ -34,7 +34,9 @@ export default function ManualConsole() {
   const [scorer, setScorer] = useState<ConfiguredPlugin>({ plugin: "refusal", params: {} });
   const [preview, setPreview] = useState<any>(null);
   const [selectedDatasetId, setSelectedDatasetId] = useState("");
+  const [selectedPromptId, setSelectedPromptId] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const urlBootstrappedRef = useRef(false);
 
   const { data: targets = [] } = useQuery({
     queryKey: ["targets"],
@@ -156,13 +158,17 @@ export default function ManualConsole() {
     onError: () => toast.error("Failed to resume manual session"),
   });
 
-  // Handle query param replay
+  // Handle query param replay. Runs once when URL params are present so the
+  // effect doesn't re-fire (and re-trigger resume / fetch) on every chat turn.
   useEffect(() => {
+    if (urlBootstrappedRef.current) return;
     const runId = searchParams.get("run");
     const attemptId = searchParams.get("attempt");
-    if (runId && !attemptId && !sessionState) {
+    if (!runId) return;
+    urlBootstrappedRef.current = true;
+    if (!attemptId) {
       resumeMut.mutate(runId);
-    } else if (runId && attemptId && !sessionState) {
+    } else {
       api.get(`/api/runs/${runId}/attempts/${attemptId}/conversation`)
         .then(res => {
           setSessionState({
@@ -176,7 +182,7 @@ export default function ManualConsole() {
         })
         .catch(() => toast.error("Failed to load conversation"));
     }
-  }, [searchParams, sessionState]);
+  }, [searchParams]);
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -423,7 +429,10 @@ export default function ManualConsole() {
             <div className="rounded-lg border border-gray-200 bg-gray-50/50 p-3 space-y-3">
               <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Benchmark prompt</div>
               <Field label="Dataset">
-                <Select value={selectedDatasetId} onChange={e => setSelectedDatasetId(e.target.value)}>
+                <Select value={selectedDatasetId} onChange={e => {
+                  setSelectedDatasetId(e.target.value);
+                  setSelectedPromptId("");
+                }}>
                   <option value="">-- select dataset --</option>
                   {datasets.map((dataset: any) => (
                     <option key={dataset.id} value={dataset.id}>{dataset.name}</option>
@@ -432,8 +441,10 @@ export default function ManualConsole() {
               </Field>
               {selectedDatasetId && (
                 <Field label="Prompt">
-                  <Select value="" onChange={e => {
-                    const item = datasetItems?.items?.find((it: any) => it.id === e.target.value);
+                  <Select value={selectedPromptId} onChange={e => {
+                    const id = e.target.value;
+                    setSelectedPromptId(id);
+                    const item = datasetItems?.items?.find((it: any) => it.id === id);
                     if (item) {
                       setUserInput(item.text);
                       setPreview(null);
