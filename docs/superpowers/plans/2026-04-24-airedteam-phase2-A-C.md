@@ -1192,7 +1192,7 @@ Do these in five small commits; each converter is a ~15-line class.
 from __future__ import annotations
 import pytest
 from airedteam.core.types import Prompt
-from airedteam.builtins.converters.unicode_obfuscation import UnicodeObfuscationConverter
+from airedteam.builtins.converters.encoding.unicode_obfuscation import UnicodeObfuscationConverter
 
 
 @pytest.mark.asyncio
@@ -1257,7 +1257,7 @@ class UnicodeObfuscationConverter:
 
 `pyproject.toml`:
 ```
-unicode_obfuscation = "airedteam.builtins.converters.unicode_obfuscation:UnicodeObfuscationConverter"
+unicode_obfuscation = "airedteam.builtins.converters.encoding.unicode_obfuscation:UnicodeObfuscationConverter"
 ```
 
 `PARAM_SCHEMAS` (in `plugins.py`):
@@ -1284,7 +1284,7 @@ git commit -m "feat(phase2): unicode_obfuscation converter"
 ```python
 @pytest.mark.asyncio
 async def test_leetspeak_replaces_default_set():
-    from airedteam.builtins.converters.leetspeak import LeetspeakConverter
+    from airedteam.builtins.converters.obfuscation.leetspeak import LeetspeakConverter
     from airedteam.core.types import Prompt
     c = LeetspeakConverter()
     r = await c.convert(Prompt(text="leet attack"))
@@ -1341,7 +1341,7 @@ assert r.text == "l337 @77@ck"
 ```python
 # tests/unit/test_converter_persona.py
 import pytest
-from airedteam.builtins.converters.persona_role_play_prefix import PersonaRolePlayPrefixConverter
+from airedteam.builtins.converters.prompt_framing.persona_role_play_prefix import PersonaRolePlayPrefixConverter
 from airedteam.core.types import Prompt
 
 
@@ -1444,7 +1444,7 @@ from __future__ import annotations
 import pytest
 from airedteam.core.types import Prompt, Response
 from airedteam.core.plugins import BaseTarget
-from airedteam.builtins.converters.translation_llm import TranslationLLMConverter
+from airedteam.builtins.converters.llm_rewrite.translation_llm import TranslationLLMConverter
 
 
 class FakeTranslator(BaseTarget):

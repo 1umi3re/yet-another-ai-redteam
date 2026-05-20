@@ -78,10 +78,10 @@ hf = "airedteam.builtins.datasets.hf:HuggingFaceDataset"
 json_upload = "airedteam.builtins.datasets.json_upload:JsonUploadDataset"
 
 [project.entry-points."airedteam.converters"]
-identity = "airedteam.builtins.converters.identity:IdentityConverter"
-base64 = "airedteam.builtins.converters.base64_conv:Base64Converter"
-rot13 = "airedteam.builtins.converters.rot13:Rot13Converter"
-prefix = "airedteam.builtins.converters.prefix:PrefixConverter"
+identity = "airedteam.builtins.converters.utility.identity:IdentityConverter"
+base64 = "airedteam.builtins.converters.encoding.base64_conv:Base64Converter"
+rot13 = "airedteam.builtins.converters.encoding.rot13:Rot13Converter"
+prefix = "airedteam.builtins.converters.prompt_framing.prefix:PrefixConverter"
 
 [project.entry-points."airedteam.executors"]
 single_turn = "airedteam.builtins.executors.single_turn:SingleTurnExecutor"
@@ -1089,8 +1089,8 @@ Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
 ```python
 # tests/unit/test_converters_basic.py
 import pytest, base64
-from airedteam.builtins.converters.identity import IdentityConverter
-from airedteam.builtins.converters.base64_conv import Base64Converter
+from airedteam.builtins.converters.utility.identity import IdentityConverter
+from airedteam.builtins.converters.encoding.base64_conv import Base64Converter
 from airedteam.core.types import Prompt
 
 
@@ -1153,8 +1153,8 @@ Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
 ```python
 # tests/unit/test_converters_more.py
 import pytest, codecs
-from airedteam.builtins.converters.rot13 import Rot13Converter
-from airedteam.builtins.converters.prefix import PrefixConverter
+from airedteam.builtins.converters.encoding.rot13 import Rot13Converter
+from airedteam.builtins.converters.prompt_framing.prefix import PrefixConverter
 from airedteam.core.types import Prompt
 
 
@@ -1759,7 +1759,7 @@ Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
 # tests/unit/test_executor_single_turn.py
 import pytest
 from airedteam.builtins.executors.single_turn import SingleTurnExecutor
-from airedteam.builtins.converters.base64_conv import Base64Converter
+from airedteam.builtins.converters.encoding.base64_conv import Base64Converter
 from airedteam.core.types import Prompt, Response
 
 
