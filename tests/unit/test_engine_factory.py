@@ -26,6 +26,15 @@ def test_build_executor_jailbreak_iterative_requires_attacker_and_judge():
         raise AssertionError("jailbreak_iterative should require attacker and judge")
 
 
+def test_build_executor_general_multi_turn_requires_role_targets():
+    try:
+        build_executor({"plugin": "general_multi_turn", "params": {}})
+    except ValueError as exc:
+        assert "attacker" in str(exc)
+    else:
+        raise AssertionError("general_multi_turn should require role targets")
+
+
 def test_build_scorer_refusal():
     s = build_scorer({"plugin": "refusal", "params": {}})
     assert s.name == "refusal"

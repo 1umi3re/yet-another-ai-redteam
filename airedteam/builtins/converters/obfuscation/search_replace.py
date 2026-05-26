@@ -13,7 +13,7 @@ class SearchReplaceConverter:
     def __init__(
         self,
         *,
-        search: str,
+        search: str = "__AIREDTEAM_NO_MATCH__",
         replace: str = "",
         use_regex: bool = False,
         case_sensitive: bool = True,

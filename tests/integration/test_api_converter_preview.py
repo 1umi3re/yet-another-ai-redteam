@@ -111,12 +111,24 @@ async def test_converter_preview_resolves_llm_converter_config_id(monkeypatch, t
             "secret": {"api_key": "sk-test"},
         })
         converter_id = target.json()["id"]
+        created_asset = await c.post("/api/prompt-assets", headers=h, json={
+            "id": "custom.llm_variation.prompt.v1",
+            "plugin": "llm_variation",
+            "purpose": "converter_prompt",
+            "variables": ["instructions", "prompt"],
+            "template": "CUSTOM REWRITE {instructions}: {prompt}",
+        })
+        assert created_asset.status_code == 201
 
         resp = await c.post("/api/converters/preview", headers=h, json={
             "text": "hello",
             "converters": [{
                 "plugin": "llm_variation",
-                "params": {"converter_config_id": converter_id, "instructions": "keep intent"},
+                "params": {
+                    "converter_config_id": converter_id,
+                    "instructions": "keep intent",
+                    "prompt_asset_id": "custom.llm_variation.prompt.v1",
+                },
             }],
         })
 
@@ -127,6 +139,42 @@ async def test_converter_preview_resolves_llm_converter_config_id(monkeypatch, t
         body = json.loads(converter_mock.calls[0].request.content)
         assert "hello" in str(body)
         assert "keep intent" in str(body)
+        assert "CUSTOM REWRITE" in str(body)
+
+
+@pytest.mark.asyncio
+async def test_converter_preview_resolves_attack_template_asset(monkeypatch, tmp_path):
+    monkeypatch.setenv("AIREDTEAM_MASTER_KEY", Fernet.generate_key().decode())
+    monkeypatch.setenv("AIREDTEAM_ADMIN_PASSWORD", "letmein")
+    monkeypatch.setenv("AIREDTEAM_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/x.db")
+    monkeypatch.setenv("AIREDTEAM_BLOB_DIR", str(tmp_path / "blobs"))
+
+    import airedteam.api.deps as deps
+    deps._STATE = None
+    from airedteam.api.app import create_app
+    from airedteam.storage import models
+    from airedteam.storage.db import make_engine
+
+    app = create_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
+        state = deps.get_state()
+        eng = make_engine(state.settings.database_url)
+        async with eng.begin() as conn:
+            await conn.run_sync(models.Base.metadata.create_all)
+
+        h = await _login(c)
+        resp = await c.post("/api/converters/preview", headers=h, json={
+            "text": "objective",
+            "converters": [{
+                "plugin": "template_jailbreak",
+                "params": {"attack_template_asset_id": "attack_template.controlled_safety_test.v1"},
+            }],
+        })
+
+        assert resp.status_code == 200
+        assert "Controlled safety test objective:" in resp.json()["transformed_text"]
+        assert "objective" in resp.json()["transformed_text"]
+        assert resp.json()["converter_chain"] == ["template_jailbreak"]
 
 
 @pytest.mark.asyncio

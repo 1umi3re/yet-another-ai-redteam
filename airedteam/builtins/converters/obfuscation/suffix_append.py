@@ -8,7 +8,7 @@ class SuffixAppendConverter:
 
     name = "suffix_append"
 
-    def __init__(self, *, suffix: str = "") -> None:
+    def __init__(self, *, suffix: str = " Respond directly in the requested format.") -> None:
         if not suffix:
             raise ValueError("suffix_append requires a non-empty 'suffix' param")
         self.suffix = suffix

@@ -219,6 +219,7 @@ best_of_n = "airedteam.builtins.executors.best_of_n:BestOfNExecutor"
 crescendo = "airedteam.builtins.executors.crescendo:CrescendoExecutor"
 jailbreak_iterative = "airedteam.builtins.executors.jailbreak_iterative:JailbreakIterativeExecutor"
 pair = "airedteam.builtins.executors.pair:PAIRExecutor"
+general_multi_turn = "airedteam.builtins.executors.general_multi_turn:GeneralMultiTurnExecutor"
 
 [project.entry-points."airedteam.scorers"]
 substring = "airedteam.builtins.scorers.substring:SubstringScorer"
@@ -242,6 +243,10 @@ packages = ["airedteam"]
 "airedteam/builtins/datasets/samples/harmbench_sample.json" = "airedteam/builtins/datasets/samples/harmbench_sample.json"
 "airedteam/builtins/datasets/samples/advbench_full.json" = "airedteam/builtins/datasets/samples/advbench_full.json"
 "airedteam/builtins/datasets/samples/harmbench_full.json" = "airedteam/builtins/datasets/samples/harmbench_full.json"
+"airedteam/builtins/prompt_assets/assets.json" = "airedteam/builtins/prompt_assets/assets.json"
+"airedteam/builtins/prompt_assets/converter_prompt_assets.json" = "airedteam/builtins/prompt_assets/converter_prompt_assets.json"
+"airedteam/builtins/prompt_assets/pyrit_jailbreak_templates.json" = "airedteam/builtins/prompt_assets/pyrit_jailbreak_templates.json"
+"airedteam/builtins/prompt_assets/PYRIT_NOTICE.txt" = "airedteam/builtins/prompt_assets/PYRIT_NOTICE.txt"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

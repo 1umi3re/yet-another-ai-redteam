@@ -8,7 +8,12 @@ class TemplateJailbreakConverter:
 
     name = "template_jailbreak"
 
-    def __init__(self, *, template: str = "{prompt}") -> None:
+    def __init__(
+        self,
+        *,
+        template: str = "{prompt}",
+        attack_template_asset_id: str | None = None,
+    ) -> None:
         if "{prompt}" not in template:
             raise ValueError("template_jailbreak template must contain '{prompt}'")
         self.template = template
