@@ -2,13 +2,15 @@ import { Field, Input, Select, Textarea } from "./ui/Form";
 import { useI18n } from "../lib/i18n";
 
 export type ParamSchema = {
-  type: "bool" | "string" | "text" | "string_list" | "enum" | "target_ref";
+  type: "bool" | "string" | "text" | "string_list" | "enum" | "target_ref" | "prompt_asset_ref";
   required?: boolean;
   default?: any;
   label?: string;
   help?: string;
   placeholder?: string;
   options?: string[];
+  purpose_filter?: string;
+  purpose_exclude?: string;
 };
 
 export type PluginSchemas = Record<string, Record<string, ParamSchema>>;
@@ -27,11 +29,12 @@ export function defaultsFor(schema: Record<string, ParamSchema> | undefined): Re
 }
 
 export function ParamField({
-  name, schema, value, onChange, targets,
+  name, schema, value, onChange, targets, promptAssets = [],
 }: {
   name: string; schema: ParamSchema; value: any;
   onChange: (v: any) => void;
   targets: any[];
+  promptAssets?: any[];
 }) {
   const { t } = useI18n();
   const label = t(schema.label ?? name) + (schema.required ? " *" : "");
@@ -60,6 +63,24 @@ export function ParamField({
           <Select value={value ?? ""} onChange={e => onChange(e.target.value)}>
             <option value="">{t("-- pick target --")}</option>
             {targets.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </Select>
+        </Field>
+      );
+    case "prompt_asset_ref":
+      const selectableAssets = schema.purpose_filter
+        ? promptAssets.filter(a => a.purpose === schema.purpose_filter)
+        : schema.purpose_exclude
+        ? promptAssets.filter(a => a.purpose !== schema.purpose_exclude)
+        : promptAssets;
+      return (
+        <Field {...common}>
+          <Select value={value ?? ""} onChange={e => onChange(e.target.value)}>
+            <option value="">{t("-- pick prompt asset --")}</option>
+            {selectableAssets.map(a => (
+              <option key={a.id} value={a.id}>
+                {a.id}{a.source ? ` (${a.source})` : ""}
+              </option>
+            ))}
           </Select>
         </Field>
       );

@@ -4,13 +4,35 @@ import { useMemo, useState } from "react";
 import { api } from "../lib/api";
 import { Card, CardBody, CardHeader, CardTitle, CardDescription } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
-import { Input, Select, Field } from "../components/ui/Form";
+import { Input, Select, Field, Textarea } from "../components/ui/Form";
 import { Badge } from "../components/ui/Badge";
 import { PlayCircle, Sparkles, Wrench, X } from "lucide-react";
 import clsx from "clsx";
 import { toast } from "sonner";
 import { ConfiguredPlugin, defaultsFor, ParamField, PluginSchemas } from "../components/PluginParamsForm";
 import { useI18n } from "../lib/i18n";
+
+const CONVERTER_CATEGORY_ORDER = [
+  "encoding",
+  "obfuscation",
+  "prompt_framing",
+  "llm_rewrite",
+  "perturbation",
+  "multimodal",
+  "utility",
+  "other",
+] as const;
+
+const CONVERTER_CATEGORY_LABELS: Record<string, string> = {
+  encoding: "Encoding",
+  obfuscation: "Obfuscation",
+  prompt_framing: "Prompt framing",
+  llm_rewrite: "LLM rewrite",
+  perturbation: "Perturbation",
+  multimodal: "Multimodal",
+  utility: "Utility",
+  other: "Other",
+};
 
 export default function NewRun() {
   const { t } = useI18n();
@@ -19,10 +41,14 @@ export default function NewRun() {
   const { data: datasets } = useQuery({ queryKey: ["datasets"], queryFn: async () => (await api.get("/api/datasets")).data });
   const { data: scenarios } = useQuery({ queryKey: ["scenarios"], queryFn: async () => (await api.get("/api/scenarios")).data });
   const { data: plugins } = useQuery({ queryKey: ["plugins"], queryFn: async () => (await api.get("/api/plugins")).data });
+  const { data: promptAssets } = useQuery({ queryKey: ["prompt-assets"], queryFn: async () => (await api.get("/api/prompt-assets")).data });
 
   const convSchemas: PluginSchemas = plugins?.params?.converters ?? {};
   const scorerSchemas: PluginSchemas = plugins?.params?.scorers ?? {};
   const executorSchemas: PluginSchemas = plugins?.params?.executors ?? {};
+  const availableConverters: string[] = plugins?.converters ?? [];
+  const converterCategories: Record<string, string> = plugins?.converter_categories ?? {};
+  const generalMultiTurnExecutors: string[] = plugins?.general_multi_turn_executors ?? ["general_multi_turn"];
 
   const [mode, setMode] = useState<"preset" | "custom">("preset");
   const [name, setName] = useState(t("My run"));
@@ -32,13 +58,91 @@ export default function NewRun() {
   const [executor, setExecutor] = useState<ConfiguredPlugin>({ plugin: "single_turn", params: {} });
   const [scorer, setScorer] = useState<ConfiguredPlugin>({ plugin: "refusal", params: {} });
   const [converters, setConverters] = useState<ConfiguredPlugin[]>([]);
+  const [converterCategory, setConverterCategory] = useState("all");
+  const [converterSearch, setConverterSearch] = useState("");
   const [samplingEnabled, setSamplingEnabled] = useState(false);
   const [samplingLimit, setSamplingLimit] = useState<string>("");
   const [samplingShuffle, setSamplingShuffle] = useState(false);
   const [samplingSeed, setSamplingSeed] = useState<string>("");
+  const [timeoutSeconds, setTimeoutSeconds] = useState<string>("");
+  const [goalSource, setGoalSource] = useState<"dataset_items" | "fixed">("dataset_items");
+  const [goalSearch, setGoalSearch] = useState("");
+  const [goalPage, setGoalPage] = useState(0);
+  const [selectedGoalItemId, setSelectedGoalItemId] = useState("");
 
   const executorSchema = executorSchemas[executor.plugin];
   const scorerSchema = scorerSchemas[scorer.plugin];
+  const isGeneralMultiTurnExecutor = generalMultiTurnExecutors.includes(executor.plugin);
+  const showGeneralGoalImport = mode === "custom" && isGeneralMultiTurnExecutor;
+  const { data: goalDatasetItems } = useQuery({
+    queryKey: ["new-run-goal-dataset-items", datasetId, goalSearch, goalPage],
+    queryFn: async () => (await api.get(`/api/datasets/${datasetId}/items`, {
+      params: {
+        limit: 100,
+        offset: goalPage * 100,
+        q: goalSearch || undefined,
+      },
+    })).data,
+    enabled: showGeneralGoalImport && goalSource === "fixed" && !!datasetId,
+  });
+  const selectedConverterNames = useMemo(
+    () => new Set(converters.map(c => c.plugin)),
+    [converters],
+  );
+  const converterCategoryOptions = useMemo(() => {
+    const present = new Set(availableConverters.map(plugin => converterCategories[plugin] ?? "other"));
+    const ordered = CONVERTER_CATEGORY_ORDER.filter(category => present.has(category));
+    const extra = [...present].filter(category => !ordered.includes(category as any)).sort();
+    return ["all", "selected", ...ordered, ...extra];
+  }, [availableConverters, converterCategories]);
+  const converterCategoryCounts = useMemo(() => {
+    const counts: Record<string, number> = {
+      all: availableConverters.length,
+      selected: converters.length,
+    };
+    for (const plugin of availableConverters) {
+      const category = converterCategories[plugin] ?? "other";
+      counts[category] = (counts[category] ?? 0) + 1;
+    }
+    return counts;
+  }, [availableConverters, converterCategories, converters.length]);
+  const filteredConverters = useMemo(() => {
+    const search = converterSearch.trim().toLowerCase();
+    return availableConverters.filter(plugin => {
+      if (converterCategory === "selected" && !selectedConverterNames.has(plugin)) return false;
+      if (converterCategory !== "all" && converterCategory !== "selected") {
+        const category = converterCategories[plugin] ?? "other";
+        if (category !== converterCategory) return false;
+      }
+      return !search || plugin.toLowerCase().includes(search);
+    });
+  }, [
+    availableConverters,
+    converterCategories,
+    converterCategory,
+    converterSearch,
+    selectedConverterNames,
+  ]);
+  const groupedConverters = useMemo(() => {
+    const groups = new Map<string, string[]>();
+    for (const plugin of filteredConverters) {
+      const category = converterCategories[plugin] ?? "other";
+      const list = groups.get(category) ?? [];
+      list.push(plugin);
+      groups.set(category, list);
+    }
+    const orderedCategories = [
+      ...CONVERTER_CATEGORY_ORDER,
+      ...[...groups.keys()].filter(category => !CONVERTER_CATEGORY_ORDER.includes(category as any)).sort(),
+    ].filter(category => groups.has(category));
+    return orderedCategories.map(category => ({ category, plugins: groups.get(category) ?? [] }));
+  }, [converterCategories, filteredConverters]);
+
+  const converterCategoryLabel = (category: string) => {
+    if (category === "all") return t("All");
+    if (category === "selected") return t("Selected");
+    return t(CONVERTER_CATEGORY_LABELS[category] ?? category);
+  };
 
   const toggleConverter = (c: string) => {
     setConverters(prev => {
@@ -48,12 +152,32 @@ export default function NewRun() {
     });
   };
 
+  const selectConverterCategory = (category: string) => {
+    const pluginsInCategory = availableConverters.filter(
+      plugin => (converterCategories[plugin] ?? "other") === category,
+    );
+    setConverters(prev => {
+      const existing = new Set(prev.map(c => c.plugin));
+      const additions = pluginsInCategory
+        .filter(plugin => !existing.has(plugin))
+        .map(plugin => ({ plugin, params: defaultsFor(convSchemas[plugin]) }));
+      return [...prev, ...additions];
+    });
+  };
+
+  const clearConverterCategory = (category: string) => {
+    setConverters(prev => prev.filter(
+      converter => (converterCategories[converter.plugin] ?? "other") !== category,
+    ));
+  };
+
   const updateConverterParam = (idx: number, key: string, v: any) => {
     setConverters(prev => prev.map((p, i) => i === idx ? { ...p, params: { ...p.params, [key]: v } } : p));
   };
 
   const setExecutorPlugin = (p: string) => {
     setExecutor({ plugin: p, params: defaultsFor(executorSchemas[p]) });
+    if (generalMultiTurnExecutors.includes(p)) setGoalSource("dataset_items");
   };
   const updateExecutorParam = (key: string, v: any) => {
     setExecutor(prev => ({ ...prev, params: { ...prev.params, [key]: v } }));
@@ -76,6 +200,9 @@ export default function NewRun() {
           if (empty) missing.push(`executor.${k}`);
         }
       }
+      if (isGeneralMultiTurnExecutor && goalSource === "fixed" && !String(executor.params.goal ?? "").trim()) {
+        missing.push("executor.goal");
+      }
       for (const [k, s] of Object.entries(scorerSchema ?? {})) {
         if (s.required) {
           const v = scorer.params[k];
@@ -95,15 +222,29 @@ export default function NewRun() {
       }
     }
     return missing;
-  }, [mode, executor, executorSchema, scorer, scorerSchema, converters, convSchemas]);
+  }, [
+    mode,
+    executor,
+    executorSchema,
+    goalSource,
+    scorer,
+    scorerSchema,
+    converters,
+    convSchemas,
+    isGeneralMultiTurnExecutor,
+  ]);
 
   const submit = useMutation({
     mutationFn: async () => {
+      const executorParams = { ...executor.params };
+      if (mode === "custom" && isGeneralMultiTurnExecutor && goalSource === "dataset_items") {
+        executorParams.goal = "";
+      }
       const base: any = {
         name,
         targets: [{ config_id: targetId }],
         dataset: { config_id: datasetId },
-        executor: { plugin: executor.plugin, params: executor.params },
+        executor: { plugin: executor.plugin, params: executorParams },
         scorers: [{ plugin: scorer.plugin, params: scorer.params }],
         converters: converters.map(c => ({ plugin: c.plugin, params: c.params })),
       };
@@ -117,6 +258,7 @@ export default function NewRun() {
           seed: samplingShuffle && samplingSeed ? parseInt(samplingSeed, 10) : null,
         };
       }
+      if (timeoutSeconds) base.timeout_seconds = parseFloat(timeoutSeconds);
       
       const r = await api.post("/api/runs", { name, runspec: base });
       await api.post(`/api/runs/${r.data.id}/start`);
@@ -142,6 +284,12 @@ export default function NewRun() {
         </CardHeader>
         <CardBody>
           <Field label={t("Run name")}><Input value={name} onChange={e => setName(e.target.value)} /></Field>
+          <div className="mt-4">
+            <Field label={t("Run timeout")} hint={t("Seconds before an automated run is failed; blank means no limit.")}>
+              <Input type="number" min="1" placeholder="300" value={timeoutSeconds}
+                onChange={e => setTimeoutSeconds(e.target.value)} />
+            </Field>
+          </div>
           <div className="mt-5">
             <div className="label">{t("Mode")}</div>
             <div className="grid grid-cols-2 gap-3">
@@ -198,12 +346,92 @@ export default function NewRun() {
               </Select>
             </Field>
             <Field label={t("Dataset")}>
-              <Select value={datasetId} onChange={e => setDatasetId(e.target.value)}>
+              <Select value={datasetId} onChange={e => {
+                setDatasetId(e.target.value);
+                setGoalSearch("");
+                setGoalPage(0);
+                setSelectedGoalItemId("");
+              }}>
                 <option value="">{t("-- pick dataset --")}</option>
                 {datasets?.map((d: any) => <option key={d.id} value={d.id}>{d.name}</option>)}
               </Select>
             </Field>
           </div>
+
+          {showGeneralGoalImport && (
+            <div className="mt-5 rounded-lg border border-gray-200 bg-gray-50/50 p-4 space-y-3">
+              <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">{t("Attack goal")}</div>
+              <Field label={t("Attack goal source")}>
+                <Select value={goalSource} onChange={e => {
+                  const next = e.target.value as "dataset_items" | "fixed";
+                  setGoalSource(next);
+                  setGoalPage(0);
+                  setSelectedGoalItemId("");
+                }}>
+                  <option value="dataset_items">{t("Use each dataset item")}</option>
+                  <option value="fixed">{t("Fixed goal")}</option>
+                </Select>
+              </Field>
+              {goalSource === "dataset_items" ? (
+                <div className="text-xs text-gray-500">{t("Each dataset prompt will be used as the attack goal.")}</div>
+              ) : (
+                <>
+                  {datasetId && (
+                    <>
+                      <Field label={t("Search prompts")}>
+                        <Input value={goalSearch} onChange={e => {
+                          setGoalSearch(e.target.value);
+                          setGoalPage(0);
+                          setSelectedGoalItemId("");
+                        }} />
+                      </Field>
+                      <Field label={t("Import from dataset")}>
+                        <Select value={selectedGoalItemId} onChange={e => {
+                          const selectedId = e.target.value;
+                          setSelectedGoalItemId(selectedId);
+                          const item = goalDatasetItems?.items?.find((it: any) => it.id === selectedId);
+                          if (item) updateExecutorParam("goal", item.text);
+                        }}>
+                          <option value="">{t("-- load prompt --")}</option>
+                          {goalDatasetItems?.items?.map((item: any, idx: number) => (
+                            <option key={`${item.id}-${idx}`} value={item.id}>
+                              {item.id}: {item.text.slice(0, 80)}
+                            </option>
+                          ))}
+                        </Select>
+                      </Field>
+                      <div className="flex items-center justify-between gap-2 text-xs text-gray-500">
+                        <span>{t("Showing {{count}} of {{total}}", {
+                          count: goalDatasetItems?.items?.length ?? 0,
+                          total: goalDatasetItems?.total ?? goalDatasetItems?.total_returned ?? 0,
+                        })}</span>
+                        <div className="flex gap-2">
+                          <Button variant="secondary" size="sm" disabled={goalPage === 0}
+                            onClick={() => {
+                              setSelectedGoalItemId("");
+                              setGoalPage(p => Math.max(0, p - 1));
+                            }}>
+                            {t("Previous")}
+                          </Button>
+                          <Button variant="secondary" size="sm" disabled={!goalDatasetItems?.has_more}
+                            onClick={() => {
+                              setSelectedGoalItemId("");
+                              setGoalPage(p => p + 1);
+                            }}>
+                            {t("Next")}
+                          </Button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                  <Field label={t("Attack goal")}>
+                    <Textarea rows={4} value={executor.params.goal ?? ""}
+                      onChange={e => updateExecutorParam("goal", e.target.value)} />
+                  </Field>
+                </>
+              )}
+            </div>
+          )}
           
           <div className="mt-5">
             <div className="flex items-center gap-2 mb-3">
@@ -275,10 +503,13 @@ export default function NewRun() {
               {executorSchema && Object.keys(executorSchema).length > 0 && (
                 <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50/50 p-4 space-y-3">
                   <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">{t("Executor params")}</div>
-                  {Object.entries(executorSchema).map(([k, s]) => (
-                    <ParamField key={k} name={k} schema={s} targets={targets ?? []}
-                      value={executor.params[k]} onChange={v => updateExecutorParam(k, v)} />
-                  ))}
+                  {Object.entries(executorSchema)
+                    .filter(([k]) => !(isGeneralMultiTurnExecutor && k === "goal"))
+                    .map(([k, s]) => (
+                      <ParamField key={k} name={k} schema={s} targets={targets ?? []}
+                        promptAssets={promptAssets ?? []}
+                        value={executor.params[k]} onChange={v => updateExecutorParam(k, v)} />
+                    ))}
                 </div>
               )}
             </div>
@@ -294,6 +525,7 @@ export default function NewRun() {
                   <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">{t("Scorer params")}</div>
                   {Object.entries(scorerSchema).map(([k, s]) => (
                     <ParamField key={k} name={k} schema={s} targets={targets ?? []}
+                      promptAssets={promptAssets ?? []}
                       value={scorer.params[k]} onChange={v => updateScorerParam(k, v)} />
                   ))}
                 </div>
@@ -302,18 +534,112 @@ export default function NewRun() {
 
             <div>
               <Field label={t("Converters")} hint={t("Click to toggle. Executed in order.")}>
-                <div className="flex flex-wrap gap-2">
-                  {plugins?.converters?.length ? plugins.converters.map((c: string) => {
-                    const on = converters.some(p => p.plugin === c);
-                    return (
-                      <button key={c} type="button" onClick={() => toggleConverter(c)}
+                <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50/50 p-3">
+                  <Input
+                    value={converterSearch}
+                    onChange={e => setConverterSearch(e.target.value)}
+                    placeholder={t("Filter by name...")}
+                  />
+                  <div className="flex flex-wrap gap-1.5">
+                    {converterCategoryOptions.map(category => (
+                      <button
+                        key={category}
+                        type="button"
+                        onClick={() => setConverterCategory(category)}
                         className={clsx(
-                          "px-2.5 py-1 text-xs rounded-full border transition",
-                          on ? "bg-brand-600 border-brand-600 text-white" : "bg-white border-gray-200 text-gray-700 hover:border-gray-300",
+                          "rounded-full border px-2.5 py-1 text-[11px] font-medium transition",
+                          converterCategory === category
+                            ? "border-brand-600 bg-brand-600 text-white"
+                            : "border-gray-200 bg-white text-gray-600 hover:border-gray-300",
                         )}
-                      >{c}</button>
-                    );
-                  }) : <Badge>{t("No converters available")}</Badge>}
+                      >
+                        {converterCategoryLabel(category)}
+                        <span className={clsx(
+                          "ml-1 tabular-nums",
+                          converterCategory === category ? "text-brand-100" : "text-gray-400",
+                        )}>
+                          {converterCategoryCounts[category] ?? 0}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="text-[11px] text-gray-500">
+                    {t("Showing {{count}} of {{total}} converters", {
+                      count: filteredConverters.length,
+                      total: availableConverters.length,
+                    })}
+                  </div>
+                  {availableConverters.length === 0 ? (
+                    <Badge>{t("No converters available")}</Badge>
+                  ) : groupedConverters.length === 0 ? (
+                    <div className="rounded-lg border border-gray-200 bg-white py-6 text-center text-xs text-gray-500">
+                      {t("No converters match.")}
+                    </div>
+                  ) : (
+                    <div className="max-h-80 overflow-y-auto space-y-3">
+                      {groupedConverters.map(group => {
+                        const selectedInGroup = group.plugins.filter(plugin =>
+                          selectedConverterNames.has(plugin),
+                        ).length;
+                        return (
+                          <div
+                            key={group.category}
+                            className="rounded-lg border border-gray-200 bg-white p-3"
+                          >
+                            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                              <div>
+                                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                                  {converterCategoryLabel(group.category)}
+                                </div>
+                                <div className="mt-0.5 text-[11px] text-gray-400">
+                                  {selectedInGroup}/{group.plugins.length} {t("Selected")}
+                                </div>
+                              </div>
+                              <div className="flex gap-2">
+                                <Button
+                                  type="button"
+                                  variant="secondary"
+                                  size="sm"
+                                  onClick={() => selectConverterCategory(group.category)}
+                                >
+                                  {t("Select all")}
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="secondary"
+                                  size="sm"
+                                  disabled={selectedInGroup === 0}
+                                  onClick={() => clearConverterCategory(group.category)}
+                                >
+                                  {t("Clear")}
+                                </Button>
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {group.plugins.map(plugin => {
+                                const on = selectedConverterNames.has(plugin);
+                                return (
+                                  <button
+                                    key={plugin}
+                                    type="button"
+                                    onClick={() => toggleConverter(plugin)}
+                                    className={clsx(
+                                      "px-2.5 py-1 text-xs rounded-full border transition",
+                                      on
+                                        ? "bg-brand-600 border-brand-600 text-white"
+                                        : "bg-white border-gray-200 text-gray-700 hover:border-gray-300",
+                                    )}
+                                  >
+                                    {plugin}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </Field>
               {converters.length > 0 && (
@@ -330,6 +656,7 @@ export default function NewRun() {
                         </div>
                         {Object.entries(cs).map(([k, s]) => (
                           <ParamField key={k} name={k} schema={s} targets={targets ?? []}
+                            promptAssets={promptAssets ?? []}
                             value={c.params[k]} onChange={v => updateConverterParam(i, k, v)} />
                         ))}
                       </div>
