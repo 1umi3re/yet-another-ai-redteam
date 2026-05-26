@@ -33,6 +33,27 @@ async def test_prompt_asset_api_override_flow(monkeypatch, tmp_path):
         assert listed.status_code == 200
         assert any(a["id"] == "llm_judge.single.v1" for a in listed.json())
 
+        custom = await c.post(
+            "/api/prompt-assets",
+            headers=h,
+            json={
+                "id": "custom.evaluator.v1",
+                "plugin": "custom",
+                "purpose": "turn_feedback",
+                "category": "Executor",
+                "variables": [],
+                "template": "Evaluate {goal} with {transcript}",
+            },
+        )
+        assert custom.status_code == 201
+        assert custom.json()["is_custom"] is True
+        assert custom.json()["category"] == "Executor"
+        assert custom.json()["variables"] == ["goal", "transcript"]
+
+        custom_detail = await c.get("/api/prompt-assets/custom.evaluator.v1", headers=h)
+        assert custom_detail.status_code == 200
+        assert custom_detail.json()["source"] == "custom"
+
         detail = await c.get("/api/prompt-assets/llm_judge.single.v1", headers=h)
         assert detail.status_code == 200
         assert detail.json()["active_override"] is None

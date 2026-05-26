@@ -52,3 +52,40 @@ async def test_dataset_items_preview(monkeypatch, tmp_path):
             "metadata": {"id": "p1", "category": "a"},
         }]
         assert items.json()["total_returned"] == 1
+        assert items.json()["total"] == 2
+        assert items.json()["has_more"] is True
+
+        searched = await c.get(f"/api/datasets/{ds_id}/items?q=two&limit=10", headers=h)
+        assert searched.status_code == 200
+        assert searched.json()["total"] == 1
+        assert searched.json()["items"][0]["id"] == "p2"
+
+        content = await c.get(f"/api/datasets/{ds_id}/content", headers=h)
+        assert content.status_code == 200
+        assert content.json()["version"] == 1
+        assert len(content.json()["items"]) == 2
+
+        updated = await c.put(
+            f"/api/datasets/{ds_id}/content",
+            headers=h,
+            json={
+                "items": [{"id": "p3", "prompt": "Prompt three", "category": "c"}],
+                "note": "replace test items",
+            },
+        )
+        assert updated.status_code == 200
+        assert updated.json()["current_version"] == 2
+        assert updated.json()["item_count"] == 1
+
+        versions = await c.get(f"/api/datasets/{ds_id}/versions", headers=h)
+        assert versions.status_code == 200
+        assert [v["version"] for v in versions.json()] == [2, 1]
+        assert versions.json()[0]["note"] == "replace test items"
+        assert versions.json()[0]["is_current"] is True
+
+        restored = await c.post(f"/api/datasets/{ds_id}/versions/1/restore", headers=h)
+        assert restored.status_code == 200
+        assert restored.json()["current_version"] == 1
+        restored_items = await c.get(f"/api/datasets/{ds_id}/items?limit=10", headers=h)
+        assert restored_items.json()["total"] == 2
+        assert restored_items.json()["items"][0]["id"] == "p1"

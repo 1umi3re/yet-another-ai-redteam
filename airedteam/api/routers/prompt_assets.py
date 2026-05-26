@@ -14,6 +14,16 @@ class OverrideIn(BaseModel):
     template: str
 
 
+class AssetIn(BaseModel):
+    id: str
+    plugin: str = "custom"
+    purpose: str = "custom"
+    category: str | None = None
+    variables: list[str] = []
+    template: str
+    version: int = 1
+
+
 class ActiveIn(BaseModel):
     override_id: str | None = None
 
@@ -23,6 +33,26 @@ async def list_prompt_assets(
     _=Depends(require_admin), state: AppState = Depends(get_state),
 ):
     return await state.prompt_assets.list_assets()
+
+
+@router.post("/prompt-assets", status_code=201)
+async def create_prompt_asset(
+    body: AssetIn,
+    _=Depends(require_admin),
+    state: AppState = Depends(get_state),
+):
+    try:
+        return await state.prompt_assets.create_asset(
+            asset_id=body.id,
+            plugin=body.plugin,
+            purpose=body.purpose,
+            category=body.category,
+            variables=body.variables,
+            template=body.template,
+            version=body.version,
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
 
 @router.get("/prompt-assets/{asset_id:path}")

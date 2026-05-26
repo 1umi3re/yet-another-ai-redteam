@@ -6,12 +6,11 @@ import { useAuth } from "./lib/auth";
 const Login = lazy(() => import("./pages/Login"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Targets = lazy(() => import("./pages/Targets"));
-const Datasets = lazy(() => import("./pages/Datasets"));
+const Assets = lazy(() => import("./pages/Assets"));
 const Runs = lazy(() => import("./pages/Runs"));
 const RunDetail = lazy(() => import("./pages/RunDetail"));
 const NewRun = lazy(() => import("./pages/NewRun"));
 const ManualConsole = lazy(() => import("./pages/ManualConsole"));
-const PromptAssets = lazy(() => import("./pages/PromptAssets"));
 
 function Protected({ children }: { children: JSX.Element }) {
   const t = useAuth(s => s.token);
@@ -27,12 +26,13 @@ export default function App() {
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/targets" element={<Targets />} />
-          <Route path="/datasets" element={<Datasets />} />
+          <Route path="/assets" element={<Assets />} />
+          <Route path="/datasets" element={<Navigate to="/assets" replace />} />
           <Route path="/runs" element={<Runs />} />
           <Route path="/runs/new" element={<NewRun />} />
           <Route path="/runs/:id" element={<RunDetail />} />
           <Route path="/manual" element={<ManualConsole />} />
-          <Route path="/prompt-assets" element={<PromptAssets />} />
+          <Route path="/prompt-assets" element={<Navigate to="/assets?tab=prompt-templates" replace />} />
         </Route>
       </Routes>
     </Suspense>

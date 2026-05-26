@@ -20,6 +20,36 @@ async def test_prompt_asset_builtins_and_active_override_precedence(tmp_path):
     assert "llm_judge.single.v1" in ids
     assert "crescendo.attacker.v1" in ids
     assert "pair.judge.v1" in ids
+    assert "general_multi_turn.attacker.v1" in ids
+    assert "attack_template.controlled_safety_test.v1" in ids
+    assert "llm_variation.rewrite.v1" in ids
+    assert "translation_llm.translate.v1" in ids
+    assert "attack_template.pyrit.aim.v1" in ids
+
+    attack_template = next(
+        a for a in assets if a["id"] == "attack_template.controlled_safety_test.v1"
+    )
+    assert attack_template["purpose"] == "attack_template"
+    assert attack_template["variables"] == ["prompt"]
+    pyrit_template = next(a for a in assets if a["id"] == "attack_template.pyrit.aim.v1")
+    assert pyrit_template["purpose"] == "attack_template"
+    assert pyrit_template["variables"] == ["prompt"]
+    assert "{prompt}" in pyrit_template["template"]
+
+    converter_prompt = next(a for a in assets if a["id"] == "llm_variation.rewrite.v1")
+    assert converter_prompt["purpose"] == "converter_prompt"
+    assert converter_prompt["category"] == "Converters"
+    assert converter_prompt["variables"] == ["instructions", "prompt"]
+    assert next(a for a in assets if a["id"] == "crescendo.attacker.v1")[
+        "category"
+    ] == "Executors / Crescendo"
+    assert next(a for a in assets if a["id"] == "pair.judge.v1")[
+        "category"
+    ] == "Executors / PAIR"
+    assert next(a for a in assets if a["id"] == "general_multi_turn.judger.v1")[
+        "category"
+    ] == "Executors / General Multi Turn"
+    assert pyrit_template["category"].startswith("PyRIT")
 
     rendered = await svc.render(
         "llm_judge.single.v1",
@@ -53,6 +83,88 @@ async def test_prompt_asset_builtins_and_active_override_precedence(tmp_path):
     )
     assert explicit_builtin["source"] == "builtin"
     assert "Judge P / A" not in explicit_builtin["rendered_text"]
+
+
+@pytest.mark.asyncio
+async def test_prompt_asset_custom_asset_flow(tmp_path):
+    eng = make_engine(f"sqlite+aiosqlite:///{tmp_path}/t.db")
+    sessions = make_sessionmaker(eng)
+    async with eng.begin() as c:
+        await c.run_sync(models.Base.metadata.create_all)
+
+    svc = PromptAssetService(sessions, LocalBlobStore(tmp_path / "blobs"))
+
+    created = await svc.create_asset(
+        asset_id="custom.attacker.v1",
+        plugin="custom",
+        purpose="next_user_message",
+        category="Executor",
+        variables=[],
+        template="Attack {goal} after {transcript}",
+    )
+    assert created["id"] == "custom.attacker.v1"
+    assert created["source"] == "custom"
+    assert created["category"] == "Executor"
+    assert created["variables"] == ["goal", "transcript"]
+
+    listed = await svc.list_assets()
+    assert any(a["id"] == "custom.attacker.v1" and a["is_custom"] for a in listed)
+
+    rendered = await svc.render(
+        "custom.attacker.v1",
+        {"goal": "G", "transcript": "T"},
+    )
+    assert rendered["source"] == "custom"
+    assert rendered["rendered_text"] == "Attack G after T"
+
+    override = await svc.create_override(
+        "custom.attacker.v1",
+        name="short",
+        template="Next {goal}",
+        active=True,
+    )
+    active = await svc.render(
+        "custom.attacker.v1",
+        {"goal": "G", "transcript": "T"},
+    )
+    assert active["source"] == "override"
+    assert active["override_id"] == override["id"]
+    assert active["rendered_text"] == "Next G"
+
+
+@pytest.mark.asyncio
+async def test_attack_template_assets_must_include_prompt_variable(tmp_path):
+    eng = make_engine(f"sqlite+aiosqlite:///{tmp_path}/t.db")
+    sessions = make_sessionmaker(eng)
+    async with eng.begin() as c:
+        await c.run_sync(models.Base.metadata.create_all)
+
+    svc = PromptAssetService(sessions, LocalBlobStore(tmp_path / "blobs"))
+
+    with pytest.raises(ValueError, match="must include"):
+        await svc.create_asset(
+            asset_id="attack_template.bad.v1",
+            plugin="attack_template",
+            purpose="attack_template",
+            variables=[],
+            template="No insertion point",
+        )
+
+    created = await svc.create_asset(
+        asset_id="attack_template.custom.v1",
+        plugin="attack_template",
+        purpose="attack_template",
+        variables=[],
+        template="Wrap {prompt}",
+    )
+    assert created["variables"] == ["prompt"]
+
+    with pytest.raises(ValueError, match="must include"):
+        await svc.create_override(
+            "attack_template.custom.v1",
+            name="bad",
+            template="No insertion point",
+        )
 
 
 @pytest.mark.asyncio
