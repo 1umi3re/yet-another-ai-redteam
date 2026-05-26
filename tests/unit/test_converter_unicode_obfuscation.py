@@ -13,6 +13,13 @@ async def test_zero_width_inserted_between_chars():
 
 
 @pytest.mark.asyncio
+async def test_zero_width_accepts_string_every_from_api_params():
+    c = UnicodeObfuscationConverter(strategy="zero_width", every="2")
+    r = await c.convert(Prompt(text="abcd"))
+    assert r.text == "ab\u200bcd"
+
+
+@pytest.mark.asyncio
 async def test_homoglyph_strategy_replaces_subset():
     c = UnicodeObfuscationConverter(strategy="homoglyph")
     r = await c.convert(Prompt(text="apple"))

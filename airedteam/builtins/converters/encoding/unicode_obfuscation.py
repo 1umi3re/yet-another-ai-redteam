@@ -17,7 +17,7 @@ class UnicodeObfuscationConverter:
         every: int = 2,
     ) -> None:
         self.strategy = strategy
-        self.every = max(1, every)
+        self.every = max(1, int(every))
 
     async def convert(self, prompt: Prompt) -> Prompt:
         if self.strategy == "zero_width":

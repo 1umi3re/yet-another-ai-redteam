@@ -178,6 +178,40 @@ async def test_converter_preview_resolves_attack_template_asset(monkeypatch, tmp
 
 
 @pytest.mark.asyncio
+async def test_converter_preview_accepts_string_numeric_encoding_params(monkeypatch, tmp_path):
+    monkeypatch.setenv("AIREDTEAM_MASTER_KEY", Fernet.generate_key().decode())
+    monkeypatch.setenv("AIREDTEAM_ADMIN_PASSWORD", "letmein")
+    monkeypatch.setenv("AIREDTEAM_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/x.db")
+    monkeypatch.setenv("AIREDTEAM_BLOB_DIR", str(tmp_path / "blobs"))
+
+    import airedteam.api.deps as deps
+    deps._STATE = None
+    from airedteam.api.app import create_app
+    from airedteam.storage import models
+    from airedteam.storage.db import make_engine
+
+    app = create_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
+        state = deps.get_state()
+        eng = make_engine(state.settings.database_url)
+        async with eng.begin() as conn:
+            await conn.run_sync(models.Base.metadata.create_all)
+
+        h = await _login(c)
+        resp = await c.post("/api/converters/preview", headers=h, json={
+            "text": "abcd",
+            "converters": [{
+                "plugin": "unicode_obfuscation",
+                "params": {"strategy": "zero_width", "every": "2"},
+            }],
+        })
+
+        assert resp.status_code == 200
+        assert resp.json()["transformed_text"] == "ab\u200bcd"
+        assert resp.json()["converter_chain"] == ["unicode_obfuscation"]
+
+
+@pytest.mark.asyncio
 @respx.mock
 async def test_converter_preview_resolves_garak_lrl_and_paraphrase_configs(monkeypatch, tmp_path):
     translator_mock = respx.post("https://translator.example.com/v1/chat/completions").mock(
