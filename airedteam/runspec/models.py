@@ -25,3 +25,4 @@ class RunSpec(BaseModel):
     scorers: list[PluginRef] = Field(default_factory=list)
     concurrency: int = 4
     sampling: Sampling | None = None
+    timeout_seconds: float | None = None

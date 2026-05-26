@@ -59,6 +59,8 @@ export default function ManualConsole() {
   const [preview, setPreview] = useState<any>(null);
   const [selectedDatasetId, setSelectedDatasetId] = useState("");
   const [selectedPromptId, setSelectedPromptId] = useState("");
+  const [datasetPromptSearch, setDatasetPromptSearch] = useState("");
+  const [datasetPromptPage, setDatasetPromptPage] = useState(0);
   const [converterSearch, setConverterSearch] = useState("");
   const [converterCategory, setConverterCategory] = useState("all");
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -78,8 +80,14 @@ export default function ManualConsole() {
     queryFn: async () => (await api.get("/api/datasets")).data,
   });
   const { data: datasetItems } = useQuery({
-    queryKey: ["dataset-items", selectedDatasetId],
-    queryFn: async () => (await api.get(`/api/datasets/${selectedDatasetId}/items?limit=100`)).data,
+    queryKey: ["dataset-items", selectedDatasetId, datasetPromptSearch, datasetPromptPage],
+    queryFn: async () => (await api.get(`/api/datasets/${selectedDatasetId}/items`, {
+      params: {
+        limit: 100,
+        offset: datasetPromptPage * 100,
+        q: datasetPromptSearch || undefined,
+      },
+    })).data,
     enabled: !!selectedDatasetId,
   });
   const { data: plugins } = useQuery({
@@ -495,6 +503,7 @@ export default function ManualConsole() {
                 <Select value={selectedDatasetId} onChange={e => {
                   setSelectedDatasetId(e.target.value);
                   setSelectedPromptId("");
+                  setDatasetPromptPage(0);
                 }}>
                   <option value="">{t("-- select dataset --")}</option>
                   {datasets.map((dataset: any) => (
@@ -503,24 +512,48 @@ export default function ManualConsole() {
                 </Select>
               </Field>
               {selectedDatasetId && (
-                <Field label={t("Prompt")}>
-                  <Select value={selectedPromptId} onChange={e => {
-                    const id = e.target.value;
-                    setSelectedPromptId(id);
-                    const item = datasetItems?.items?.find((it: any) => it.id === id);
-                    if (item) {
-                      setUserInput(item.text);
-                      setPreview(null);
-                    }
-                  }}>
-                    <option value="">{t("-- load prompt --")}</option>
-                    {datasetItems?.items?.map((item: any, idx: number) => (
-                      <option key={`${item.id}-${idx}`} value={item.id}>
-                        {item.id}: {item.text.slice(0, 80)}
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
+                <div className="space-y-3">
+                  <Field label={t("Search prompts")}>
+                    <Input value={datasetPromptSearch} onChange={e => {
+                      setDatasetPromptSearch(e.target.value);
+                      setDatasetPromptPage(0);
+                    }} />
+                  </Field>
+                  <Field label={t("Prompt")}>
+                    <Select value={selectedPromptId} onChange={e => {
+                      const id = e.target.value;
+                      setSelectedPromptId(id);
+                      const item = datasetItems?.items?.find((it: any) => it.id === id);
+                      if (item) {
+                        setUserInput(item.text);
+                        setPreview(null);
+                      }
+                    }}>
+                      <option value="">{t("-- load prompt --")}</option>
+                      {datasetItems?.items?.map((item: any, idx: number) => (
+                        <option key={`${item.id}-${idx}`} value={item.id}>
+                          {item.id}: {item.text.slice(0, 80)}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                  <div className="flex items-center justify-between gap-2 text-xs text-gray-500">
+                    <span>{t("Showing {{count}} of {{total}}", {
+                      count: datasetItems?.items?.length ?? 0,
+                      total: datasetItems?.total ?? datasetItems?.total_returned ?? 0,
+                    })}</span>
+                    <div className="flex gap-2">
+                      <Button variant="secondary" size="sm" disabled={datasetPromptPage === 0}
+                        onClick={() => setDatasetPromptPage(p => Math.max(0, p - 1))}>
+                        {t("Previous")}
+                      </Button>
+                      <Button variant="secondary" size="sm" disabled={!datasetItems?.has_more}
+                        onClick={() => setDatasetPromptPage(p => p + 1)}>
+                        {t("Next")}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
 

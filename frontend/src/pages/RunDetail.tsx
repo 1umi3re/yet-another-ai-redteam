@@ -9,7 +9,7 @@ import { Badge, StatusBadge } from "../components/ui/Badge";
 import { ProgressBar } from "../components/ui/ProgressBar";
 import { Button } from "../components/ui/Button";
 import { Textarea } from "../components/ui/Form";
-import { ArrowLeft, X, Clock, Hash, AlertCircle, MessageSquare } from "lucide-react";
+import { ArrowLeft, X, Clock, Hash, AlertCircle, MessageSquare, Download, Ban } from "lucide-react";
 import clsx from "clsx";
 import { toast } from "sonner";
 import { useI18n } from "../lib/i18n";
@@ -43,9 +43,14 @@ export default function RunDetail() {
   const { t } = useI18n();
   const { id = "" } = useParams();
   const token = useAuth(s => s.token);
+  const queryClient = useQueryClient();
   const [events, setEvents] = useState<any[]>([]);
   const [tab, setTab] = useState<Tab>("overview");
   const [detailAttemptId, setDetailAttemptId] = useState<string | null>(null);
+  const [attemptVerdict, setAttemptVerdict] = useState("");
+  const [attemptStatus, setAttemptStatus] = useState("");
+  const [attemptTarget, setAttemptTarget] = useState("");
+  const [attemptPage, setAttemptPage] = useState(0);
 
   const { data: run } = useQuery({
     queryKey: ["run", id],
@@ -53,14 +58,31 @@ export default function RunDetail() {
     refetchInterval: (q) => isTerminalStatus(q.state.data?.status) ? false : 2000,
   });
   const pollInterval: number | false = isTerminalStatus(run?.status) ? false : 2000;
-  const { data: attempts = [] } = useQuery({
-    queryKey: ["run-attempts", id],
-    queryFn: async () => (await api.get(`/api/runs/${id}/attempts`)).data,
+  const attemptLimit = 50;
+  const { data: attemptsPage = { items: [], total: 0, offset: 0, limit: attemptLimit } } = useQuery({
+    queryKey: ["run-attempts", id, attemptVerdict, attemptStatus, attemptTarget, attemptPage],
+    queryFn: async () => (await api.get(`/api/runs/${id}/attempts`, {
+      params: {
+        paged: true,
+        limit: attemptLimit,
+        offset: attemptPage * attemptLimit,
+        verdict: attemptVerdict || undefined,
+        status: attemptStatus || undefined,
+        target_id: attemptTarget || undefined,
+      },
+    })).data,
     refetchInterval: pollInterval,
   });
-  const { data: scores = [] } = useQuery({
+  const attempts = attemptsPage.items ?? [];
+  const { data: scoresRaw = [] } = useQuery({
     queryKey: ["run-scores", id],
     queryFn: async () => (await api.get(`/api/runs/${id}/scores`)).data,
+    refetchInterval: pollInterval,
+  });
+  const scores = Array.isArray(scoresRaw) ? scoresRaw : (scoresRaw.items ?? []);
+  const { data: report } = useQuery({
+    queryKey: ["run-report", id],
+    queryFn: async () => (await api.get(`/api/runs/${id}/report`)).data,
     refetchInterval: pollInterval,
   });
 
@@ -83,6 +105,13 @@ export default function RunDetail() {
   }, [scores]);
 
   const chartData = useMemo(() => {
+    if (report?.by_target?.length) {
+      return report.by_target.map((row: any) => ({
+        target: row.target_name ?? row.key,
+        refused: row.refused,
+        complied: row.complied,
+      }));
+    }
     const byTarget: Record<string, { target: string; refused: number; complied: number }> = {};
     for (const a of attempts as any[]) {
       byTarget[a.target_name] ||= { target: a.target_name, refused: 0, complied: 0 };
@@ -92,15 +121,55 @@ export default function RunDetail() {
       else byTarget[a.target_name].complied++;
     }
     return Object.values(byTarget);
-  }, [attempts, scoreByAttempt]);
+  }, [attempts, scoreByAttempt, report]);
 
   const totals = useMemo(() => {
+    if (report?.totals) {
+      return {
+        refused: report.totals.refused ?? 0,
+        complied: report.totals.complied ?? 0,
+        total: report.totals.scored ?? 0,
+      };
+    }
     let refused = 0, complied = 0;
     for (const s of scores as any[]) {
       if (verdictOf(s) === "refused") refused++; else complied++;
     }
     return { refused, complied, total: refused + complied };
-  }, [scores]);
+  }, [scores, report]);
+
+  const targetOptions = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const row of report?.by_target ?? []) {
+      seen.set(row.target_id ?? row.target_name ?? row.key, row.target_name ?? row.key);
+    }
+    return [...seen.entries()];
+  }, [report]);
+
+  const cancelMut = useMutation({
+    mutationFn: async () => (await api.post(`/api/runs/${id}/cancel`)).data,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["run", id] });
+      queryClient.invalidateQueries({ queryKey: ["run-report", id] });
+      toast.success(t("Run cancelled"));
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.detail ?? t("Failed to cancel run")),
+  });
+
+  const downloadExport = async (format: "json" | "csv") => {
+    const response = await api.get(`/api/runs/${id}/export`, {
+      params: { format },
+      responseType: "blob",
+    });
+    const url = URL.createObjectURL(response.data);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${run?.name ?? "run"}-${id.slice(0, 8)}.${format}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="space-y-6">
@@ -118,6 +187,23 @@ export default function RunDetail() {
             )}
           </div>
           {run?.error && <div className="mt-2 text-xs text-red-600">{run.error}</div>}
+        </div>
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button variant="secondary" size="sm" icon={<Download className="h-4 w-4" />}
+            onClick={() => downloadExport("json")}>
+            {t("Export JSON")}
+          </Button>
+          <Button variant="secondary" size="sm" icon={<Download className="h-4 w-4" />}
+            onClick={() => downloadExport("csv")}>
+            {t("Export CSV")}
+          </Button>
+          {run?.kind === "automated" && run?.status === "running" && (
+            <Button variant="danger" size="sm" icon={<Ban className="h-4 w-4" />}
+              loading={cancelMut.isPending}
+              onClick={() => cancelMut.mutate()}>
+              {t("Cancel run")}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -138,7 +224,7 @@ export default function RunDetail() {
               "px-4 py-2 text-sm font-medium border-b-2 -mb-px transition",
               tab === tabId ? "border-brand-600 text-brand-700" : "border-transparent text-gray-500 hover:text-gray-700",
             )}>
-            {tabId === "overview" ? t("Overview") : tabId === "attempts" ? t("Attempts ({{count}})", { count: (attempts as any[]).length }) : t("Live events")}
+            {tabId === "overview" ? t("Overview") : tabId === "attempts" ? t("Attempts ({{count}})", { count: attemptsPage.total ?? attempts.length }) : t("Live events")}
           </button>
         ))}
       </div>
@@ -171,6 +257,29 @@ export default function RunDetail() {
 
       {tab === "attempts" && (
         <Card>
+          <CardBody className="border-b border-gray-100">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <select className="input" value={attemptVerdict} onChange={e => { setAttemptVerdict(e.target.value); setAttemptPage(0); }}>
+                <option value="">{t("All verdicts")}</option>
+                <option value="refused">{t("refused")}</option>
+                <option value="complied">{t("complied")}</option>
+                <option value="unscored">{t("Unscored")}</option>
+              </select>
+              <select className="input" value={attemptStatus} onChange={e => { setAttemptStatus(e.target.value); setAttemptPage(0); }}>
+                <option value="">{t("All statuses")}</option>
+                <option value="completed">{t("Completed")}</option>
+                <option value="failed">{t("Failed")}</option>
+                <option value="skipped">{t("Skipped")}</option>
+              </select>
+              <select className="input" value={attemptTarget} onChange={e => { setAttemptTarget(e.target.value); setAttemptPage(0); }}>
+                <option value="">{t("All targets")}</option>
+                {targetOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+              <div className="flex items-center justify-end gap-2 text-xs text-gray-500">
+                {t("Showing {{count}} of {{total}}", { count: attempts.length, total: attemptsPage.total ?? attempts.length })}
+              </div>
+            </div>
+          </CardBody>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-gray-600 text-xs uppercase tracking-wider">
@@ -183,7 +292,7 @@ export default function RunDetail() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {(attempts as any[]).map(a => {
+                {attempts.map((a: any) => {
                   const sc = scoreByAttempt.get(a.id);
                   const verdict = sc ? verdictOf(sc) : null;
                   return (
@@ -203,12 +312,23 @@ export default function RunDetail() {
                     </tr>
                   );
                 })}
-                {!(attempts as any[]).length && (
+                {!attempts.length && (
                   <tr><td colSpan={5} className="px-5 py-10 text-center text-sm text-gray-500">{t("No attempts yet.")}</td></tr>
                 )}
               </tbody>
             </table>
           </div>
+          <CardBody className="flex items-center justify-end gap-2 border-t border-gray-100">
+            <Button variant="secondary" size="sm" disabled={attemptPage === 0}
+              onClick={() => setAttemptPage(p => Math.max(0, p - 1))}>
+              {t("Previous")}
+            </Button>
+            <Button variant="secondary" size="sm"
+              disabled={(attemptPage + 1) * attemptLimit >= (attemptsPage.total ?? 0)}
+              onClick={() => setAttemptPage(p => p + 1)}>
+              {t("Next")}
+            </Button>
+          </CardBody>
         </Card>
       )}
 
@@ -228,7 +348,7 @@ export default function RunDetail() {
 
       <AttemptDetailDrawer
         runId={id}
-        attempt={detailAttemptId ? (attempts as any[]).find(a => a.id === detailAttemptId) ?? null : null}
+        attempt={detailAttemptId ? attempts.find((a: any) => a.id === detailAttemptId) ?? null : null}
         scores={detailAttemptId ? (scores as any[]).filter(s => s.attempt_id === detailAttemptId) : []}
         onClose={() => setDetailAttemptId(null)}
       />
@@ -405,9 +525,7 @@ function AttemptDetailDrawer({ runId, attempt, scores, onClose }: { runId: strin
 
           {promptSnapshot && (
             <Section title={t("Executor Prompt Snapshots")}>
-              <pre className="text-xs whitespace-pre-wrap break-words font-mono bg-gray-50 border border-gray-200 rounded-lg p-3 text-gray-800 max-h-80 overflow-auto">
-{JSON.stringify(promptSnapshot, null, 2)}
-              </pre>
+              <PromptSnapshotView snapshot={promptSnapshot} />
             </Section>
           )}
         </div>
@@ -421,6 +539,41 @@ function Section({ title, children }: { title: string; children: React.ReactNode
     <div>
       <div className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5">{title}</div>
       {children}
+    </div>
+  );
+}
+
+function PromptSnapshotView({ snapshot }: { snapshot: any }) {
+  const { t } = useI18n();
+  const snapshots = Array.isArray(snapshot?.snapshots) ? snapshot.snapshots : [snapshot];
+  return (
+    <div className="space-y-3">
+      {snapshots.map((item: any, idx: number) => (
+        <div key={`${item.asset_id ?? "snapshot"}-${idx}`} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+          <div className="flex flex-wrap items-center gap-2 text-[11px]">
+            <Badge>{item.asset_id ?? t("Prompt snapshot")}</Badge>
+            {item.source && <Badge>{item.source}</Badge>}
+            {item.override_id && <Badge>{t("override")}</Badge>}
+            {item.sha256 && <span className="font-mono text-gray-500">{item.sha256.slice(0, 12)}</span>}
+          </div>
+          {item.variables && (
+            <details className="mt-2 text-[11px] text-gray-600">
+              <summary className="cursor-pointer hover:text-gray-800">{t("Variables")}</summary>
+              <pre className="mt-1 bg-white border border-gray-200 rounded p-2 font-mono overflow-auto max-h-40">
+{JSON.stringify(item.variables, null, 2)}
+              </pre>
+            </details>
+          )}
+          {item.rendered_text && (
+            <details className="mt-2 text-[11px] text-gray-600">
+              <summary className="cursor-pointer hover:text-gray-800">{t("Rendered prompt")}</summary>
+              <pre className="mt-1 bg-white border border-gray-200 rounded p-2 font-mono whitespace-pre-wrap break-words overflow-auto max-h-64">
+{item.rendered_text}
+              </pre>
+            </details>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
@@ -448,6 +601,8 @@ function ScoreCard({ score }: { score: any }) {
       (await api.patch(`/api/runs/${runId}/scores/${score.id}`, body)).data,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["run-scores", runId] });
+      queryClient.invalidateQueries({ queryKey: ["run-attempts", runId] });
+      queryClient.invalidateQueries({ queryKey: ["run-report", runId] });
       toast.success(t("Annotation saved"));
     },
     onError: () => toast.error(t("Failed to save annotation")),
@@ -537,9 +692,7 @@ function ScoreCard({ score }: { score: any }) {
       {promptSnapshot && (
         <details className="text-[11px] text-gray-500">
           <summary className="cursor-pointer hover:text-gray-700">{t("Prompt snapshot")}</summary>
-          <pre className="mt-1 bg-gray-50 border border-gray-200 rounded p-2 font-mono overflow-auto max-h-48">
-{JSON.stringify(promptSnapshot, null, 2)}
-          </pre>
+          <div className="mt-1"><PromptSnapshotView snapshot={promptSnapshot} /></div>
         </details>
       )}
 
