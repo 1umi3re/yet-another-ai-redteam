@@ -160,6 +160,47 @@ Automated scorers (refusal, regex, substring, LLM judge) produce initial verdict
 
 The annotation API is `PATCH /api/runs/{rid}/scores/{sid}` with JSON body `{"reviewer_label": <bool>, "reviewer_notes": "<string>"}`.
 
+### Assets, templates, and the general multi-turn executor
+
+The UI groups reusable red-team material under **Assets**:
+
+- **Test Datasets** — attack objective datasets used to drive automated and manual tests.
+- **Prompt Templates** — LLM-side templates for executors, converters, evaluators, and judges. These are not sent to the tested target model.
+- **Attack Templates** — target-facing templates that combine with a dataset objective before being sent to the tested model.
+
+Uploaded JSON test datasets can be edited from the Test Datasets tab. Each save creates a new immutable dataset version, and older versions can be restored as the active version for future runs.
+
+The `general_multi_turn` executor provides a configurable attacker/evaluator/judge loop for automated adaptive attacks. Configure it with:
+
+- `attacker_config_id` — LLM target used to generate the next attack prompt.
+- `evaluator_config_id` — LLM target that evaluates each turn and feeds back into the attacker.
+- `judge_config_id` — LLM target that decides whether an attack turn succeeded.
+- `goal`, `max_turns`, and `success_threshold`.
+- `attacker_prompt_asset_id`, `evaluator_prompt_asset_id`, and `judger_prompt_asset_id`.
+
+Those three prompt IDs are selected from Prompt Assets. Built-in defaults are seeded as:
+
+- `general_multi_turn.attacker.v1`
+- `general_multi_turn.evaluator.v1`
+- `general_multi_turn.judger.v1`
+
+The Prompt Templates tab can create new LLM prompt assets as well as overrides for built-ins. It includes executor prompts and every helper-LLM converter prompt, such as `llm_variation`, `translation_llm`, `low_resource_language`, and `paraphrase_fast`. Templates include a `category` field so the UI can quickly filter executor, converter, judge, PyRIT, and custom templates. Executor runs store rendered prompt snapshots on attempts/scores so operators can audit the exact attacker, evaluator, and judge prompts used.
+
+Attack Templates are also prompt assets, but they use `purpose = "attack_template"` and must include `{prompt}`. The `template_jailbreak` converter can select one with `attack_template_asset_id`; at runtime the dataset objective is inserted into the template and the combined prompt is sent to the tested target. Built-ins include the prompt-only jailbreak templates imported from Microsoft PyRIT under `pyrit/datasets/jailbreak/templates`.
+
+### Run operations and reporting
+
+Automated runs now support an optional `timeout_seconds` value in the run spec. Running automated jobs can be cancelled from the run detail page or via `POST /api/runs/{rid}/cancel`.
+
+Run detail also includes paginated/filtered attempts, prompt snapshot rendering, and export controls. The API surface is:
+
+- `GET /api/runs/{rid}/attempts?paged=true&limit=50&offset=0&verdict=refused|complied|unscored`
+- `GET /api/runs/{rid}/scores?paged=true&reviewed=true|false`
+- `GET /api/runs/{rid}/report`
+- `GET /api/runs/{rid}/export?format=json|csv`
+
+Manual Console dataset prompt selection now supports server-side search and pagination, which keeps large datasets usable without loading every item into the browser.
+
 ### Configuration unchanged
 
 Phase 2 features do not introduce new environment variables. The same three secrets from Phase 1 remain required:
