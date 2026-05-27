@@ -160,7 +160,7 @@ async def test_run_service_resolves_garak_lrl_and_paraphrase_configs(tmp_path):
     )
     converter_mock = respx.post("https://converter.example.com/v1/chat/completions").mock(
         return_value=httpx.Response(200, json={
-            "choices": [{"message": {"content": "paraphrased yoruba prompt"}}],
+            "choices": [{"message": {"content": "paraphrased original prompt"}}],
             "usage": {"prompt_tokens": 10, "completion_tokens": 3},
         })
     )
@@ -227,8 +227,10 @@ async def test_run_service_resolves_garak_lrl_and_paraphrase_configs(tmp_path):
     assert converter_mock.called
     converter_body = json.loads(converter_mock.calls[0].request.content)
     assert "Pegasus" in str(converter_body)
-    assert "yoruba prompt" in str(converter_body)
+    assert "original prompt" in str(converter_body)
 
     assert target_mock.called
-    target_body = json.loads(target_mock.calls[0].request.content)
-    assert "paraphrased yoruba prompt" in str(target_body)
+    assert target_mock.call_count == 2
+    target_bodies = [json.loads(call.request.content) for call in target_mock.calls]
+    assert "yoruba prompt" in str(target_bodies)
+    assert "paraphrased original prompt" in str(target_bodies)

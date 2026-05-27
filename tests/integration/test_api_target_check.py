@@ -1,8 +1,11 @@
+import asyncio
 import pytest
 import respx
 import httpx
 from cryptography.fernet import Fernet
 from httpx import AsyncClient, ASGITransport
+from airedteam.core.registry import default_registry
+from airedteam.core.types import Response
 
 
 async def _login(c):
@@ -187,6 +190,52 @@ async def test_target_check_draft(monkeypatch, tmp_path):
         # Verify target was not persisted
         targets = await c.get("/api/targets", headers=h)
         assert len(targets.json()) == 0
+
+
+@pytest.mark.asyncio
+async def test_target_check_draft_uses_configured_timeout(monkeypatch, tmp_path):
+    class SlowCheckTarget:
+        def __init__(self, *, name: str, timeout: float) -> None:
+            self.name = name
+            self.timeout = timeout
+
+        async def generate(self, prompt):
+            await asyncio.sleep(0.05)
+            return Response(text="late pong", raw={}, latency_ms=50)
+
+        async def aclose(self):
+            pass
+
+    default_registry().register("targets", "slow_check_target", SlowCheckTarget)
+    monkeypatch.setenv("AIREDTEAM_MASTER_KEY", Fernet.generate_key().decode())
+    monkeypatch.setenv("AIREDTEAM_ADMIN_PASSWORD", "letmein")
+    monkeypatch.setenv("AIREDTEAM_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/x.db")
+    monkeypatch.setenv("AIREDTEAM_BLOB_DIR", str(tmp_path / "blobs"))
+
+    import airedteam.api.deps as deps
+    deps._STATE = None
+    from airedteam.api.app import create_app
+
+    app = create_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
+        state = deps.get_state()
+        from airedteam.storage.db import make_engine
+        from airedteam.storage import models
+        eng = make_engine(state.settings.database_url)
+        async with eng.begin() as conn:
+            await conn.run_sync(models.Base.metadata.create_all)
+
+        h = await _login(c)
+
+        check_resp = await c.post("/api/targets/check", headers=h, json={
+            "name": "slow_target",
+            "plugin": "slow_check_target",
+            "params": {"name": "slow_target", "timeout": 0.01},
+        })
+        assert check_resp.status_code == 200
+        result = check_resp.json()
+        assert result["ok"] is False
+        assert result["error"] == "TimeoutError: Request exceeded 0.01 seconds"
 
 
 @pytest.mark.asyncio

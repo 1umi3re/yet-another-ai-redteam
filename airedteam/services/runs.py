@@ -57,6 +57,19 @@ def _is_general_multi_turn_executor(cls) -> bool:
         return False
 
 
+def _target_max_concurrency(runtime_cfg: dict) -> int | None:
+    raw = (runtime_cfg.get("params") or {}).get("max_concurrency")
+    if raw is None or raw == "":
+        return None
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        raise ValueError(f"target max_concurrency must be a positive integer: {raw!r}") from None
+    if value < 1:
+        raise ValueError(f"target max_concurrency must be a positive integer: {raw!r}")
+    return value
+
+
 class RunService:
     def __init__(
         self,
@@ -128,7 +141,11 @@ class RunService:
         """Build a Target instance from a resolved target-config dict
         (as returned by TargetConfigService.resolve_for_runtime).
         """
-        return build_target(runtime_cfg)
+        target = build_target(runtime_cfg)
+        max_concurrency = _target_max_concurrency(runtime_cfg)
+        if max_concurrency is not None:
+            target._airedteam_max_concurrency = max_concurrency
+        return target
 
     async def _is_cancelled(self, run_id: str) -> bool:
         async with self._sf() as s:
@@ -161,7 +178,7 @@ class RunService:
             target_refs = [await self._resolve_plugin_ref(t, "target") for t in spec.targets]
             ds_ref = await self._resolve_plugin_ref(spec.dataset, "dataset")
 
-            targets = [build_target(r) for r in target_refs]
+            targets = [self._build_target_from_cfg(r) for r in target_refs]
             closeables.extend(targets)
             dataset = build_dataset(ds_ref, blob_store=self._blob)
 
@@ -343,8 +360,11 @@ class RunService:
                 total = (await dataset.size()) or 0
             except Exception:
                 total = 0
+            converter_variant_count = max(1, len(converters))
             async with self._sf() as s:
-                await s.execute(update(Run).where(Run.id == run_id).values(progress_total=total * len(targets)))
+                await s.execute(update(Run).where(Run.id == run_id).values(
+                    progress_total=total * len(targets) * converter_variant_count
+                ))
                 await s.commit()
 
             engine = RunEngine(progress_bus=self._bus, on_attempt=on_attempt, on_score=on_score)

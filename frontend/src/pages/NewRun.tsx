@@ -533,7 +533,7 @@ export default function NewRun() {
             </div>
 
             <div>
-              <Field label={t("Converters")} hint={t("Click to toggle. Executed in order.")}>
+              <Field label={t("Converters")} hint={t("Each selected converter creates a separate attack attempt.")}>
                 <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50/50 p-3">
                   <Input
                     value={converterSearch}

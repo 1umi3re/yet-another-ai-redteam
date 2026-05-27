@@ -33,31 +33,47 @@ class RunEngine:
         orchestrator,
     ) -> None:
         sem = asyncio.Semaphore(max(1, concurrency))
+        converter_variants = [[c] for c in converters] if converters else [[]]
+        target_sems: dict[int, asyncio.Semaphore] = {}
+        for target in targets:
+            limit = getattr(target, "_airedteam_max_concurrency", None)
+            if limit is not None:
+                target_sems[id(target)] = asyncio.Semaphore(max(1, int(limit)))
 
-        async def process(prompt, target):
+        async def process(prompt, target, converter_variant):
             target_name = getattr(target, "name", "?")
             dataset_item_id = None
             try:
                 dataset_item_id = prompt.metadata.get("id")
             except Exception:
                 pass
-            async with sem:
-                ar = await executor.run(prompt, target, converters)
-                async with self._lock:
-                    await self._on_attempt(ar, target_name, dataset_item_id)
-                    idx = self._counter
-                    self._counter += 1
-                await self._bus.publish(run_id, {"type": "attempt.completed", "status": ar.status})
-                for sc in scorers:
-                    try:
-                        sr = await sc.score(ar)
-                    except Exception as e:
-                        sr = ScoreResult(scorer=getattr(sc, "name", "?"), value={"error": str(e)}, rationale=None)
-                    await self._on_score(idx, sr)
+            target_sem = target_sems.get(id(target))
+            if target_sem is not None:
+                async with target_sem:
+                    async with sem:
+                        await run_attempt(prompt, target, converter_variant, target_name, dataset_item_id)
+            else:
+                async with sem:
+                    await run_attempt(prompt, target, converter_variant, target_name, dataset_item_id)
+
+        async def run_attempt(prompt, target, converter_variant, target_name, dataset_item_id):
+            ar = await executor.run(prompt, target, converter_variant)
+            async with self._lock:
+                await self._on_attempt(ar, target_name, dataset_item_id)
+                idx = self._counter
+                self._counter += 1
+            await self._bus.publish(run_id, {"type": "attempt.completed", "status": ar.status})
+            for sc in scorers:
+                try:
+                    sr = await sc.score(ar)
+                except Exception as e:
+                    sr = ScoreResult(scorer=getattr(sc, "name", "?"), value={"error": str(e)}, rationale=None)
+                await self._on_score(idx, sr)
 
         tasks: list[asyncio.Task] = []
         async for prompt in orchestrator.attempts(dataset, converters):
             for t in targets:
-                tasks.append(asyncio.create_task(process(prompt, t)))
+                for converter_variant in converter_variants:
+                    tasks.append(asyncio.create_task(process(prompt, t, converter_variant)))
         if tasks:
             await asyncio.gather(*tasks)

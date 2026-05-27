@@ -2,6 +2,8 @@ from __future__ import annotations
 from typing import Any
 from airedteam.core.registry import default_registry
 
+TARGET_RUNTIME_PARAM_KEYS = {"max_concurrency"}
+
 
 def _instantiate(group: str, ref: dict, **extra: Any):
     plugin = ref.get("plugin")
@@ -14,7 +16,12 @@ def _instantiate(group: str, ref: dict, **extra: Any):
 
 
 def build_target(ref: dict):
-    return _instantiate("targets", ref)
+    filtered = dict(ref)
+    params = dict(filtered.get("params") or {})
+    for key in TARGET_RUNTIME_PARAM_KEYS:
+        params.pop(key, None)
+    filtered["params"] = params
+    return _instantiate("targets", filtered)
 
 
 def build_dataset(ref: dict, *, blob_store=None):

@@ -1,4 +1,22 @@
-from airedteam.engine.factory import build_converter, build_executor, build_scorer
+from airedteam.core.registry import default_registry
+from airedteam.engine.factory import build_converter, build_executor, build_scorer, build_target
+
+
+def test_build_target_filters_runtime_concurrency_param_but_keeps_timeout():
+    class RuntimeParamTarget:
+        def __init__(self, *, name: str, timeout: float) -> None:
+            self.name = name
+            self.timeout = timeout
+
+    default_registry().register("targets", "runtime_param_target", RuntimeParamTarget)
+
+    t = build_target({
+        "plugin": "runtime_param_target",
+        "params": {"name": "t1", "timeout": 123.0, "max_concurrency": 2},
+    })
+
+    assert t.name == "t1"
+    assert t.timeout == 123.0
 
 
 def test_build_converter_identity():
