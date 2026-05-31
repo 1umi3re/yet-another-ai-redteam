@@ -24,8 +24,5 @@ class CharCorruptConverter:
 
     async def convert(self, prompt: Prompt) -> Prompt:
         rng = random.Random(self.seed)
-        text = "".join(
-            self.replacement if rng.random() < self.probability else ch
-            for ch in prompt.text
-        )
+        text = "".join(self.replacement if rng.random() < self.probability else ch for ch in prompt.text)
         return converted_prompt(prompt, text)

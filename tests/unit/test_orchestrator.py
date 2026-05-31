@@ -1,15 +1,21 @@
 import pytest
-from airedteam.engine.orchestrator import DefaultOrchestrator
+
 from airedteam.core.types import Prompt
+from airedteam.engine.orchestrator import DefaultOrchestrator
 
 
 class FakeDataset:
     name = "fd"
-    def __init__(self, items): self.items = items
+
+    def __init__(self, items):
+        self.items = items
+
     async def __aiter__(self):
         for t in self.items:
             yield Prompt(text=t)
-    async def size(self): return len(self.items)
+
+    async def size(self):
+        return len(self.items)
 
 
 @pytest.mark.asyncio

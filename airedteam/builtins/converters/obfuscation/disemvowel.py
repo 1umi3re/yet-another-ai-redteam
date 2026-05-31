@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from airedteam.core.types import Prompt
 
-
 _VOWELS = frozenset("aeiouAEIOU")
 
 

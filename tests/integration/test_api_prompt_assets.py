@@ -16,6 +16,7 @@ async def test_prompt_asset_api_override_flow(monkeypatch, tmp_path):
     monkeypatch.setenv("AIREDTEAM_BLOB_DIR", str(tmp_path / "blobs"))
 
     import airedteam.api.deps as deps
+
     deps._STATE = None
     from airedteam.api.app import create_app
     from airedteam.storage import models
@@ -94,6 +95,7 @@ async def test_prompt_snapshot_api(monkeypatch, tmp_path):
     monkeypatch.setenv("AIREDTEAM_BLOB_DIR", str(tmp_path / "blobs"))
 
     import airedteam.api.deps as deps
+
     deps._STATE = None
     from airedteam.api.app import create_app
     from airedteam.storage import models
@@ -112,7 +114,9 @@ async def test_prompt_snapshot_api(monkeypatch, tmp_path):
             s.add(run)
             await s.flush()
             attempt_path = await state.prompt_assets.write_snapshot(
-                run.id, "attempt-a1", {"snapshots": [{"asset_id": "pair.judge.v1"}]},
+                run.id,
+                "attempt-a1",
+                {"snapshots": [{"asset_id": "pair.judge.v1"}]},
             )
             attempt = models.Attempt(
                 id="a1",
@@ -125,15 +129,19 @@ async def test_prompt_snapshot_api(monkeypatch, tmp_path):
             s.add(attempt)
             await s.flush()
             score_path = await state.prompt_assets.write_snapshot(
-                run.id, "score-s1", {"asset_id": "llm_judge.single.v1"},
+                run.id,
+                "score-s1",
+                {"asset_id": "llm_judge.single.v1"},
             )
-            s.add(models.Score(
-                id="s1",
-                attempt_id=attempt.id,
-                scorer="llm_judge",
-                value_json={"label": True},
-                prompt_snapshot_blob_path=score_path,
-            ))
+            s.add(
+                models.Score(
+                    id="s1",
+                    attempt_id=attempt.id,
+                    scorer="llm_judge",
+                    value_json={"label": True},
+                    prompt_snapshot_blob_path=score_path,
+                )
+            )
             await s.commit()
             run_id = run.id
 

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from airedteam.core.types import Prompt
 
-
 _GLYPHS = {
     "A": [" A ", "A A", "AAA", "A A", "A A"],
     "B": ["BB ", "B B", "BB ", "B B", "BBB"],

@@ -1,16 +1,21 @@
-import asyncio, pytest
+import asyncio
 from dataclasses import dataclass
-from airedteam.core.types import Prompt, Response, AttemptResult, ScoreResult
-from airedteam.engine.run_engine import RunEngine
-from airedteam.engine.progress import ProgressBus
+
+import pytest
+
+from airedteam.core.types import AttemptResult, Prompt, Response, ScoreResult
 from airedteam.engine.orchestrator import DefaultOrchestrator
+from airedteam.engine.progress import ProgressBus
+from airedteam.engine.run_engine import RunEngine
 
 
 class FakeDataset:
     name = "fake"
+
     async def __aiter__(self):
         for i in range(3):
             yield Prompt(text=f"p{i}", metadata={"id": str(i)})
+
     async def size(self):
         return 3
 
@@ -18,14 +23,17 @@ class FakeDataset:
 class FakeTarget:
     def __init__(self, n="t"):
         self.name = n
+
     async def generate(self, prompt):
         return Response(text="ok", raw={}, latency_ms=1)
+
     async def aclose(self):
         pass
 
 
 class FakeExec:
     name = "fake_exec"
+
     async def run(self, prompt, target, converters):
         r = await target.generate(prompt)
         return AttemptResult(prompt=prompt, response=r, status="completed", converter_chain=[])
@@ -33,6 +41,7 @@ class FakeExec:
 
 class FakeScorer:
     name = "fake_scorer"
+
     async def score(self, ar):
         return ScoreResult(scorer=self.name, value={"label": True})
 

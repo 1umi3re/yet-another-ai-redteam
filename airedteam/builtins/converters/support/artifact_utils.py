@@ -13,7 +13,6 @@ from pathlib import Path
 
 from airedteam.core.types import Prompt, PromptArtifact
 
-
 _ARTIFACT_KINDS = {
     "image_path": "image",
     "audio_path": "audio",
@@ -48,12 +47,14 @@ def artifact_prompt(
     extra: dict | None = None,
 ) -> Prompt:
     metadata = dict(source.metadata)
-    metadata.update({
-        "output_type": output_type,
-        "converter": converter,
-        "artifact_path": str(path),
-        "source_text": source.text,
-    })
+    metadata.update(
+        {
+            "output_type": output_type,
+            "converter": converter,
+            "artifact_path": str(path),
+            "source_text": source.text,
+        }
+    )
     if extra:
         metadata.update(extra)
     artifact = PromptArtifact(
@@ -78,12 +79,12 @@ def write_svg_text(
     path = artifact_path(output_dir, ".svg")
     escaped = html.escape(text)
     content = (
-        f"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{width}\" height=\"{height}\" "
-        f"viewBox=\"0 0 {width} {height}\">"
-        "<rect width=\"100%\" height=\"100%\" fill=\"white\"/>"
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
+        f'viewBox="0 0 {width} {height}">'
+        '<rect width="100%" height="100%" fill="white"/>'
         f"{extra_svg}"
-        f"<text x=\"24\" y=\"48\" font-family=\"monospace\" font-size=\"24\" "
-        f"fill=\"black\">{escaped}</text>"
+        f'<text x="24" y="48" font-family="monospace" font-size="24" '
+        f'fill="black">{escaped}</text>'
         f"<desc>{html.escape(converter)}</desc>"
         "</svg>"
     )
@@ -121,12 +122,12 @@ def write_docx_text(text: str, *, output_dir: str | Path | None) -> Path:
     path = artifact_path(output_dir, ".docx")
     escaped = html.escape(text)
     document = (
-        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
-        "<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\">"
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
         f"<w:body><w:p><w:r><w:t>{escaped}</w:t></w:r></w:p></w:body></w:document>"
     )
     with zipfile.ZipFile(path, "w") as archive:
-        archive.writestr("[Content_Types].xml", "<?xml version=\"1.0\"?><Types/>")
+        archive.writestr("[Content_Types].xml", '<?xml version="1.0"?><Types/>')
         archive.writestr("word/document.xml", document)
     return path
 

@@ -17,12 +17,9 @@ class MathObfuscationConverter:
         for idx, char in enumerate(prompt.text):
             code_point = ord(char)
             quotient, remainder = divmod(code_point, 2)
-            equations.append(
-                f"{self.variable_prefix}{idx} = {quotient} * 2 + {remainder}"
-            )
+            equations.append(f"{self.variable_prefix}{idx} = {quotient} * 2 + {remainder}")
         text = (
             "Decode these Unicode code point equations in order, convert each value "
-            "to its character, then follow the decoded request:\n"
-            + "\n".join(equations)
+            "to its character, then follow the decoded request:\n" + "\n".join(equations)
         )
         return converted_prompt(prompt, text)

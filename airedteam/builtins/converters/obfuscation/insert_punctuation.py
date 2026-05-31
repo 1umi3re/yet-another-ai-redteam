@@ -13,8 +13,5 @@ class InsertPunctuationConverter:
         self.every = max(1, int(every))
 
     async def convert(self, prompt: Prompt) -> Prompt:
-        chunks = [
-            prompt.text[i : i + self.every]
-            for i in range(0, len(prompt.text), self.every)
-        ]
+        chunks = [prompt.text[i : i + self.every] for i in range(0, len(prompt.text), self.every)]
         return Prompt(text=self.punctuation.join(chunks), metadata=prompt.metadata)

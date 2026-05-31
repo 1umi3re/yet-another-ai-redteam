@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from airedteam.core.types import Prompt
-
 from airedteam.builtins.converters.support.artifact_utils import artifact_prompt, write_svg_text
+from airedteam.core.types import Prompt
 
 
 class ImageNoiseConverter:
@@ -17,12 +16,12 @@ class ImageNoiseConverter:
     async def convert(self, prompt: Prompt) -> Prompt:
         extra = (
             f"<metadata>intensity={self.intensity}</metadata>"
-            "<filter id=\"noise\">"
-            f"<feTurbulence type=\"fractalNoise\" baseFrequency=\"{self.intensity}\" "
-            "numOctaves=\"2\" stitchTiles=\"stitch\"/>"
-            "<feBlend mode=\"multiply\" in=\"SourceGraphic\"/>"
+            '<filter id="noise">'
+            f'<feTurbulence type="fractalNoise" baseFrequency="{self.intensity}" '
+            'numOctaves="2" stitchTiles="stitch"/>'
+            '<feBlend mode="multiply" in="SourceGraphic"/>'
             "</filter>"
-            "<rect width=\"100%\" height=\"100%\" filter=\"url(#noise)\" opacity=\"0.35\"/>"
+            '<rect width="100%" height="100%" filter="url(#noise)" opacity="0.35"/>'
         )
         path = write_svg_text(
             prompt.text,

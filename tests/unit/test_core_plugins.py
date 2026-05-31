@@ -1,4 +1,4 @@
-from airedteam.core.plugins import Target, Dataset, Converter, Executor, Scorer, Orchestrator
+from airedteam.core.plugins import Converter, Dataset, Executor, Orchestrator, Scorer, Target
 from airedteam.core.types import Prompt
 
 

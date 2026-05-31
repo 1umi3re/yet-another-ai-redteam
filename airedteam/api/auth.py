@@ -1,6 +1,8 @@
 from __future__ import annotations
+
 from datetime import UTC, datetime, timedelta
-from jose import jwt, JWTError
+
+from jose import JWTError, jwt
 
 ALG = "HS256"
 

@@ -1,5 +1,6 @@
-import os
 import pytest
+from pydantic import ValidationError
+
 from airedteam.config import Settings
 
 
@@ -17,5 +18,5 @@ def test_settings_defaults(monkeypatch, tmp_path):
 def test_settings_requires_master_key(monkeypatch):
     monkeypatch.delenv("AIREDTEAM_MASTER_KEY", raising=False)
     monkeypatch.setenv("AIREDTEAM_ADMIN_PASSWORD", "secret")
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         Settings(_env_file=None)

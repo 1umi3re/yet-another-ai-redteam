@@ -1,9 +1,11 @@
 import pytest
+
 from airedteam.builtins.scorers.regex import RegexScorer
 from airedteam.core.types import AttemptResult, Prompt, Response
 
 
-def _ar(t): return AttemptResult(prompt=Prompt(text="x"), response=Response(text=t, raw={}, latency_ms=1))
+def _ar(t):
+    return AttemptResult(prompt=Prompt(text="x"), response=Response(text=t, raw={}, latency_ms=1))
 
 
 @pytest.mark.asyncio
@@ -15,5 +17,6 @@ async def test_regex_match():
 
 def test_regex_requires_pattern():
     import pytest as _pt
+
     with _pt.raises(ValueError):
         RegexScorer(pattern="")

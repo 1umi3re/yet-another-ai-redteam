@@ -16,8 +16,5 @@ class Base2048Converter:
         bits = "".join(f"{byte:08b}" for byte in data)
         pad = (-len(bits)) % 11
         bits = bits + ("0" * pad)
-        chars = [
-            chr(self.offset + int(bits[i : i + 11], 2))
-            for i in range(0, len(bits), 11)
-        ]
+        chars = [chr(self.offset + int(bits[i : i + 11], 2)) for i in range(0, len(bits), 11)]
         return Prompt(text="".join(chars), metadata=prompt.metadata)

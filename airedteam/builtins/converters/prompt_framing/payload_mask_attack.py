@@ -22,10 +22,7 @@ class PayloadMaskAttackConverter:
 
     async def convert(self, prompt: Prompt) -> Prompt:
         words = prompt.text.split()
-        masked_words = [
-            self.mask_token if (index + 1) % self.every == 0 else word
-            for index, word in enumerate(words)
-        ]
+        masked_words = [self.mask_token if (index + 1) % self.every == 0 else word for index, word in enumerate(words)]
         masked_payload = " ".join(masked_words)
         text = f"{self.instruction}\n\nMasked payload: {masked_payload}"
         return converted_prompt(prompt, text)

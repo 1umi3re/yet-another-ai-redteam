@@ -35,14 +35,20 @@ class ScriptedTarget(BaseTarget):
 @pytest.mark.asyncio
 async def test_general_multi_turn_feedback_drives_next_attack_and_stops_on_judge():
     attacker = ScriptedTarget("attacker", ['{"prompt": "try-2", "rationale": "use feedback"}'])
-    evaluator = ScriptedTarget("evaluator", [
-        '{"feedback": "ask more directly", "score": 3, "rationale": "refused"}',
-        '{"feedback": "done", "score": 10, "rationale": "complied"}',
-    ])
-    judge = ScriptedTarget("judge", [
-        '{"success": false, "score": 3, "rationale": "not yet"}',
-        '{"success": true, "score": 10, "rationale": "done"}',
-    ])
+    evaluator = ScriptedTarget(
+        "evaluator",
+        [
+            '{"feedback": "ask more directly", "score": 3, "rationale": "refused"}',
+            '{"feedback": "done", "score": 10, "rationale": "complied"}',
+        ],
+    )
+    judge = ScriptedTarget(
+        "judge",
+        [
+            '{"success": false, "score": 3, "rationale": "not yet"}',
+            '{"success": true, "score": 10, "rationale": "done"}',
+        ],
+    )
     target = ScriptedTarget("target", ["refused", "complied"])
 
     executor = GeneralMultiTurnExecutor(
@@ -59,6 +65,47 @@ async def test_general_multi_turn_feedback_drives_next_attack_and_stops_on_judge
     assert [m.text for m in result.conversation if m.role == "user"] == ["seed", "try-2"]
     assert "ask more directly" in attacker.seen[0]
     assert "LAST JUDGE SCORE: 3" in attacker.seen[0]
+
+
+@pytest.mark.asyncio
+async def test_general_multi_turn_rewrites_over_limit_attacker_output():
+    attacker = ScriptedTarget(
+        "attacker",
+        [
+            '{"prompt": "this generated turn is too long"}',
+            '{"prompt": "short"}',
+        ],
+    )
+    evaluator = ScriptedTarget(
+        "evaluator",
+        [
+            '{"feedback": "shorten", "score": 3, "rationale": "refused"}',
+            '{"feedback": "done", "score": 10, "rationale": "complied"}',
+        ],
+    )
+    judge = ScriptedTarget(
+        "judge",
+        [
+            '{"success": false, "score": 3, "rationale": "not yet"}',
+            '{"success": true, "score": 10, "rationale": "done"}',
+        ],
+    )
+    target = ScriptedTarget("target", ["refused", "complied"])
+    target._airedteam_max_input_chars = 5
+
+    executor = GeneralMultiTurnExecutor(
+        attacker=attacker,
+        evaluator=evaluator,
+        judge=judge,
+        goal="G",
+        max_turns=5,
+    )
+    result = await executor.run(Prompt(text="seed"), target, [])
+
+    assert result.status == "completed"
+    assert [m.text for m in result.conversation if m.role == "user"] == ["seed", "short"]
+    assert "5 characters" in attacker.seen[0]
+    assert "Rewrite" in attacker.seen[1]
 
 
 @pytest.mark.asyncio
@@ -91,14 +138,20 @@ async def test_general_multi_turn_uses_selected_prompt_assets(tmp_path):
     )
 
     attacker = ScriptedTarget("attacker", ['{"prompt": "try-2"}'])
-    evaluator = ScriptedTarget("evaluator", [
-        '{"feedback": "feedback-1", "score": 2}',
-        '{"feedback": "feedback-2", "score": 10}',
-    ])
-    judge = ScriptedTarget("judge", [
-        '{"success": false, "score": 2, "rationale": "no"}',
-        '{"success": true, "score": 10, "rationale": "yes"}',
-    ])
+    evaluator = ScriptedTarget(
+        "evaluator",
+        [
+            '{"feedback": "feedback-1", "score": 2}',
+            '{"feedback": "feedback-2", "score": 10}',
+        ],
+    )
+    judge = ScriptedTarget(
+        "judge",
+        [
+            '{"success": false, "score": 2, "rationale": "no"}',
+            '{"success": true, "score": 10, "rationale": "yes"}',
+        ],
+    )
     target = ScriptedTarget("target", ["r1", "r2"])
 
     executor = GeneralMultiTurnExecutor(
@@ -174,14 +227,20 @@ async def test_general_multi_turn_variant_uses_default_prompt_assets(tmp_path):
     )
 
     attacker = ScriptedTarget("attacker", ['{"prompt": "variant-try-2"}'])
-    evaluator = ScriptedTarget("evaluator", [
-        '{"feedback": "variant-feedback", "score": 2}',
-        '{"feedback": "done", "score": 10}',
-    ])
-    judge = ScriptedTarget("judge", [
-        '{"success": false, "score": 2}',
-        '{"success": true, "score": 10}',
-    ])
+    evaluator = ScriptedTarget(
+        "evaluator",
+        [
+            '{"feedback": "variant-feedback", "score": 2}',
+            '{"feedback": "done", "score": 10}',
+        ],
+    )
+    judge = ScriptedTarget(
+        "judge",
+        [
+            '{"success": false, "score": 2}',
+            '{"success": true, "score": 10}',
+        ],
+    )
     target = ScriptedTarget("target", ["r1", "r2"])
 
     executor = VariantExecutor(

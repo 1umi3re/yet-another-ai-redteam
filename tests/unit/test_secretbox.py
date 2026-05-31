@@ -1,4 +1,5 @@
 from cryptography.fernet import Fernet
+
 from airedteam.storage.secretbox import SecretBox
 
 

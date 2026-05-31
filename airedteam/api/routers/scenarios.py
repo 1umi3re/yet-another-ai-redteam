@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
-from airedteam.core.registry import default_registry
-from airedteam.api.deps import require_admin
 
+from airedteam.api.deps import require_admin
+from airedteam.core.registry import default_registry
 
 router = APIRouter()
 

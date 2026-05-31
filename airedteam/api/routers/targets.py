@@ -1,12 +1,13 @@
-from typing import Any
 import asyncio
 import time
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from airedteam.api.deps import AppState, get_state, require_admin
-from airedteam.engine.factory import build_target
-from airedteam.core.types import Prompt
 
+from airedteam.api.deps import AppState, get_state, require_admin
+from airedteam.core.types import Prompt
+from airedteam.engine.factory import build_target
 
 router = APIRouter()
 
@@ -29,6 +30,8 @@ class TargetOut(BaseModel):
 class UpdateTargetLimits(BaseModel):
     timeout: float | None = Field(default=None, gt=0)
     max_concurrency: int | None = Field(default=None, gt=0)
+    max_input_chars: int | None = Field(default=None, gt=0)
+    input_limit_unit: str | None = Field(default=None, pattern="^characters$")
 
 
 class CheckResult(BaseModel):
@@ -42,7 +45,13 @@ class CheckResult(BaseModel):
 
 
 def _to_out(row) -> TargetOut:
-    return TargetOut(id=row.id, name=row.name, plugin=row.plugin, params=row.params_json or {}, has_secret=row.secret_ciphertext is not None)
+    return TargetOut(
+        id=row.id,
+        name=row.name,
+        plugin=row.plugin,
+        params=row.params_json or {},
+        has_secret=row.secret_ciphertext is not None,
+    )
 
 
 def _probe_timeout(runtime_cfg: dict) -> float:
@@ -81,6 +90,10 @@ async def update_limits(
             timeout=req.timeout,
             max_concurrency_set="max_concurrency" in req.model_fields_set,
             max_concurrency=req.max_concurrency,
+            max_input_chars_set="max_input_chars" in req.model_fields_set,
+            max_input_chars=req.max_input_chars,
+            input_limit_unit_set="input_limit_unit" in req.model_fields_set,
+            input_limit_unit=req.input_limit_unit,
         )
     except KeyError:
         raise HTTPException(404, "Target not found") from None
@@ -101,12 +114,9 @@ async def _check_target_connectivity(runtime_cfg: dict) -> CheckResult:
     try:
         target = build_target(runtime_cfg)
         start = time.perf_counter()
-        
+
         ping_prompt = Prompt(text="Reply with the single word: pong")
-        response = await asyncio.wait_for(
-            target.generate(ping_prompt),
-            timeout=timeout
-        )
+        response = await asyncio.wait_for(target.generate(ping_prompt), timeout=timeout)
         stream_ok = None
         stream_error = None
         if hasattr(target, "check_stream_support"):
@@ -114,29 +124,23 @@ async def _check_target_connectivity(runtime_cfg: dict) -> CheckResult:
                 target.check_stream_support(Prompt(text="Reply with the single word: pong")),
                 timeout=timeout,
             )
-        
+
         elapsed_ms = int((time.perf_counter() - start) * 1000)
         preview = response.text[:200] if response.text else None
         model_echo = runtime_cfg.get("params", {}).get("model")
-        
+
         return CheckResult(
             ok=True,
             latency_ms=elapsed_ms,
             response_preview=preview,
             stream_ok=stream_ok,
             stream_error=stream_error,
-            model_echo=model_echo
+            model_echo=model_echo,
         )
-    except asyncio.TimeoutError:
-        return CheckResult(
-            ok=False,
-            error=f"TimeoutError: Request exceeded {timeout:g} seconds"
-        )
+    except TimeoutError:
+        return CheckResult(ok=False, error=f"TimeoutError: Request exceeded {timeout:g} seconds")
     except Exception as e:
-        return CheckResult(
-            ok=False,
-            error=f"{type(e).__name__}: {str(e)}"
-        )
+        return CheckResult(ok=False, error=f"{type(e).__name__}: {str(e)}")
     finally:
         if target is not None:
             await target.aclose()
@@ -147,7 +151,7 @@ async def check_target(tid: str, _=Depends(require_admin), state: AppState = Dep
     """Check connectivity and responsiveness of a configured target."""
     if await state.targets.get(tid) is None:
         raise HTTPException(404, "Target not found")
-    
+
     runtime_cfg = await state.targets.resolve_for_runtime(tid)
     return await _check_target_connectivity(runtime_cfg)
 
@@ -156,11 +160,8 @@ async def check_target(tid: str, _=Depends(require_admin), state: AppState = Dep
 async def check_target_draft(req: CreateTarget, _=Depends(require_admin), state: AppState = Depends(get_state)):
     """Check connectivity of a target config without saving it."""
     # Build a runtime config from the request (without persisting)
-    runtime_cfg = {
-        "plugin": req.plugin,
-        "params": req.params
-    }
-    
+    runtime_cfg = {"plugin": req.plugin, "params": req.params}
+
     # If there's a secret, we need to temporarily decrypt it for the check
     # But since we're not persisting, we can pass it directly to the target
     if req.secret:
@@ -169,5 +170,5 @@ async def check_target_draft(req: CreateTarget, _=Depends(require_admin), state:
         # Most targets like openai_compat expect api_key in the params
         if req.plugin in ("openai_compat", "anthropic_compat"):
             runtime_cfg["params"] = {**req.params, **req.secret}
-    
+
     return await _check_target_connectivity(runtime_cfg)

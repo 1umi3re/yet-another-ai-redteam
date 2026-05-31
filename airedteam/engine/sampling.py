@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -7,7 +8,7 @@ if TYPE_CHECKING:
 
 class SampledDataset:
     """Wrapper that applies sampling (limit, shuffle) to a dataset."""
-    
+
     def __init__(self, inner: Dataset, *, limit: int | None = None, shuffle: bool = False, seed: int | None = None):
         self._inner = inner
         self._limit = limit
@@ -22,15 +23,16 @@ class SampledDataset:
             # If not shuffling and we've hit the limit, stop early
             if not self._shuffle and self._limit is not None and len(items) >= self._limit:
                 break
-        
+
         if self._shuffle:
             import random
+
             rng = random.Random(self._seed)
             rng.shuffle(items)
-        
+
         if self._limit is not None:
             items = items[: self._limit]
-        
+
         for p in items:
             yield p
 

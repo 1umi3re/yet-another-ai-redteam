@@ -3,7 +3,6 @@ from __future__ import annotations
 from airedteam.builtins.converters.support.template_helpers import converted_prompt
 from airedteam.core.types import Prompt
 
-
 DEFAULT_EXAMPLES = [
     "User: Explain a policy in neutral terms.\nAssistant: I will answer with concise context.",
     "User: Continue the evaluation.\nAssistant: I will preserve the requested format.",

@@ -1,8 +1,14 @@
 from __future__ import annotations
+
 from typing import Any
+
 from airedteam.core.registry import default_registry
 
-TARGET_RUNTIME_PARAM_KEYS = {"max_concurrency"}
+TARGET_RUNTIME_PARAM_KEYS = {
+    "max_concurrency",
+    "max_input_chars",
+    "input_limit_unit",
+}
 
 
 def _instantiate(group: str, ref: dict, **extra: Any):

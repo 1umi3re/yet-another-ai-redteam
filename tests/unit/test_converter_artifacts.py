@@ -6,7 +6,6 @@ from pathlib import Path
 
 import pytest
 
-from airedteam.core.types import Prompt
 from airedteam.builtins.converters.multimodal.add_image_text import AddImageTextConverter
 from airedteam.builtins.converters.multimodal.add_image_to_video import AddImageToVideoConverter
 from airedteam.builtins.converters.multimodal.add_text_image import AddTextImageConverter
@@ -21,15 +20,18 @@ from airedteam.builtins.converters.multimodal.azure_speech_audio_to_text import 
 from airedteam.builtins.converters.multimodal.azure_speech_text_to_audio import (
     AzureSpeechTextToAudioConverter,
 )
-from airedteam.builtins.converters.multimodal.image_color_saturation import ImageColorSaturationConverter
+from airedteam.builtins.converters.multimodal.image_color_saturation import (
+    ImageColorSaturationConverter,
+)
 from airedteam.builtins.converters.multimodal.image_compression import ImageCompressionConverter
 from airedteam.builtins.converters.multimodal.image_noise import ImageNoiseConverter
 from airedteam.builtins.converters.multimodal.image_resizing import ImageResizingConverter
 from airedteam.builtins.converters.multimodal.image_rotation import ImageRotationConverter
-from airedteam.builtins.converters.prompt_framing.indirect_web_pwn import IndirectWebPwnConverter
 from airedteam.builtins.converters.multimodal.pdf import PDFConverter
 from airedteam.builtins.converters.multimodal.qr_code import QRCodeConverter
 from airedteam.builtins.converters.multimodal.word_doc import WordDocConverter
+from airedteam.builtins.converters.prompt_framing.indirect_web_pwn import IndirectWebPwnConverter
+from airedteam.core.types import Prompt
 
 
 def _assert_artifact(prompt: Prompt, suffix: str, output_type: str) -> Path:
@@ -83,9 +85,7 @@ async def test_image_artifact_converters(tmp_path):
         assert converter.name in out.metadata["converter"]
         assert artifact.read_text()
 
-    noisy = await ImageNoiseConverter(output_dir=tmp_path, intensity=0.42).convert(
-        Prompt(text="payload")
-    )
+    noisy = await ImageNoiseConverter(output_dir=tmp_path, intensity=0.42).convert(Prompt(text="payload"))
     noisy_svg = _assert_artifact(noisy, ".svg", "image_path").read_text()
     assert "feTurbulence" in noisy_svg
     assert "intensity=0.42" in noisy_svg

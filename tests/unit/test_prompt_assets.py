@@ -26,9 +26,7 @@ async def test_prompt_asset_builtins_and_active_override_precedence(tmp_path):
     assert "translation_llm.translate.v1" in ids
     assert "attack_template.pyrit.aim.v1" in ids
 
-    attack_template = next(
-        a for a in assets if a["id"] == "attack_template.controlled_safety_test.v1"
-    )
+    attack_template = next(a for a in assets if a["id"] == "attack_template.controlled_safety_test.v1")
     assert attack_template["purpose"] == "attack_template"
     assert attack_template["variables"] == ["prompt"]
     pyrit_template = next(a for a in assets if a["id"] == "attack_template.pyrit.aim.v1")
@@ -40,15 +38,12 @@ async def test_prompt_asset_builtins_and_active_override_precedence(tmp_path):
     assert converter_prompt["purpose"] == "converter_prompt"
     assert converter_prompt["category"] == "Converters"
     assert converter_prompt["variables"] == ["instructions", "prompt"]
-    assert next(a for a in assets if a["id"] == "crescendo.attacker.v1")[
-        "category"
-    ] == "Executors / Crescendo"
-    assert next(a for a in assets if a["id"] == "pair.judge.v1")[
-        "category"
-    ] == "Executors / PAIR"
-    assert next(a for a in assets if a["id"] == "general_multi_turn.judger.v1")[
-        "category"
-    ] == "Executors / General Multi Turn"
+    assert next(a for a in assets if a["id"] == "crescendo.attacker.v1")["category"] == "Executors / Crescendo"
+    assert next(a for a in assets if a["id"] == "pair.judge.v1")["category"] == "Executors / PAIR"
+    assert (
+        next(a for a in assets if a["id"] == "general_multi_turn.judger.v1")["category"]
+        == "Executors / General Multi Turn"
+    )
     assert pyrit_template["category"].startswith("PyRIT")
 
     rendered = await svc.render(

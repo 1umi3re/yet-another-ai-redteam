@@ -1,8 +1,10 @@
-from logging.config import fileConfig
-from sqlalchemy import engine_from_config, pool
-from alembic import context
-from airedteam.storage.models import Base
 import os
+from logging.config import fileConfig
+
+from sqlalchemy import engine_from_config, pool
+
+from airedteam.storage.models import Base
+from alembic import context
 
 config = context.config
 if config.config_file_name:
@@ -20,7 +22,9 @@ def run_migrations_offline():
 
 
 def run_migrations_online():
-    connectable = engine_from_config(config.get_section(config.config_ini_section), prefix="sqlalchemy.", poolclass=pool.NullPool)
+    connectable = engine_from_config(
+        config.get_section(config.config_ini_section), prefix="sqlalchemy.", poolclass=pool.NullPool
+    )
     with connectable.connect() as conn:
         context.configure(connection=conn, target_metadata=target_metadata)
         with context.begin_transaction():

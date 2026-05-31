@@ -4,7 +4,6 @@ import re
 
 from airedteam.core.types import Prompt
 
-
 DEFAULT_REPLACEMENTS = {
     "bomb": "device",
     "gun": "tool",

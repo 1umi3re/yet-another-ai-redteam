@@ -1,5 +1,6 @@
 def test_registry_loads_known_groups():
     from airedteam.core.registry import Registry
+
     r = Registry()
     assert "openai_compat" in r.list("targets")
     assert "openai_compat_new_session" in r.list("targets")
@@ -12,6 +13,7 @@ def test_registry_loads_known_groups():
 
 def test_registry_get_returns_callable_class():
     from airedteam.core.registry import Registry
+
     r = Registry()
     cls = r.get("converters", "base64")
     inst = cls()

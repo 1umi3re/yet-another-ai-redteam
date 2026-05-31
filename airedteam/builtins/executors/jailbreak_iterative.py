@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from airedteam.core.plugins import Target
 from airedteam.builtins.executors.pair import PAIRExecutor
+from airedteam.core.plugins import Target
 
 
 class JailbreakIterativeExecutor(PAIRExecutor):
@@ -10,9 +10,15 @@ class JailbreakIterativeExecutor(PAIRExecutor):
     name = "jailbreak_iterative"
 
     def __init__(
-        self, *, attacker: Target | None = None, judge: Target | None = None,
-        goal: str = "", max_turns: int = 5, success_threshold: int = 8,
-        prompt_assets=None, attacker_prompt_override_id: str | None = None,
+        self,
+        *,
+        attacker: Target | None = None,
+        judge: Target | None = None,
+        goal: str = "",
+        max_turns: int = 5,
+        success_threshold: int = 8,
+        prompt_assets=None,
+        attacker_prompt_override_id: str | None = None,
         judge_prompt_override_id: str | None = None,
         use_builtin_prompt: bool = False,
     ) -> None:

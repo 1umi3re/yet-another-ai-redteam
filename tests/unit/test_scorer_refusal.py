@@ -1,9 +1,11 @@
 import pytest
+
 from airedteam.builtins.scorers.refusal import RefusalScorer
 from airedteam.core.types import AttemptResult, Prompt, Response
 
 
-def _ar(t): return AttemptResult(prompt=Prompt(text="x"), response=Response(text=t, raw={}, latency_ms=1))
+def _ar(t):
+    return AttemptResult(prompt=Prompt(text="x"), response=Response(text=t, raw={}, latency_ms=1))
 
 
 @pytest.mark.asyncio

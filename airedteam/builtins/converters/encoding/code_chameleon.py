@@ -13,16 +13,7 @@ class CodeChameleonConverter:
 
     async def convert(self, prompt: Prompt) -> Prompt:
         if self.language in {"javascript", "js", "typescript", "ts"}:
-            text = (
-                "function task() {\n"
-                f"  const request = {prompt.text!r};\n"
-                "  return request;\n"
-                "}"
-            )
+            text = f"function task() {{\n  const request = {prompt.text!r};\n  return request;\n}}"
         else:
-            text = (
-                "def task():\n"
-                f"    request = {prompt.text!r}\n"
-                "    return request"
-            )
+            text = f"def task():\n    request = {prompt.text!r}\n    return request"
         return Prompt(text=text, metadata=prompt.metadata)

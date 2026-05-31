@@ -17,6 +17,7 @@ class TranslationLLMConverter:
 
     The translator target is resolved by ``RunService`` at runtime from
     ``translator_config_id``."""
+
     name = "translation_llm"
 
     def __init__(
@@ -28,9 +29,7 @@ class TranslationLLMConverter:
         prompt_asset_id: str = DEFAULT_PROMPT_ASSET_ID,
     ) -> None:
         if translator is None:
-            raise ValueError(
-                "translation_llm requires a 'translator_config_id' pointing at a configured target"
-            )
+            raise ValueError("translation_llm requires a 'translator_config_id' pointing at a configured target")
         self._tr = translator
         self.target_language = target_language
         self._prompt_assets = prompt_assets

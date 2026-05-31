@@ -1,7 +1,8 @@
 import pytest
-from airedteam.storage.db import make_engine, make_sessionmaker
-from airedteam.storage import models  # noqa: F401
 from sqlalchemy import text
+
+from airedteam.storage import models  # noqa: F401
+from airedteam.storage.db import make_engine, make_sessionmaker
 
 
 @pytest.mark.asyncio

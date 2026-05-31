@@ -27,8 +27,7 @@ class LLMScientificTranslationConverter:
     ) -> None:
         if converter is None:
             raise ValueError(
-                "llm_scientific_translation requires a 'converter_config_id' pointing at "
-                "a configured target"
+                "llm_scientific_translation requires a 'converter_config_id' pointing at a configured target"
             )
         self._converter = converter
         self.discipline = discipline.strip() or "chemistry"

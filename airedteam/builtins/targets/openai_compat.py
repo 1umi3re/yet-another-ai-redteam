@@ -1,13 +1,27 @@
 from __future__ import annotations
+
 import time
+
 import httpx
-from airedteam.core.types import Prompt, Response, Message
-from airedteam.core.plugins import BaseTarget
+
 from airedteam.builtins.targets.artifact_content import openai_content
+from airedteam.core.plugins import BaseTarget
+from airedteam.core.types import Message, Prompt, Response
 
 
 class OpenAICompatTarget(BaseTarget):
-    def __init__(self, *, name: str, base_url: str, model: str, api_key: str, timeout: float = 300.0, system_prompt: str | None = None, temperature: float | None = None, extra_headers: dict[str, str] | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        name: str,
+        base_url: str,
+        model: str,
+        api_key: str,
+        timeout: float = 300.0,
+        system_prompt: str | None = None,
+        temperature: float | None = None,
+        extra_headers: dict[str, str] | None = None,
+    ) -> None:
         self.name = name
         self.base_url = base_url.rstrip("/")
         self.model = model
@@ -27,7 +41,13 @@ class OpenAICompatTarget(BaseTarget):
         data = r.json()
         text = data["choices"][0]["message"]["content"]
         usage = data.get("usage") or {}
-        return Response(text=text, raw=data, latency_ms=latency, tokens_in=usage.get("prompt_tokens"), tokens_out=usage.get("completion_tokens"))
+        return Response(
+            text=text,
+            raw=data,
+            latency_ms=latency,
+            tokens_in=usage.get("prompt_tokens"),
+            tokens_out=usage.get("completion_tokens"),
+        )
 
     async def generate(self, prompt: Prompt) -> Response:
         msgs = []
@@ -74,10 +94,7 @@ class OpenAICompatTarget(BaseTarget):
             return False, f"{type(e).__name__}: {e}"
 
     async def chat(self, messages: list[Message]) -> Response:
-        msgs = [
-            {"role": m.role, "content": openai_content(m.text, m.artifacts)}
-            for m in messages
-        ]
+        msgs = [{"role": m.role, "content": openai_content(m.text, m.artifacts)} for m in messages]
         body: dict = {"model": self.model, "messages": msgs}
         if self.temperature is not None:
             body["temperature"] = self.temperature

@@ -1,5 +1,6 @@
-from airedteam.builtins.scenarios.owasp_llm_top10_jailbreak import scenario, bundled_prompts_json
 import json
+
+from airedteam.builtins.scenarios.owasp_llm_top10_jailbreak import bundled_prompts_json, scenario
 
 
 def test_scenario_describes_runspec_template():

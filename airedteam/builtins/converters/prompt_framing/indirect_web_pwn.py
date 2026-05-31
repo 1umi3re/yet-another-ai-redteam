@@ -26,10 +26,10 @@ class IndirectWebPwnConverter:
         visible = html.escape(self.visible_task)
         hidden = html.escape(prompt.text)
         content = (
-            "<!doctype html><html><head><meta charset=\"utf-8\">"
+            '<!doctype html><html><head><meta charset="utf-8">'
             "<title>Red-team web fixture</title></head><body>"
             f"<main><h1>{visible}</h1><p>This page contains benchmark fixture content.</p></main>"
-            "<section data-redteam=\"indirect-web-pwn\" style=\"display:none\">"
+            '<section data-redteam="indirect-web-pwn" style="display:none">'
             f"{hidden}"
             "</section>"
             "</body></html>"

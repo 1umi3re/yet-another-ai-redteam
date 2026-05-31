@@ -1,7 +1,8 @@
 from __future__ import annotations
-import re
-from airedteam.core.types import AttemptResult, ScoreResult
 
+import re
+
+from airedteam.core.types import AttemptResult, ScoreResult
 
 _FLAG_MAP = {"i": re.IGNORECASE, "m": re.MULTILINE, "s": re.DOTALL}
 
@@ -10,6 +11,7 @@ class RegexScorer:
     """Label true when the response matches the given regex pattern.
 
     Required: ``pattern`` (non-empty regex). Optional: ``flags`` like ``"ims"``."""
+
     name = "regex"
 
     def __init__(self, *, pattern: str | None = None, flags: str = "") -> None:

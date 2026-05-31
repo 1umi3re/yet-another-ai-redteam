@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 from cryptography.fernet import Fernet
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 
 
 async def _login(c):
@@ -17,8 +17,11 @@ async def test_list_plugins_and_scenarios(monkeypatch, tmp_path):
     monkeypatch.setenv("AIREDTEAM_ADMIN_PASSWORD", "letmein")
     monkeypatch.setenv("AIREDTEAM_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/x.db")
     monkeypatch.setenv("AIREDTEAM_BLOB_DIR", str(tmp_path / "blobs"))
-    import airedteam.api.deps as deps; deps._STATE = None
+    import airedteam.api.deps as deps
+
+    deps._STATE = None
     from airedteam.api.app import create_app
+
     app = create_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
         h = await _login(c)
@@ -28,9 +31,7 @@ async def test_list_plugins_and_scenarios(monkeypatch, tmp_path):
         assert "refusal" in body["scorers"]
         assert "general_multi_turn" in body["general_multi_turn_executors"]
         expected_converters = set(
-            tomllib.loads(Path("pyproject.toml").read_text())["project"]["entry-points"][
-                "airedteam.converters"
-            ]
+            tomllib.loads(Path("pyproject.toml").read_text())["project"]["entry-points"]["airedteam.converters"]
         )
         removed_aliases = {
             "alter_sentence_structure",
@@ -89,16 +90,11 @@ async def test_list_plugins_and_scenarios(monkeypatch, tmp_path):
         assert llm_variation_prompt["type"] == "prompt_asset_ref"
         assert llm_variation_prompt["default"] == "llm_variation.rewrite.v1"
         assert llm_variation_prompt["purpose_exclude"] == "attack_template"
-        assert (
-            converter_params["translation_llm"]["prompt_asset_id"]["default"]
-            == "translation_llm.translate.v1"
-        )
+        assert converter_params["translation_llm"]["prompt_asset_id"]["default"] == "translation_llm.translate.v1"
         assert body["converter_categories"]["base64"] == "encoding"
         assert body["converter_categories"]["leetspeak"] == "obfuscation"
         assert body["converter_categories"]["prefix"] == "prompt_framing"
-        template_jailbreak_asset = converter_params["template_jailbreak"][
-            "attack_template_asset_id"
-        ]
+        template_jailbreak_asset = converter_params["template_jailbreak"]["attack_template_asset_id"]
         assert template_jailbreak_asset["purpose_filter"] == "attack_template"
         assert "best_of_n" in body["executors"]
         assert body["params"]["executors"]["best_of_n"]["attempts"]["default"] == "5"
@@ -110,7 +106,10 @@ async def test_list_plugins_and_scenarios(monkeypatch, tmp_path):
 
 
 def test_general_multi_turn_variant_plugin_schema_uses_variant_defaults():
-    from airedteam.api.routers.plugins import general_multi_turn_executor_names, plugin_param_schemas
+    from airedteam.api.routers.plugins import (
+        general_multi_turn_executor_names,
+        plugin_param_schemas,
+    )
     from airedteam.builtins.executors.general_multi_turn import make_general_multi_turn_executor
     from airedteam.core.registry import Registry
 

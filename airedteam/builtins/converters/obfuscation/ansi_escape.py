@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from airedteam.core.types import Prompt
 
-
 _STYLES = {
     "red": "31",
     "green": "32",

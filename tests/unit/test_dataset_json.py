@@ -1,4 +1,7 @@
-import json, pytest
+import json
+
+import pytest
+
 from airedteam.builtins.datasets.json_upload import JsonUploadDataset
 from airedteam.storage.blobs import LocalBlobStore
 

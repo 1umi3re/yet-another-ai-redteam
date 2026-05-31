@@ -126,6 +126,20 @@ Beyond single-turn prompts, **airedteam** now supports multi-turn executors that
 
 Both store full conversation history in blob storage (`conversation_blob_path` on each `Attempt`). To implement custom multi-turn strategies, extend `airedteam.builtins.executors.multi_turn_base.MultiTurnExecutor` — see that module for the extension API.
 
+### Input-limited targets
+
+Some targets reject user messages above a fixed length, such as 200 characters.
+Set `max_input_chars` on the target config to make airedteam enforce that
+per-message limit.
+
+- Use `split_executor` when long dataset prompts should be decomposed into
+  ordered chat turns under the target limit.
+- Use `crescendo`, `pair`, or `general_multi_turn` when you want adaptive
+  multi-turn attacks. These executors pass the character budget to their
+  attacker LLM and retry short rewrites for over-budget generated turns.
+- Avoid expansion-heavy converters and long attack templates unless the test is
+  specifically about input-length rejection.
+
 ### New converters
 
 Phase 2 adds five prompt transformation converters:

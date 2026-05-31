@@ -4,7 +4,6 @@ import re
 
 from airedteam.core.types import Prompt
 
-
 DEFAULT_SWAPS = {
     "you": "u",
     "your": "ur",

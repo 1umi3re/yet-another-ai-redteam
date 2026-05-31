@@ -16,10 +16,13 @@ async def _login(c):
 @respx.mock
 async def test_converter_preview_resolves_translation_llm(monkeypatch, tmp_path):
     translator_mock = respx.post("https://translator.example.com/v1/chat/completions").mock(
-        return_value=httpx.Response(200, json={
-            "choices": [{"message": {"content": "bonjour"}}],
-            "usage": {"prompt_tokens": 10, "completion_tokens": 2},
-        })
+        return_value=httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": "bonjour"}}],
+                "usage": {"prompt_tokens": 10, "completion_tokens": 2},
+            },
+        )
     )
 
     monkeypatch.setenv("AIREDTEAM_MASTER_KEY", Fernet.generate_key().decode())
@@ -28,6 +31,7 @@ async def test_converter_preview_resolves_translation_llm(monkeypatch, tmp_path)
     monkeypatch.setenv("AIREDTEAM_BLOB_DIR", str(tmp_path / "blobs"))
 
     import airedteam.api.deps as deps
+
     deps._STATE = None
     from airedteam.api.app import create_app
     from airedteam.storage import models
@@ -41,25 +45,35 @@ async def test_converter_preview_resolves_translation_llm(monkeypatch, tmp_path)
             await conn.run_sync(models.Base.metadata.create_all)
 
         h = await _login(c)
-        target = await c.post("/api/targets", headers=h, json={
-            "name": "translator",
-            "plugin": "openai_compat",
-            "params": {
+        target = await c.post(
+            "/api/targets",
+            headers=h,
+            json={
                 "name": "translator",
-                "base_url": "https://translator.example.com/v1",
-                "model": "gpt-test",
+                "plugin": "openai_compat",
+                "params": {
+                    "name": "translator",
+                    "base_url": "https://translator.example.com/v1",
+                    "model": "gpt-test",
+                },
+                "secret": {"api_key": "sk-test"},
             },
-            "secret": {"api_key": "sk-test"},
-        })
+        )
         translator_id = target.json()["id"]
 
-        resp = await c.post("/api/converters/preview", headers=h, json={
-            "text": "hello",
-            "converters": [{
-                "plugin": "translation_llm",
-                "params": {"translator_config_id": translator_id, "target_language": "French"},
-            }],
-        })
+        resp = await c.post(
+            "/api/converters/preview",
+            headers=h,
+            json={
+                "text": "hello",
+                "converters": [
+                    {
+                        "plugin": "translation_llm",
+                        "params": {"translator_config_id": translator_id, "target_language": "French"},
+                    }
+                ],
+            },
+        )
 
         assert resp.status_code == 200
         assert resp.json()["original_text"] == "hello"
@@ -75,10 +89,13 @@ async def test_converter_preview_resolves_translation_llm(monkeypatch, tmp_path)
 @respx.mock
 async def test_converter_preview_resolves_llm_converter_config_id(monkeypatch, tmp_path):
     converter_mock = respx.post("https://converter.example.com/v1/chat/completions").mock(
-        return_value=httpx.Response(200, json={
-            "choices": [{"message": {"content": "rewritten hello"}}],
-            "usage": {"prompt_tokens": 8, "completion_tokens": 3},
-        })
+        return_value=httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": "rewritten hello"}}],
+                "usage": {"prompt_tokens": 8, "completion_tokens": 3},
+            },
+        )
     )
 
     monkeypatch.setenv("AIREDTEAM_MASTER_KEY", Fernet.generate_key().decode())
@@ -87,6 +104,7 @@ async def test_converter_preview_resolves_llm_converter_config_id(monkeypatch, t
     monkeypatch.setenv("AIREDTEAM_BLOB_DIR", str(tmp_path / "blobs"))
 
     import airedteam.api.deps as deps
+
     deps._STATE = None
     from airedteam.api.app import create_app
     from airedteam.storage import models
@@ -100,37 +118,51 @@ async def test_converter_preview_resolves_llm_converter_config_id(monkeypatch, t
             await conn.run_sync(models.Base.metadata.create_all)
 
         h = await _login(c)
-        target = await c.post("/api/targets", headers=h, json={
-            "name": "converter",
-            "plugin": "openai_compat",
-            "params": {
+        target = await c.post(
+            "/api/targets",
+            headers=h,
+            json={
                 "name": "converter",
-                "base_url": "https://converter.example.com/v1",
-                "model": "gpt-test",
+                "plugin": "openai_compat",
+                "params": {
+                    "name": "converter",
+                    "base_url": "https://converter.example.com/v1",
+                    "model": "gpt-test",
+                },
+                "secret": {"api_key": "sk-test"},
             },
-            "secret": {"api_key": "sk-test"},
-        })
+        )
         converter_id = target.json()["id"]
-        created_asset = await c.post("/api/prompt-assets", headers=h, json={
-            "id": "custom.llm_variation.prompt.v1",
-            "plugin": "llm_variation",
-            "purpose": "converter_prompt",
-            "variables": ["instructions", "prompt"],
-            "template": "CUSTOM REWRITE {instructions}: {prompt}",
-        })
+        created_asset = await c.post(
+            "/api/prompt-assets",
+            headers=h,
+            json={
+                "id": "custom.llm_variation.prompt.v1",
+                "plugin": "llm_variation",
+                "purpose": "converter_prompt",
+                "variables": ["instructions", "prompt"],
+                "template": "CUSTOM REWRITE {instructions}: {prompt}",
+            },
+        )
         assert created_asset.status_code == 201
 
-        resp = await c.post("/api/converters/preview", headers=h, json={
-            "text": "hello",
-            "converters": [{
-                "plugin": "llm_variation",
-                "params": {
-                    "converter_config_id": converter_id,
-                    "instructions": "keep intent",
-                    "prompt_asset_id": "custom.llm_variation.prompt.v1",
-                },
-            }],
-        })
+        resp = await c.post(
+            "/api/converters/preview",
+            headers=h,
+            json={
+                "text": "hello",
+                "converters": [
+                    {
+                        "plugin": "llm_variation",
+                        "params": {
+                            "converter_config_id": converter_id,
+                            "instructions": "keep intent",
+                            "prompt_asset_id": "custom.llm_variation.prompt.v1",
+                        },
+                    }
+                ],
+            },
+        )
 
         assert resp.status_code == 200
         assert resp.json()["transformed_text"] == "rewritten hello"
@@ -150,6 +182,7 @@ async def test_converter_preview_resolves_attack_template_asset(monkeypatch, tmp
     monkeypatch.setenv("AIREDTEAM_BLOB_DIR", str(tmp_path / "blobs"))
 
     import airedteam.api.deps as deps
+
     deps._STATE = None
     from airedteam.api.app import create_app
     from airedteam.storage import models
@@ -163,13 +196,19 @@ async def test_converter_preview_resolves_attack_template_asset(monkeypatch, tmp
             await conn.run_sync(models.Base.metadata.create_all)
 
         h = await _login(c)
-        resp = await c.post("/api/converters/preview", headers=h, json={
-            "text": "objective",
-            "converters": [{
-                "plugin": "template_jailbreak",
-                "params": {"attack_template_asset_id": "attack_template.controlled_safety_test.v1"},
-            }],
-        })
+        resp = await c.post(
+            "/api/converters/preview",
+            headers=h,
+            json={
+                "text": "objective",
+                "converters": [
+                    {
+                        "plugin": "template_jailbreak",
+                        "params": {"attack_template_asset_id": "attack_template.controlled_safety_test.v1"},
+                    }
+                ],
+            },
+        )
 
         assert resp.status_code == 200
         assert "Controlled safety test objective:" in resp.json()["transformed_text"]
@@ -185,6 +224,7 @@ async def test_converter_preview_accepts_string_numeric_encoding_params(monkeypa
     monkeypatch.setenv("AIREDTEAM_BLOB_DIR", str(tmp_path / "blobs"))
 
     import airedteam.api.deps as deps
+
     deps._STATE = None
     from airedteam.api.app import create_app
     from airedteam.storage import models
@@ -198,13 +238,19 @@ async def test_converter_preview_accepts_string_numeric_encoding_params(monkeypa
             await conn.run_sync(models.Base.metadata.create_all)
 
         h = await _login(c)
-        resp = await c.post("/api/converters/preview", headers=h, json={
-            "text": "abcd",
-            "converters": [{
-                "plugin": "unicode_obfuscation",
-                "params": {"strategy": "zero_width", "every": "2"},
-            }],
-        })
+        resp = await c.post(
+            "/api/converters/preview",
+            headers=h,
+            json={
+                "text": "abcd",
+                "converters": [
+                    {
+                        "plugin": "unicode_obfuscation",
+                        "params": {"strategy": "zero_width", "every": "2"},
+                    }
+                ],
+            },
+        )
 
         assert resp.status_code == 200
         assert resp.json()["transformed_text"] == "ab\u200bcd"
@@ -215,16 +261,22 @@ async def test_converter_preview_accepts_string_numeric_encoding_params(monkeypa
 @respx.mock
 async def test_converter_preview_resolves_garak_lrl_and_paraphrase_configs(monkeypatch, tmp_path):
     translator_mock = respx.post("https://translator.example.com/v1/chat/completions").mock(
-        return_value=httpx.Response(200, json={
-            "choices": [{"message": {"content": "yoruba hello"}}],
-            "usage": {"prompt_tokens": 8, "completion_tokens": 3},
-        })
+        return_value=httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": "yoruba hello"}}],
+                "usage": {"prompt_tokens": 8, "completion_tokens": 3},
+            },
+        )
     )
     converter_mock = respx.post("https://converter.example.com/v1/chat/completions").mock(
-        return_value=httpx.Response(200, json={
-            "choices": [{"message": {"content": "paraphrased yoruba hello"}}],
-            "usage": {"prompt_tokens": 8, "completion_tokens": 3},
-        })
+        return_value=httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": "paraphrased yoruba hello"}}],
+                "usage": {"prompt_tokens": 8, "completion_tokens": 3},
+            },
+        )
     )
 
     monkeypatch.setenv("AIREDTEAM_MASTER_KEY", Fernet.generate_key().decode())
@@ -233,6 +285,7 @@ async def test_converter_preview_resolves_garak_lrl_and_paraphrase_configs(monke
     monkeypatch.setenv("AIREDTEAM_BLOB_DIR", str(tmp_path / "blobs"))
 
     import airedteam.api.deps as deps
+
     deps._STATE = None
     from airedteam.api.app import create_app
     from airedteam.storage import models
@@ -246,43 +299,55 @@ async def test_converter_preview_resolves_garak_lrl_and_paraphrase_configs(monke
             await conn.run_sync(models.Base.metadata.create_all)
 
         h = await _login(c)
-        translator = await c.post("/api/targets", headers=h, json={
-            "name": "translator",
-            "plugin": "openai_compat",
-            "params": {
+        translator = await c.post(
+            "/api/targets",
+            headers=h,
+            json={
                 "name": "translator",
-                "base_url": "https://translator.example.com/v1",
-                "model": "gpt-test",
+                "plugin": "openai_compat",
+                "params": {
+                    "name": "translator",
+                    "base_url": "https://translator.example.com/v1",
+                    "model": "gpt-test",
+                },
+                "secret": {"api_key": "sk-test"},
             },
-            "secret": {"api_key": "sk-test"},
-        })
-        converter = await c.post("/api/targets", headers=h, json={
-            "name": "converter",
-            "plugin": "openai_compat",
-            "params": {
+        )
+        converter = await c.post(
+            "/api/targets",
+            headers=h,
+            json={
                 "name": "converter",
-                "base_url": "https://converter.example.com/v1",
-                "model": "gpt-test",
+                "plugin": "openai_compat",
+                "params": {
+                    "name": "converter",
+                    "base_url": "https://converter.example.com/v1",
+                    "model": "gpt-test",
+                },
+                "secret": {"api_key": "sk-test"},
             },
-            "secret": {"api_key": "sk-test"},
-        })
+        )
 
-        resp = await c.post("/api/converters/preview", headers=h, json={
-            "text": "hello",
-            "converters": [
-                {
-                    "plugin": "low_resource_language",
-                    "params": {
-                        "translator_config_id": translator.json()["id"],
-                        "target_language": "Yoruba",
+        resp = await c.post(
+            "/api/converters/preview",
+            headers=h,
+            json={
+                "text": "hello",
+                "converters": [
+                    {
+                        "plugin": "low_resource_language",
+                        "params": {
+                            "translator_config_id": translator.json()["id"],
+                            "target_language": "Yoruba",
+                        },
                     },
-                },
-                {
-                    "plugin": "paraphrase_fast",
-                    "params": {"converter_config_id": converter.json()["id"]},
-                },
-            ],
-        })
+                    {
+                        "plugin": "paraphrase_fast",
+                        "params": {"converter_config_id": converter.json()["id"]},
+                    },
+                ],
+            },
+        )
 
         assert resp.status_code == 200
         assert resp.json()["transformed_text"] == "paraphrased yoruba hello"

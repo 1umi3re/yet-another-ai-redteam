@@ -1,7 +1,9 @@
-import pytest
 from datetime import UTC, datetime
-from airedteam.storage.db import make_engine, make_sessionmaker
+
+import pytest
+
 from airedteam.storage import models
+from airedteam.storage.db import make_engine, make_sessionmaker
 
 
 @pytest.mark.asyncio
@@ -18,9 +20,15 @@ async def test_new_columns_roundtrip(tmp_path):
         s.add(a)
         await s.commit()
         now = datetime.now(UTC).replace(tzinfo=None)
-        sc = models.Score(attempt_id=a.id, scorer="refusal", value_json={"label": True},
-                          reviewer_label=False, reviewer_notes="actually complied",
-                          reviewer_id="admin", reviewed_at=now)
+        sc = models.Score(
+            attempt_id=a.id,
+            scorer="refusal",
+            value_json={"label": True},
+            reviewer_label=False,
+            reviewer_notes="actually complied",
+            reviewer_id="admin",
+            reviewed_at=now,
+        )
         s.add(sc)
         await s.commit()
         got = await s.get(models.Score, sc.id)

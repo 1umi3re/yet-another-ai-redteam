@@ -1,4 +1,7 @@
-import pytest, codecs
+import codecs
+
+import pytest
+
 from airedteam.builtins.converters.encoding.rot13 import Rot13Converter
 from airedteam.builtins.converters.prompt_framing.prefix import PrefixConverter
 from airedteam.core.types import Prompt
@@ -28,5 +31,6 @@ async def test_prefix():
 
 def test_prefix_requires_non_empty():
     import pytest
+
     with pytest.raises(ValueError):
         PrefixConverter(prefix="")

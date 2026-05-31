@@ -5,7 +5,6 @@ import re
 from airedteam.builtins.converters.support.template_helpers import converted_prompt
 from airedteam.core.types import Prompt
 
-
 DEFAULT_REPLACEMENTS = {
     "ignore": "disregard",
     "instruction": "direction",

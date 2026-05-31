@@ -1,6 +1,8 @@
 from __future__ import annotations
+
 import asyncio
 import json
+
 import click
 
 
@@ -15,7 +17,9 @@ def main() -> None:
 def serve(host: str, port: int) -> None:
     """Run the FastAPI app with uvicorn."""
     import uvicorn
+
     from airedteam.api.app import create_app
+
     uvicorn.run(create_app(), host=host, port=port)
 
 
@@ -25,7 +29,9 @@ def serve(host: str, port: int) -> None:
 def run_cmd(runspec_yaml: str, name: str) -> None:
     """Execute a RunSpec YAML file directly (uses default settings)."""
     import yaml
+
     from airedteam.api.deps import build_state
+
     state = build_state()
 
     async def _go():
@@ -34,11 +40,13 @@ def run_cmd(runspec_yaml: str, name: str) -> None:
         await state.runs.execute_run(run.id)
         click.echo(json.dumps({"run_id": run.id}))
 
+
 @main.command("seed-datasets")
 @click.option("--sample", is_flag=True, help="Seed the small smoke-test samples instead of full datasets.")
 def seed_datasets(sample: bool) -> None:
     """Seed bundled AdvBench + HarmBench datasets into the DB."""
     from importlib import resources
+
     from airedteam.api.deps import build_state
 
     state = build_state()

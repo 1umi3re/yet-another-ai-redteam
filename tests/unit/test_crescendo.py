@@ -1,30 +1,40 @@
 from __future__ import annotations
+
 import pytest
-from airedteam.core.types import Prompt, Response, Message
-from airedteam.core.plugins import BaseTarget
+
 from airedteam.builtins.executors.crescendo import CrescendoExecutor
+from airedteam.core.plugins import BaseTarget
+from airedteam.core.types import Message, Prompt, Response
 
 
 class RecorderTarget(BaseTarget):
     name = "t"
+
     def __init__(self, replies):
         self.replies = list(replies)
         self.seen: list[list[Message]] = []
+
     async def chat(self, messages):
         self.seen.append(list(messages))
         return Response(text=self.replies.pop(0), raw={}, latency_ms=1)
-    async def aclose(self): pass
+
+    async def aclose(self):
+        pass
 
 
 class ScriptedAttacker(BaseTarget):
     name = "a"
+
     def __init__(self, next_prompts):
         self.next_prompts = list(next_prompts)
         self.seen: list[str] = []
+
     async def generate(self, prompt):
         self.seen.append(prompt.text)
         return Response(text=self.next_prompts.pop(0), raw={}, latency_ms=1)
-    async def aclose(self): pass
+
+    async def aclose(self):
+        pass
 
 
 @pytest.mark.asyncio

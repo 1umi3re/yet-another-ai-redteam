@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import re
 
-from airedteam.core.types import Prompt
 from airedteam.builtins.converters.support.template_helpers import converted_prompt
-
+from airedteam.core.types import Prompt
 
 _WORD = re.compile(r"[A-Za-z]+")
 _VOWELS = set("aeiouAEIOU")

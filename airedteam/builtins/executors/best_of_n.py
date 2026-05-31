@@ -4,7 +4,7 @@ import random
 from dataclasses import replace
 
 from airedteam.core.types import AttemptResult, Prompt, Response
-
+from airedteam.engine.input_limits import ensure_text_within_target_limit
 
 _REFUSAL_MARKERS = (
     "i can't",
@@ -40,29 +40,40 @@ class BestOfNExecutor:
         for idx in range(self.attempts):
             candidate_prompt = self._variant(cur, idx, rng)
             try:
+                ensure_text_within_target_limit(
+                    candidate_prompt.text,
+                    target,
+                    executor_name=self.name,
+                )
                 response = await target.generate(candidate_prompt)
-                candidates.append({
-                    "index": idx,
-                    "prompt": candidate_prompt,
-                    "response": response,
-                    "error": None,
-                })
+                candidates.append(
+                    {
+                        "index": idx,
+                        "prompt": candidate_prompt,
+                        "response": response,
+                        "error": None,
+                    }
+                )
             except Exception as exc:
-                candidates.append({
-                    "index": idx,
-                    "prompt": candidate_prompt,
-                    "response": None,
-                    "error": f"{type(exc).__name__}: {exc}",
-                })
+                candidates.append(
+                    {
+                        "index": idx,
+                        "prompt": candidate_prompt,
+                        "response": None,
+                        "error": f"{type(exc).__name__}: {exc}",
+                    }
+                )
 
         successes = [c for c in candidates if c["response"] is not None]
         if not successes:
             out_prompt = self._with_metadata(cur, candidates, selected_index=None)
+            first_error = next((c["error"] for c in candidates if c["error"]), None)
+            detail = f": {first_error}" if first_error else ""
             return AttemptResult(
                 prompt=out_prompt,
                 response=None,
                 status="failed",
-                error="all best_of_n candidates failed",
+                error=f"all best_of_n candidates failed{detail}",
                 converter_chain=chain,
             )
 
@@ -90,10 +101,7 @@ class BestOfNExecutor:
 
     @staticmethod
     def _random_case(text: str, rng: random.Random) -> str:
-        return "".join(
-            char.upper() if char.isalpha() and rng.random() >= 0.5 else char.lower()
-            for char in text
-        )
+        return "".join(char.upper() if char.isalpha() and rng.random() >= 0.5 else char.lower() for char in text)
 
     @staticmethod
     def _scramble_words(text: str, rng: random.Random) -> str:

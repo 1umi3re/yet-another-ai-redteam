@@ -2,8 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from airedteam.builtins.converters.support.artifact_utils import (
+    artifact_prompt,
+    write_video_manifest,
+)
 from airedteam.core.types import Prompt
-from airedteam.builtins.converters.support.artifact_utils import artifact_prompt, write_video_manifest
 
 
 class AddImageToVideoConverter:

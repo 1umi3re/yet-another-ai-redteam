@@ -8,9 +8,11 @@ class AzureSpeechAudioToTextConverter:
 
     async def convert(self, prompt: Prompt) -> Prompt:
         metadata = dict(prompt.metadata)
-        metadata.update({
-            "output_type": "text",
-            "converter": self.name,
-            "source_path": prompt.text,
-        })
+        metadata.update(
+            {
+                "output_type": "text",
+                "converter": self.name,
+                "source_path": prompt.text,
+            }
+        )
         return Prompt(text=f"[audio transcription unavailable: {prompt.text}]", metadata=metadata)

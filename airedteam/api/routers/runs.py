@@ -1,16 +1,18 @@
 from __future__ import annotations
+
 import csv
 import io
 import json
 from typing import Any
+
 import yaml
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from sse_starlette.sse import EventSourceResponse
 from pydantic import BaseModel
 from sqlalchemy import select
-from airedteam.api.deps import AppState, get_state, require_admin
-from airedteam.storage.models import Run, Attempt, Score
+from sse_starlette.sse import EventSourceResponse
 
+from airedteam.api.deps import AppState, get_state, require_admin
+from airedteam.storage.models import Attempt, Run, Score
 
 router = APIRouter()
 
@@ -73,7 +75,7 @@ async def create_run(req: CreateRun, _=Depends(require_admin), state: AppState =
     try:
         row = await state.runs.create_run(name=req.name, runspec_dict=req.runspec)
     except Exception as e:
-        raise HTTPException(400, f"invalid runspec: {e}")
+        raise HTTPException(400, f"invalid runspec: {e}") from e
     return await _run_to_out(row, state)
 
 
@@ -82,9 +84,9 @@ async def start_run(rid: str, _=Depends(require_admin), state: AppState = Depend
     try:
         await state.runs.start_run(rid)
     except KeyError:
-        raise HTTPException(404)
+        raise HTTPException(404) from None
     except ValueError as e:
-        raise HTTPException(400, str(e))
+        raise HTTPException(400, str(e)) from e
     return {"started": True}
 
 
@@ -93,7 +95,7 @@ async def cancel_run(rid: str, _=Depends(require_admin), state: AppState = Depen
     try:
         await state.runs.cancel_run(rid)
     except KeyError:
-        raise HTTPException(404)
+        raise HTTPException(404) from None
     return {"cancelled": True}
 
 
@@ -108,7 +110,8 @@ async def list_runs(_=Depends(require_admin), state: AppState = Depends(get_stat
 async def get_run(rid: str, _=Depends(require_admin), state: AppState = Depends(get_state)):
     async with state.session_factory() as s:
         r = await s.get(Run, rid)
-        if r is None: raise HTTPException(404)
+        if r is None:
+            raise HTTPException(404)
         return await _run_to_out(r, state)
 
 
@@ -128,20 +131,37 @@ async def list_attempts(
     paged: bool = False,
 ):
     async with state.session_factory() as s:
-        rows = (await s.execute(select(Attempt).where(Attempt.run_id == rid).order_by(Attempt.created_at))).scalars().all()
-        scores = (await s.execute(
-            select(Score).join(Attempt, Score.attempt_id == Attempt.id).where(Attempt.run_id == rid)
-        )).scalars().all()
+        rows = (
+            (await s.execute(select(Attempt).where(Attempt.run_id == rid).order_by(Attempt.created_at))).scalars().all()
+        )
+        scores = (
+            (await s.execute(select(Score).join(Attempt, Score.attempt_id == Attempt.id).where(Attempt.run_id == rid)))
+            .scalars()
+            .all()
+        )
         scores_by_attempt = _scores_by_attempt(scores)
-        items = [{
-            "id": a.id, "run_id": a.run_id, "target_id": a.target_id, "target_name": a.target_name, "dataset_item_id": a.dataset_item_id,
-            "prompt": a.prompt_text, "response": a.response_text, "response_blob_path": a.response_blob_path,
-            "prompt_snapshot_blob_path": a.prompt_snapshot_blob_path,
-            "converter_chain": a.converter_chain, "status": a.status, "error": a.error,
-            "latency_ms": a.latency_ms, "tokens_in": a.tokens_in, "tokens_out": a.tokens_out,
-            "final_verdict": _attempt_verdict(scores_by_attempt.get(a.id, [])),
-            "reviewed": any(sc.reviewer_label is not None for sc in scores_by_attempt.get(a.id, [])),
-        } for a in rows]
+        items = [
+            {
+                "id": a.id,
+                "run_id": a.run_id,
+                "target_id": a.target_id,
+                "target_name": a.target_name,
+                "dataset_item_id": a.dataset_item_id,
+                "prompt": a.prompt_text,
+                "response": a.response_text,
+                "response_blob_path": a.response_blob_path,
+                "prompt_snapshot_blob_path": a.prompt_snapshot_blob_path,
+                "converter_chain": a.converter_chain,
+                "status": a.status,
+                "error": a.error,
+                "latency_ms": a.latency_ms,
+                "tokens_in": a.tokens_in,
+                "tokens_out": a.tokens_out,
+                "final_verdict": _attempt_verdict(scores_by_attempt.get(a.id, [])),
+                "reviewed": any(sc.reviewer_label is not None for sc in scores_by_attempt.get(a.id, [])),
+            }
+            for a in rows
+        ]
         if target_id:
             items = [a for a in items if a["target_id"] == target_id or a["target_name"] == target_id]
         if status:
@@ -158,7 +178,7 @@ async def list_attempts(
             return items
         total = len(items)
         return {
-            "items": items[offset: offset + limit],
+            "items": items[offset : offset + limit],
             "total": total,
             "limit": limit,
             "offset": offset,
@@ -179,22 +199,27 @@ async def list_scores(
     paged: bool = False,
 ):
     async with state.session_factory() as s:
-        rows = (await s.execute(
-            select(Score, Attempt).join(Attempt, Score.attempt_id == Attempt.id).where(Attempt.run_id == rid)
-        )).all()
-        items = [{
-            "id": sc.id,
-            "attempt_id": a.id,
-            "scorer": sc.scorer,
-            "value": sc.value_json,
-            "rationale": sc.rationale,
-            "prompt_snapshot_blob_path": sc.prompt_snapshot_blob_path,
-            "reviewer_label": sc.reviewer_label,
-            "reviewer_notes": sc.reviewer_notes,
-            "reviewer_id": sc.reviewer_id,
-            "reviewed_at": sc.reviewed_at.isoformat() if sc.reviewed_at else None,
-            "final_verdict": _score_verdict(sc),
-        } for sc, a in rows]
+        rows = (
+            await s.execute(
+                select(Score, Attempt).join(Attempt, Score.attempt_id == Attempt.id).where(Attempt.run_id == rid)
+            )
+        ).all()
+        items = [
+            {
+                "id": sc.id,
+                "attempt_id": a.id,
+                "scorer": sc.scorer,
+                "value": sc.value_json,
+                "rationale": sc.rationale,
+                "prompt_snapshot_blob_path": sc.prompt_snapshot_blob_path,
+                "reviewer_label": sc.reviewer_label,
+                "reviewer_notes": sc.reviewer_notes,
+                "reviewer_id": sc.reviewer_id,
+                "reviewed_at": sc.reviewed_at.isoformat() if sc.reviewed_at else None,
+                "final_verdict": _score_verdict(sc),
+            }
+            for sc, a in rows
+        ]
         if attempt_id:
             items = [s for s in items if s["attempt_id"] == attempt_id]
         if scorer:
@@ -207,7 +232,7 @@ async def list_scores(
             return items
         total = len(items)
         return {
-            "items": items[offset: offset + limit],
+            "items": items[offset : offset + limit],
             "total": total,
             "limit": limit,
             "offset": offset,
@@ -220,12 +245,14 @@ async def get_run_report(rid: str, _=Depends(require_admin), state: AppState = D
         run = await s.get(Run, rid)
         if run is None:
             raise HTTPException(404)
-        attempts = (await s.execute(
-            select(Attempt).where(Attempt.run_id == rid).order_by(Attempt.created_at)
-        )).scalars().all()
-        scores = (await s.execute(
-            select(Score).join(Attempt, Score.attempt_id == Attempt.id).where(Attempt.run_id == rid)
-        )).scalars().all()
+        attempts = (
+            (await s.execute(select(Attempt).where(Attempt.run_id == rid).order_by(Attempt.created_at))).scalars().all()
+        )
+        scores = (
+            (await s.execute(select(Score).join(Attempt, Score.attempt_id == Attempt.id).where(Attempt.run_id == rid)))
+            .scalars()
+            .all()
+        )
     return _run_report(run, attempts, scores)
 
 
@@ -240,12 +267,14 @@ async def export_run(
         run = await s.get(Run, rid)
         if run is None:
             raise HTTPException(404)
-        attempts = (await s.execute(
-            select(Attempt).where(Attempt.run_id == rid).order_by(Attempt.created_at)
-        )).scalars().all()
-        scores = (await s.execute(
-            select(Score).join(Attempt, Score.attempt_id == Attempt.id).where(Attempt.run_id == rid)
-        )).scalars().all()
+        attempts = (
+            (await s.execute(select(Attempt).where(Attempt.run_id == rid).order_by(Attempt.created_at))).scalars().all()
+        )
+        scores = (
+            (await s.execute(select(Score).join(Attempt, Score.attempt_id == Attempt.id).where(Attempt.run_id == rid)))
+            .scalars()
+            .all()
+        )
     if format == "csv":
         return Response(
             content=_run_export_csv(run, attempts, scores),
@@ -260,8 +289,9 @@ async def export_run(
 
 
 @router.get("/runs/{rid}/attempts/{aid}/prompt-snapshot")
-async def get_attempt_prompt_snapshot(rid: str, aid: str, _=Depends(require_admin),
-                                      state: AppState = Depends(get_state)):
+async def get_attempt_prompt_snapshot(
+    rid: str, aid: str, _=Depends(require_admin), state: AppState = Depends(get_state)
+):
     async with state.session_factory() as s:
         a = await s.get(Attempt, aid)
         if a is None or a.run_id != rid or not a.prompt_snapshot_blob_path:
@@ -271,8 +301,7 @@ async def get_attempt_prompt_snapshot(rid: str, aid: str, _=Depends(require_admi
 
 
 @router.get("/runs/{rid}/scores/{sid}/prompt-snapshot")
-async def get_score_prompt_snapshot(rid: str, sid: str, _=Depends(require_admin),
-                                    state: AppState = Depends(get_state)):
+async def get_score_prompt_snapshot(rid: str, sid: str, _=Depends(require_admin), state: AppState = Depends(get_state)):
     async with state.session_factory() as s:
         sc = await s.get(Score, sid)
         if sc is None or not sc.prompt_snapshot_blob_path:
@@ -287,10 +316,11 @@ async def get_score_prompt_snapshot(rid: str, sid: str, _=Depends(require_admin)
 @router.get("/runs/{rid}/events")
 async def sse(rid: str, state: AppState = Depends(get_state), token: str = ""):
     from airedteam.api.auth import verify_token
+
     try:
         verify_token(token, secret=state.settings.jwt_secret)
     except Exception:
-        raise HTTPException(401)
+        raise HTTPException(401) from None
     queue = state.bus.subscribe(rid)
 
     async def event_gen():
@@ -307,8 +337,7 @@ async def sse(rid: str, state: AppState = Depends(get_state), token: str = ""):
 
 
 @router.get("/runs/{rid}/attempts/{aid}/conversation")
-async def get_attempt_conversation(rid: str, aid: str, _=Depends(require_admin),
-                                   state: AppState = Depends(get_state)):
+async def get_attempt_conversation(rid: str, aid: str, _=Depends(require_admin), state: AppState = Depends(get_state)):
     async with state.session_factory() as s:
         a = await s.get(Attempt, aid)
         if a is None or a.run_id != rid:
@@ -325,9 +354,11 @@ class AnnotationIn(BaseModel):
 
 
 @router.patch("/runs/{rid}/scores/{sid}")
-async def annotate_score(rid: str, sid: str, ann: AnnotationIn,
-                         admin=Depends(require_admin), state: AppState = Depends(get_state)):
+async def annotate_score(
+    rid: str, sid: str, ann: AnnotationIn, admin=Depends(require_admin), state: AppState = Depends(get_state)
+):
     from datetime import UTC, datetime
+
     async with state.session_factory() as s:
         sc = await s.get(Score, sid)
         if sc is None:
@@ -450,14 +481,17 @@ def _run_report(run: Run, attempts: list[Attempt], scores: list[Score]) -> dict[
 
     by_scorer: dict[str, dict[str, Any]] = {}
     for score in scores:
-        bucket = by_scorer.setdefault(score.scorer, {
-            "scorer": score.scorer,
-            "scores": 0,
-            "refused": 0,
-            "complied": 0,
-            "unknown": 0,
-            "reviewer_overrides": 0,
-        })
+        bucket = by_scorer.setdefault(
+            score.scorer,
+            {
+                "scorer": score.scorer,
+                "scores": 0,
+                "refused": 0,
+                "complied": 0,
+                "unknown": 0,
+                "reviewer_overrides": 0,
+            },
+        )
         bucket["scores"] += 1
         if score.reviewer_label is not None:
             bucket["reviewer_overrides"] += 1
@@ -540,11 +574,26 @@ def _run_export_csv(run: Run, attempts: list[Attempt], scores: list[Score]) -> s
     scores_by_attempt = _scores_by_attempt(scores)
     buf = io.StringIO()
     fieldnames = [
-        "run_id", "run_name", "attempt_id", "target_id", "target_name",
-        "dataset_item_id", "status", "final_verdict", "converter_chain",
-        "prompt", "response", "response_blob_path", "conversation_blob_path",
-        "prompt_snapshot_blob_path", "latency_ms", "tokens_in", "tokens_out",
-        "primary_scorer", "primary_score_value", "primary_score_rationale",
+        "run_id",
+        "run_name",
+        "attempt_id",
+        "target_id",
+        "target_name",
+        "dataset_item_id",
+        "status",
+        "final_verdict",
+        "converter_chain",
+        "prompt",
+        "response",
+        "response_blob_path",
+        "conversation_blob_path",
+        "prompt_snapshot_blob_path",
+        "latency_ms",
+        "tokens_in",
+        "tokens_out",
+        "primary_scorer",
+        "primary_score_value",
+        "primary_score_rationale",
     ]
     writer = csv.DictWriter(buf, fieldnames=fieldnames)
     writer.writeheader()
@@ -552,26 +601,28 @@ def _run_export_csv(run: Run, attempts: list[Attempt], scores: list[Score]) -> s
         attempt_scores = scores_by_attempt.get(attempt.id, [])
         primary = next((s for s in attempt_scores if s.reviewer_label is not None), None)
         primary = primary or (attempt_scores[0] if attempt_scores else None)
-        writer.writerow({
-            "run_id": run.id,
-            "run_name": run.name,
-            "attempt_id": attempt.id,
-            "target_id": attempt.target_id,
-            "target_name": attempt.target_name,
-            "dataset_item_id": attempt.dataset_item_id,
-            "status": attempt.status,
-            "final_verdict": _attempt_verdict(attempt_scores),
-            "converter_chain": " -> ".join(attempt.converter_chain or []),
-            "prompt": attempt.prompt_text,
-            "response": attempt.response_text,
-            "response_blob_path": attempt.response_blob_path,
-            "conversation_blob_path": attempt.conversation_blob_path,
-            "prompt_snapshot_blob_path": attempt.prompt_snapshot_blob_path,
-            "latency_ms": attempt.latency_ms,
-            "tokens_in": attempt.tokens_in,
-            "tokens_out": attempt.tokens_out,
-            "primary_scorer": primary.scorer if primary else "",
-            "primary_score_value": json.dumps(primary.value_json, ensure_ascii=False) if primary else "",
-            "primary_score_rationale": primary.rationale if primary else "",
-        })
+        writer.writerow(
+            {
+                "run_id": run.id,
+                "run_name": run.name,
+                "attempt_id": attempt.id,
+                "target_id": attempt.target_id,
+                "target_name": attempt.target_name,
+                "dataset_item_id": attempt.dataset_item_id,
+                "status": attempt.status,
+                "final_verdict": _attempt_verdict(attempt_scores),
+                "converter_chain": " -> ".join(attempt.converter_chain or []),
+                "prompt": attempt.prompt_text,
+                "response": attempt.response_text,
+                "response_blob_path": attempt.response_blob_path,
+                "conversation_blob_path": attempt.conversation_blob_path,
+                "prompt_snapshot_blob_path": attempt.prompt_snapshot_blob_path,
+                "latency_ms": attempt.latency_ms,
+                "tokens_in": attempt.tokens_in,
+                "tokens_out": attempt.tokens_out,
+                "primary_scorer": primary.scorer if primary else "",
+                "primary_score_value": json.dumps(primary.value_json, ensure_ascii=False) if primary else "",
+                "primary_score_rationale": primary.rationale if primary else "",
+            }
+        )
     return buf.getvalue()

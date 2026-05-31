@@ -1,7 +1,8 @@
-import pytest
 import json
+
+import pytest
 from cryptography.fernet import Fernet
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 
 
 async def _login(c):
@@ -16,35 +17,37 @@ async def test_annotate_score(monkeypatch, tmp_path):
     monkeypatch.setenv("AIREDTEAM_ADMIN_PASSWORD", "letmein")
     monkeypatch.setenv("AIREDTEAM_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/x.db")
     monkeypatch.setenv("AIREDTEAM_BLOB_DIR", str(tmp_path / "blobs"))
-    
+
     import airedteam.api.deps as deps
+
     deps._STATE = None
     from airedteam.api.app import create_app
     from airedteam.storage import models
-    
+
     app = create_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
         state = deps.get_state()
         from airedteam.storage.db import make_engine
+
         eng = make_engine(state.settings.database_url)
         async with eng.begin() as conn:
             await conn.run_sync(models.Base.metadata.create_all)
-        
+
         h = await _login(c)
-        
+
         # Create target
-        t = await c.post("/api/targets", headers=h, json={
-            "name": "test_target",
-            "plugin": "openai_compat",
-            "params": {
+        t = await c.post(
+            "/api/targets",
+            headers=h,
+            json={
                 "name": "test_target",
-                "base_url": "https://test.example.com/v1",
-                "model": "gpt-test"
+                "plugin": "openai_compat",
+                "params": {"name": "test_target", "base_url": "https://test.example.com/v1", "model": "gpt-test"},
+                "secret": {"api_key": "sk-test"},
             },
-            "secret": {"api_key": "sk-test"}
-        })
+        )
         tid = t.json()["id"]
-        
+
         # Create run + attempt + score directly via SQLAlchemy
         async with state.session_factory() as s:
             run = models.Run(
@@ -55,7 +58,7 @@ async def test_annotate_score(monkeypatch, tmp_path):
             )
             s.add(run)
             await s.flush()
-            
+
             att = models.Attempt(
                 id="test-att-1",
                 run_id=run.id,
@@ -66,7 +69,7 @@ async def test_annotate_score(monkeypatch, tmp_path):
             )
             s.add(att)
             await s.flush()
-            
+
             score = models.Score(
                 id="test-score-1",
                 attempt_id=att.id,
@@ -78,7 +81,7 @@ async def test_annotate_score(monkeypatch, tmp_path):
             await s.commit()
             rid = run.id
             sid = score.id
-        
+
         # Verify score has no reviewer fields initially
         scores_before = await c.get(f"/api/runs/{rid}/scores", headers=h)
         assert scores_before.status_code == 200
@@ -88,12 +91,13 @@ async def test_annotate_score(monkeypatch, tmp_path):
         assert score_data["reviewer_notes"] is None
         assert score_data["reviewer_id"] is None
         assert score_data["reviewed_at"] is None
-        
+
         # Annotate the score
-        r1 = await c.patch(f"/api/runs/{rid}/scores/{sid}", headers=h, json={
-            "reviewer_label": False,
-            "reviewer_notes": "Actually not a refusal, it's compliant"
-        })
+        r1 = await c.patch(
+            f"/api/runs/{rid}/scores/{sid}",
+            headers=h,
+            json={"reviewer_label": False, "reviewer_notes": "Actually not a refusal, it's compliant"},
+        )
         assert r1.status_code == 200
         annotated = r1.json()
         assert annotated["id"] == sid
@@ -101,7 +105,7 @@ async def test_annotate_score(monkeypatch, tmp_path):
         assert annotated["reviewer_notes"] == "Actually not a refusal, it's compliant"
         assert annotated["reviewer_id"] is not None
         assert annotated["reviewed_at"] is not None
-        
+
         # Verify via GET /scores that annotation persisted
         scores_after = await c.get(f"/api/runs/{rid}/scores", headers=h)
         assert scores_after.status_code == 200
@@ -119,35 +123,37 @@ async def test_annotate_score_validation(monkeypatch, tmp_path):
     monkeypatch.setenv("AIREDTEAM_ADMIN_PASSWORD", "letmein")
     monkeypatch.setenv("AIREDTEAM_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/x.db")
     monkeypatch.setenv("AIREDTEAM_BLOB_DIR", str(tmp_path / "blobs"))
-    
+
     import airedteam.api.deps as deps
+
     deps._STATE = None
     from airedteam.api.app import create_app
     from airedteam.storage import models
-    
+
     app = create_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
         state = deps.get_state()
         from airedteam.storage.db import make_engine
+
         eng = make_engine(state.settings.database_url)
         async with eng.begin() as conn:
             await conn.run_sync(models.Base.metadata.create_all)
-        
+
         h = await _login(c)
-        
+
         # Create target
-        t = await c.post("/api/targets", headers=h, json={
-            "name": "test_target",
-            "plugin": "openai_compat",
-            "params": {
+        t = await c.post(
+            "/api/targets",
+            headers=h,
+            json={
                 "name": "test_target",
-                "base_url": "https://test.example.com/v1",
-                "model": "gpt-test"
+                "plugin": "openai_compat",
+                "params": {"name": "test_target", "base_url": "https://test.example.com/v1", "model": "gpt-test"},
+                "secret": {"api_key": "sk-test"},
             },
-            "secret": {"api_key": "sk-test"}
-        })
+        )
         tid = t.json()["id"]
-        
+
         # Create two runs with scores
         async with state.session_factory() as s:
             run1 = models.Run(
@@ -165,7 +171,7 @@ async def test_annotate_score_validation(monkeypatch, tmp_path):
             s.add(run1)
             s.add(run2)
             await s.flush()
-            
+
             att1 = models.Attempt(
                 id="att-1",
                 run_id=run1.id,
@@ -176,7 +182,7 @@ async def test_annotate_score_validation(monkeypatch, tmp_path):
             )
             s.add(att1)
             await s.flush()
-            
+
             score1 = models.Score(
                 id="score-1",
                 attempt_id=att1.id,
@@ -188,15 +194,11 @@ async def test_annotate_score_validation(monkeypatch, tmp_path):
             rid1 = run1.id
             rid2 = run2.id
             sid1 = score1.id
-        
+
         # Try to annotate non-existent score
-        r1 = await c.patch(f"/api/runs/{rid1}/scores/fake-score", headers=h, json={
-            "reviewer_label": False
-        })
+        r1 = await c.patch(f"/api/runs/{rid1}/scores/fake-score", headers=h, json={"reviewer_label": False})
         assert r1.status_code == 404
-        
+
         # Try to annotate score with wrong run_id
-        r2 = await c.patch(f"/api/runs/{rid2}/scores/{sid1}", headers=h, json={
-            "reviewer_label": False
-        })
+        r2 = await c.patch(f"/api/runs/{rid2}/scores/{sid1}", headers=h, json={"reviewer_label": False})
         assert r2.status_code == 404

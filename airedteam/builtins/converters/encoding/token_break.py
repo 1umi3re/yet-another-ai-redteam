@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import re
 
-from airedteam.core.types import Prompt
 from airedteam.builtins.converters.support.template_helpers import converted_prompt
+from airedteam.core.types import Prompt
 
 
 class TokenBreakConverter:

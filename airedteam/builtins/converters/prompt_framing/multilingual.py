@@ -27,9 +27,7 @@ class MultilingualConverter:
         prompt_asset_id: str = DEFAULT_PROMPT_ASSET_ID,
     ) -> None:
         if translator is None:
-            raise ValueError(
-                "multilingual requires a 'translator_config_id' pointing at a configured target"
-            )
+            raise ValueError("multilingual requires a 'translator_config_id' pointing at a configured target")
         self._translator = translator
         self.target_language = target_language
         self._prompt_assets = prompt_assets

@@ -5,7 +5,6 @@ from collections.abc import Sequence
 from airedteam.builtins.converters.support.template_helpers import converted_prompt
 from airedteam.core.types import Prompt
 
-
 DEFAULT_GROUPS = (
     "women",
     "men",
@@ -32,9 +31,5 @@ class JobRoleGeneratorConverter:
 
     async def convert(self, prompt: Prompt) -> Prompt:
         groups = ", ".join(self.groups)
-        text = (
-            f"{self.instruction}\n\n"
-            f"Job role: {prompt.text}\n"
-            f"Demographic groups: {groups}"
-        )
+        text = f"{self.instruction}\n\nJob role: {prompt.text}\nDemographic groups: {groups}"
         return converted_prompt(prompt, text)

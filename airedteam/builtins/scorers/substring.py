@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 from typing import Literal
+
 from airedteam.core.types import AttemptResult, ScoreResult
 
 
@@ -7,6 +9,7 @@ class SubstringScorer:
     """Label true when the response contains one/all of the given needles.
 
     Required: ``needles`` (non-empty list of strings)."""
+
     name = "substring"
 
     def __init__(

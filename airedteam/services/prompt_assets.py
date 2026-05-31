@@ -63,15 +63,26 @@ class PromptAssetService:
     async def list_overrides(self, asset_id: str) -> list[dict[str, Any]]:
         await self._get_asset(asset_id)
         async with self._sf() as s:
-            rows = (await s.execute(
-                select(models.PromptAssetOverride)
-                .where(models.PromptAssetOverride.asset_id == asset_id)
-                .order_by(models.PromptAssetOverride.created_at.desc())
-            )).scalars().all()
+            rows = (
+                (
+                    await s.execute(
+                        select(models.PromptAssetOverride)
+                        .where(models.PromptAssetOverride.asset_id == asset_id)
+                        .order_by(models.PromptAssetOverride.created_at.desc())
+                    )
+                )
+                .scalars()
+                .all()
+            )
             return [_override_public(row) for row in rows]
 
     async def create_override(
-        self, asset_id: str, *, name: str, template: str, active: bool = False,
+        self,
+        asset_id: str,
+        *,
+        name: str,
+        template: str,
+        active: bool = False,
     ) -> dict[str, Any]:
         await self._validate_template(asset_id, template)
         async with self._sf() as s:
@@ -93,7 +104,11 @@ class PromptAssetService:
             return _override_public(row)
 
     async def update_override(
-        self, override_id: str, *, name: str | None = None, template: str | None = None,
+        self,
+        override_id: str,
+        *,
+        name: str | None = None,
+        template: str | None = None,
     ) -> dict[str, Any]:
         async with self._sf() as s:
             row = await s.get(models.PromptAssetOverride, override_id)
@@ -109,7 +124,9 @@ class PromptAssetService:
             return _override_public(row)
 
     async def set_active_override(
-        self, asset_id: str, override_id: str | None,
+        self,
+        asset_id: str,
+        override_id: str | None,
     ) -> dict[str, Any] | None:
         await self._get_asset(asset_id)
         async with self._sf() as s:
@@ -152,10 +169,7 @@ class PromptAssetService:
         if not asset_id:
             raise ValueError("prompt asset id is required")
         if not re.fullmatch(r"[A-Za-z0-9_.:-]+", asset_id):
-            raise ValueError(
-                "prompt asset id may only contain letters, numbers, underscore, "
-                "dash, colon, and dot"
-            )
+            raise ValueError("prompt asset id may only contain letters, numbers, underscore, dash, colon, and dot")
         if asset_id in self._builtins:
             raise ValueError(f"prompt asset already exists: {asset_id}")
         if not template.strip():
@@ -251,9 +265,11 @@ class PromptAssetService:
 
     async def _list_custom_assets(self) -> list[PromptAsset]:
         async with self._sf() as s:
-            rows = (await s.execute(
-                select(models.PromptAssetCustom).order_by(models.PromptAssetCustom.id)
-            )).scalars().all()
+            rows = (
+                (await s.execute(select(models.PromptAssetCustom).order_by(models.PromptAssetCustom.id)))
+                .scalars()
+                .all()
+            )
             return [_custom_asset(row) for row in rows]
 
     async def _validate_template(self, asset_id: str, template: str) -> None:
@@ -274,15 +290,17 @@ class PromptAssetService:
 
     async def _active_override(self, asset_id: str):
         async with self._sf() as s:
-            return (await s.execute(
-                select(models.PromptAssetOverride)
-                .where(
-                    models.PromptAssetOverride.asset_id == asset_id,
-                    models.PromptAssetOverride.is_active.is_(True),
+            return (
+                await s.execute(
+                    select(models.PromptAssetOverride)
+                    .where(
+                        models.PromptAssetOverride.asset_id == asset_id,
+                        models.PromptAssetOverride.is_active.is_(True),
+                    )
+                    .order_by(models.PromptAssetOverride.updated_at.desc())
+                    .limit(1)
                 )
-                .order_by(models.PromptAssetOverride.updated_at.desc())
-                .limit(1)
-            )).scalar_one_or_none()
+            ).scalar_one_or_none()
 
     async def _active_override_public(self, asset_id: str) -> dict[str, Any] | None:
         row = await self._active_override(asset_id)
@@ -307,11 +325,14 @@ def _custom_asset(row: models.PromptAssetCustom) -> PromptAsset:
         version=int(row.version),
         plugin=row.plugin,
         purpose=row.purpose,
-        category=getattr(row, "category", None) or _derive_category({
-            "id": row.id,
-            "plugin": row.plugin,
-            "purpose": row.purpose,
-        }),
+        category=getattr(row, "category", None)
+        or _derive_category(
+            {
+                "id": row.id,
+                "plugin": row.plugin,
+                "purpose": row.purpose,
+            }
+        ),
         variables=[str(v) for v in (row.variables_json or [])],
         template=row.template_text,
         source="custom",

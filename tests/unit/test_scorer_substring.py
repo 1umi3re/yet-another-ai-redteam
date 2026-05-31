@@ -1,4 +1,5 @@
 import pytest
+
 from airedteam.builtins.scorers.substring import SubstringScorer
 from airedteam.core.types import AttemptResult, Prompt, Response
 
@@ -31,5 +32,6 @@ async def test_all_mode():
 
 def test_substring_requires_needles():
     import pytest as _pt
+
     with _pt.raises(ValueError):
         SubstringScorer(needles=[])

@@ -30,21 +30,27 @@ export default function Targets() {
   });
   const [form, setForm] = useState({
     name: "", plugin: "openai_compat", base_url: "", model: "", api_key: "",
-    timeout: "", max_concurrency: "",
+    timeout: "", max_concurrency: "", max_input_chars: "",
   });
   const [checkResults, setCheckResults] = useState<Record<string, CheckResult | null>>({});
   const [expandedChecks, setExpandedChecks] = useState<Record<string, boolean>>({});
-  const [limitDrafts, setLimitDrafts] = useState<Record<string, { timeout: string; max_concurrency: string }>>({});
+  const [limitDrafts, setLimitDrafts] = useState<Record<string, { timeout: string; max_concurrency: string; max_input_chars: string }>>({});
   const timeoutValue = form.timeout ? Number(form.timeout) : null;
   const maxConcurrencyValue = form.max_concurrency ? Number(form.max_concurrency) : null;
+  const maxInputCharsValue = form.max_input_chars ? Number(form.max_input_chars) : null;
   const validLimits = (timeoutValue === null || timeoutValue > 0)
-    && (maxConcurrencyValue === null || (Number.isInteger(maxConcurrencyValue) && maxConcurrencyValue > 0));
+    && (maxConcurrencyValue === null || (Number.isInteger(maxConcurrencyValue) && maxConcurrencyValue > 0))
+    && (maxInputCharsValue === null || (Number.isInteger(maxInputCharsValue) && maxInputCharsValue > 0));
   
   const create = useMutation({
     mutationFn: async () => {
       const params: Record<string, any> = { name: form.name, base_url: form.base_url, model: form.model };
       if (timeoutValue !== null) params.timeout = timeoutValue;
       if (maxConcurrencyValue !== null) params.max_concurrency = maxConcurrencyValue;
+      if (maxInputCharsValue !== null) {
+        params.max_input_chars = maxInputCharsValue;
+        params.input_limit_unit = "characters";
+      }
       return api.post("/api/targets", {
         name: form.name, plugin: form.plugin,
         params,
@@ -55,7 +61,7 @@ export default function Targets() {
       toast.success(t("Target created"));
       setForm({
         name: "", plugin: "openai_compat", base_url: "", model: "", api_key: "",
-        timeout: "", max_concurrency: "",
+        timeout: "", max_concurrency: "", max_input_chars: "",
       });
       qc.invalidateQueries({ queryKey: ["targets"] });
     },
@@ -66,12 +72,15 @@ export default function Targets() {
     onSuccess: () => { toast.success(t("Deleted")); qc.invalidateQueries({ queryKey: ["targets"] }); },
   });
   const updateLimits = useMutation({
-    mutationFn: async ({ id, draft }: { id: string; draft: { timeout: string; max_concurrency: string } }) => {
+    mutationFn: async ({ id, draft }: { id: string; draft: { timeout: string; max_concurrency: string; max_input_chars: string } }) => {
       const timeout = draft.timeout.trim();
       const maxConcurrency = draft.max_concurrency.trim();
+      const maxInputChars = draft.max_input_chars.trim();
       const payload = {
         timeout: timeout ? Number(timeout) : null,
         max_concurrency: maxConcurrency ? Number(maxConcurrency) : null,
+        max_input_chars: maxInputChars ? Number(maxInputChars) : null,
+        input_limit_unit: maxInputChars ? "characters" : null,
       };
       return api.patch<T>(`/api/targets/${id}/limits`, payload);
     },
@@ -82,6 +91,7 @@ export default function Targets() {
         [target.id]: {
           timeout: target.params?.timeout != null ? String(target.params.timeout) : "",
           max_concurrency: target.params?.max_concurrency != null ? String(target.params.max_concurrency) : "",
+          max_input_chars: target.params?.max_input_chars != null ? String(target.params.max_input_chars) : "",
         },
       }));
       qc.invalidateQueries({ queryKey: ["targets"] });
@@ -148,6 +158,16 @@ export default function Targets() {
                 onChange={e => setForm({ ...form, max_concurrency: e.target.value })}
               />
             </Field>
+            <Field label={t("Input character limit")} hint={t("Blank means no per-message input limit.")}>
+              <Input
+                type="number"
+                min="1"
+                step="1"
+                placeholder="200"
+                value={form.max_input_chars}
+                onChange={e => setForm({ ...form, max_input_chars: e.target.value })}
+              />
+            </Field>
             <div className="md:col-span-2">
               <Field label={t("API key")} hint={t("Stored encrypted. Never exposed via API.")}>
                 <Input type="password" value={form.api_key} onChange={e => setForm({ ...form, api_key: e.target.value })} />
@@ -195,11 +215,14 @@ export default function Targets() {
                   const draft = limitDrafts[target.id] ?? {
                     timeout: target.params?.timeout != null ? String(target.params.timeout) : "",
                     max_concurrency: target.params?.max_concurrency != null ? String(target.params.max_concurrency) : "",
+                    max_input_chars: target.params?.max_input_chars != null ? String(target.params.max_input_chars) : "",
                   };
                   const draftTimeout = draft.timeout ? Number(draft.timeout) : null;
                   const draftMaxConcurrency = draft.max_concurrency ? Number(draft.max_concurrency) : null;
+                  const draftMaxInputChars = draft.max_input_chars ? Number(draft.max_input_chars) : null;
                   const draftValid = (draftTimeout === null || draftTimeout > 0)
-                    && (draftMaxConcurrency === null || (Number.isInteger(draftMaxConcurrency) && draftMaxConcurrency > 0));
+                    && (draftMaxConcurrency === null || (Number.isInteger(draftMaxConcurrency) && draftMaxConcurrency > 0))
+                    && (draftMaxInputChars === null || (Number.isInteger(draftMaxInputChars) && draftMaxInputChars > 0));
                   return (
                     <Fragment key={target.id}>
                       <tr>
@@ -207,7 +230,7 @@ export default function Targets() {
                         <td className="px-5 py-3"><Badge tone="indigo">{target.plugin}</Badge></td>
                         <td className="px-5 py-3 font-mono text-xs text-gray-700">{target.params?.model}</td>
                         <td className="px-5 py-3">
-                          <div className="flex min-w-52 items-end gap-2">
+                          <div className="flex min-w-[34rem] items-end gap-2">
                             <Field label={t("Timeout")}>
                               <Input
                                 type="number"
@@ -231,6 +254,19 @@ export default function Targets() {
                                 onChange={e => setLimitDrafts(prev => ({
                                   ...prev,
                                   [target.id]: { ...draft, max_concurrency: e.target.value },
+                                }))}
+                              />
+                            </Field>
+                            <Field label={t("Input chars")}>
+                              <Input
+                                type="number"
+                                min="1"
+                                step="1"
+                                placeholder={t("no limit")}
+                                value={draft.max_input_chars}
+                                onChange={e => setLimitDrafts(prev => ({
+                                  ...prev,
+                                  [target.id]: { ...draft, max_input_chars: e.target.value },
                                 }))}
                               />
                             </Field>

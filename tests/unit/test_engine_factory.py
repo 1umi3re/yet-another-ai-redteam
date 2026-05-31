@@ -2,7 +2,7 @@ from airedteam.core.registry import default_registry
 from airedteam.engine.factory import build_converter, build_executor, build_scorer, build_target
 
 
-def test_build_target_filters_runtime_concurrency_param_but_keeps_timeout():
+def test_build_target_filters_runtime_params_but_keeps_timeout():
     class RuntimeParamTarget:
         def __init__(self, *, name: str, timeout: float) -> None:
             self.name = name
@@ -10,10 +10,18 @@ def test_build_target_filters_runtime_concurrency_param_but_keeps_timeout():
 
     default_registry().register("targets", "runtime_param_target", RuntimeParamTarget)
 
-    t = build_target({
-        "plugin": "runtime_param_target",
-        "params": {"name": "t1", "timeout": 123.0, "max_concurrency": 2},
-    })
+    t = build_target(
+        {
+            "plugin": "runtime_param_target",
+            "params": {
+                "name": "t1",
+                "timeout": 123.0,
+                "max_concurrency": 2,
+                "max_input_chars": 200,
+                "input_limit_unit": "characters",
+            },
+        }
+    )
 
     assert t.name == "t1"
     assert t.timeout == 123.0
@@ -33,6 +41,11 @@ def test_build_executor_best_of_n():
     e = build_executor({"plugin": "best_of_n", "params": {"attempts": 2}})
     assert e.name == "best_of_n"
     assert e.attempts == 2
+
+
+def test_build_executor_split():
+    e = build_executor({"plugin": "split_executor", "params": {}})
+    assert e.name == "split_executor"
 
 
 def test_build_executor_jailbreak_iterative_requires_attacker_and_judge():

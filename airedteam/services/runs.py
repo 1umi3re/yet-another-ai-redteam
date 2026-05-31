@@ -1,20 +1,30 @@
 from __future__ import annotations
+
 import asyncio
-from dataclasses import asdict
 import json
 import uuid
-import yaml
+from dataclasses import asdict
 from datetime import UTC, datetime
+
+import yaml
 from sqlalchemy import update
+
 from airedteam.builtins.executors.general_multi_turn import GeneralMultiTurnExecutor
 from airedteam.core.registry import default_registry
-from airedteam.storage.models import Run, Attempt, Score
-from airedteam.engine.run_engine import RunEngine
+from airedteam.engine.factory import (
+    build_converter,
+    build_dataset,
+    build_executor,
+    build_scorer,
+    build_target,
+)
+from airedteam.engine.input_limits import apply_target_input_limit
 from airedteam.engine.orchestrator import DefaultOrchestrator
-from airedteam.engine.factory import build_converter, build_scorer, build_executor, build_target, build_dataset
+from airedteam.engine.run_engine import RunEngine
 from airedteam.engine.sampling import SampledDataset
 from airedteam.runspec.models import RunSpec
 from airedteam.services.prompt_assets import PromptAssetService
+from airedteam.storage.models import Attempt, Run, Score
 
 
 def _message_payload(message) -> dict:
@@ -99,7 +109,10 @@ class RunService:
         RunSpec.model_validate(runspec_dict)  # validate early
         async with self._sf() as s:
             row = Run(name=name, runspec_yaml=yaml.safe_dump(runspec_dict), status="pending")
-            s.add(row); await s.commit(); await s.refresh(row); return row
+            s.add(row)
+            await s.commit()
+            await s.refresh(row)
+            return row
 
     async def start_run(self, run_id: str) -> None:
         async with self._sf() as s:
@@ -145,6 +158,7 @@ class RunService:
         max_concurrency = _target_max_concurrency(runtime_cfg)
         if max_concurrency is not None:
             target._airedteam_max_concurrency = max_concurrency
+        apply_target_input_limit(target, runtime_cfg)
         return target
 
     async def _is_cancelled(self, run_id: str) -> bool:
@@ -185,10 +199,7 @@ class RunService:
             # Apply sampling if configured
             if spec.sampling is not None:
                 dataset = SampledDataset(
-                    dataset,
-                    limit=spec.sampling.limit,
-                    shuffle=spec.sampling.shuffle,
-                    seed=spec.sampling.seed
+                    dataset, limit=spec.sampling.limit, shuffle=spec.sampling.shuffle, seed=spec.sampling.seed
                 )
 
             # Resolve converter-level target references before building.
@@ -197,10 +208,7 @@ class RunService:
                 ref = conv.model_dump()
                 converter_plugin = ref.get("plugin")
                 params = dict(ref.get("params") or {})
-                if (
-                    converter_plugin in _TRANSLATION_CONVERTERS
-                    and "translator_config_id" in params
-                ):
+                if converter_plugin in _TRANSLATION_CONVERTERS and "translator_config_id" in params:
                     tcid = params.pop("translator_config_id")
                     tgt_cfg = await self._targets.resolve_for_runtime(tcid)
                     params["translator"] = self._build_target_from_cfg(tgt_cfg)
@@ -210,15 +218,9 @@ class RunService:
                     tgt_cfg = await self._targets.resolve_for_runtime(cid)
                     params["converter"] = self._build_target_from_cfg(tgt_cfg)
                     closeables.append(params["converter"])
-                if (
-                    converter_plugin in _LLM_CONVERTERS
-                    or converter_plugin in _TRANSLATION_CONVERTERS
-                ):
+                if converter_plugin in _LLM_CONVERTERS or converter_plugin in _TRANSLATION_CONVERTERS:
                     params["prompt_assets"] = self._prompt_assets
-                if (
-                    converter_plugin == "template_jailbreak"
-                    and params.get("attack_template_asset_id")
-                ):
+                if converter_plugin == "template_jailbreak" and params.get("attack_template_asset_id"):
                     asset_id = params.pop("attack_template_asset_id")
                     asset = await self._prompt_assets.get_asset(asset_id)
                     if asset.get("purpose") != "attack_template":
@@ -238,11 +240,15 @@ class RunService:
             plugin_name = executor_ref.get("plugin")
             executor_cls = default_registry().get("executors", plugin_name)
             is_general_multi_turn = _is_general_multi_turn_executor(executor_cls)
-            needs_attacker = plugin_name in {
-                "crescendo",
-                "pair",
-                "jailbreak_iterative",
-            } or is_general_multi_turn
+            needs_attacker = (
+                plugin_name
+                in {
+                    "crescendo",
+                    "pair",
+                    "jailbreak_iterative",
+                }
+                or is_general_multi_turn
+            )
             needs_evaluator = is_general_multi_turn
             needs_judge = plugin_name in {"pair", "jailbreak_iterative"} or is_general_multi_turn
             uses_prompt_assets = needs_attacker or needs_judge or needs_evaluator
@@ -299,9 +305,7 @@ class RunService:
                 conv_path: str | None = None
                 if ar.conversation:
                     conv_path = f"runs/{run_id}/conversations/{attempt_id}.json"
-                    payload = json.dumps({
-                        "messages": [_message_payload(m) for m in ar.conversation]
-                    }).encode("utf-8")
+                    payload = json.dumps({"messages": [_message_payload(m) for m in ar.conversation]}).encode("utf-8")
                     await self._blob.put(conv_path, payload)
                 prompt_snapshot_path: str | None = None
                 if ar.prompt_snapshots:
@@ -328,7 +332,9 @@ class RunService:
                         status=ar.status,
                         error=ar.error,
                     )
-                    s.add(a); await s.commit(); await s.refresh(a)
+                    s.add(a)
+                    await s.commit()
+                    await s.refresh(a)
                     idx = len(attempt_id_by_index)
                     attempt_id_by_index[idx] = a.id
                     await s.execute(update(Run).where(Run.id == run_id).values(progress_done=Run.progress_done + 1))
@@ -346,14 +352,16 @@ class RunService:
                         prompt_snapshot_path = await self._prompt_assets.write_snapshot(
                             run_id, f"score-{score_id}", sr.prompt_snapshot
                         )
-                    s.add(Score(
-                        id=score_id,
-                        attempt_id=attempt_id,
-                        scorer=sr.scorer,
-                        value_json=value,
-                        rationale=sr.rationale,
-                        prompt_snapshot_blob_path=prompt_snapshot_path,
-                    ))
+                    s.add(
+                        Score(
+                            id=score_id,
+                            attempt_id=attempt_id,
+                            scorer=sr.scorer,
+                            value_json=value,
+                            rationale=sr.rationale,
+                            prompt_snapshot_blob_path=prompt_snapshot_path,
+                        )
+                    )
                     await s.commit()
 
             try:
@@ -362,15 +370,21 @@ class RunService:
                 total = 0
             converter_variant_count = max(1, len(converters))
             async with self._sf() as s:
-                await s.execute(update(Run).where(Run.id == run_id).values(
-                    progress_total=total * len(targets) * converter_variant_count
-                ))
+                await s.execute(
+                    update(Run)
+                    .where(Run.id == run_id)
+                    .values(progress_total=total * len(targets) * converter_variant_count)
+                )
                 await s.commit()
 
             engine = RunEngine(progress_bus=self._bus, on_attempt=on_attempt, on_score=on_score)
             run_coro = engine.run(
-                run_id=run_id, dataset=dataset, targets=targets, converters=converters,
-                executor=executor, scorers=scorers,
+                run_id=run_id,
+                dataset=dataset,
+                targets=targets,
+                converters=converters,
+                executor=executor,
+                scorers=scorers,
                 concurrency=min(spec.concurrency, self._max_conc),
                 orchestrator=DefaultOrchestrator(),
             )
@@ -381,24 +395,44 @@ class RunService:
             if await self._is_cancelled(run_id):
                 return
             async with self._sf() as s:
-                await s.execute(update(Run).where(Run.id == run_id).values(status="completed", finished_at=datetime.now(UTC).replace(tzinfo=None)))
+                await s.execute(
+                    update(Run)
+                    .where(Run.id == run_id)
+                    .values(status="completed", finished_at=datetime.now(UTC).replace(tzinfo=None))
+                )
                 await s.commit()
             await self._bus.publish(run_id, {"event": "run.finished", "status": "completed"})
         except asyncio.CancelledError:
             async with self._sf() as s:
-                await s.execute(update(Run).where(Run.id == run_id).values(status="cancelled", finished_at=datetime.now(UTC).replace(tzinfo=None)))
+                await s.execute(
+                    update(Run)
+                    .where(Run.id == run_id)
+                    .values(status="cancelled", finished_at=datetime.now(UTC).replace(tzinfo=None))
+                )
                 await s.commit()
             await self._bus.publish(run_id, {"event": "run.cancelled", "status": "cancelled"})
             return
         except TimeoutError:
             async with self._sf() as s:
-                await s.execute(update(Run).where(Run.id == run_id).values(status="failed", finished_at=datetime.now(UTC).replace(tzinfo=None), error=f"run timed out after {spec.timeout_seconds} seconds"))
+                await s.execute(
+                    update(Run)
+                    .where(Run.id == run_id)
+                    .values(
+                        status="failed",
+                        finished_at=datetime.now(UTC).replace(tzinfo=None),
+                        error=f"run timed out after {spec.timeout_seconds} seconds",
+                    )
+                )
                 await s.commit()
             await self._bus.publish(run_id, {"event": "run.failed", "status": "failed"})
             raise
         except Exception as e:
             async with self._sf() as s:
-                await s.execute(update(Run).where(Run.id == run_id).values(status="failed", finished_at=datetime.now(UTC).replace(tzinfo=None), error=str(e)))
+                await s.execute(
+                    update(Run)
+                    .where(Run.id == run_id)
+                    .values(status="failed", finished_at=datetime.now(UTC).replace(tzinfo=None), error=str(e))
+                )
                 await s.commit()
             await self._bus.publish(run_id, {"event": "run.failed", "status": "failed"})
             raise

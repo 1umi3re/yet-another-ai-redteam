@@ -4,32 +4,13 @@ import tomllib
 from pathlib import Path
 
 from airedteam.builtins.converters.frameworks.coverage import (
+    ADVERTORCH_CURRENT_ATTACK_INVENTORY,
+    ADVERTORCH_REQUIRES_GRADIENT_EVASION_SUPPORT,
+    ADVERTORCH_REQUIRES_OPTIMIZATION_EVASION_SUPPORT,
+    ADVERTORCH_REQUIRES_SEARCH_EVASION_SUPPORT,
+    ADVERTORCH_REQUIRES_SPATIAL_EVASION_SUPPORT,
     AEGISRT_CURRENT_CONVERTER_INVENTORY,
     AEGISRT_TEXT_COMPATIBLE,
-    AISAFETYLAB_ATTACK_CONVERTER_COMPATIBLE,
-    AISAFETYLAB_ATTACK_EXECUTOR_COMPATIBLE,
-    AISAFETYLAB_CURRENT_ATTACK_METHOD_INVENTORY,
-    AISAFETYLAB_REQUIRES_ADAPTIVE_ATTACK_SUPPORT,
-    AISAFETYLAB_REQUIRES_FUZZER_SUPPORT,
-    AISAFETYLAB_REQUIRES_GENETIC_OPTIMIZER_SUPPORT,
-    AISAFETYLAB_REQUIRES_LEARNED_PROMPTER_SUPPORT,
-    AISAFETYLAB_REQUIRES_LLM_REFINEMENT_SUPPORT,
-    AISAFETYLAB_REQUIRES_TEMPLATE_RECIPE_SUPPORT,
-    AISAFETYLAB_REQUIRES_TREE_SEARCH_SUPPORT,
-    AISAFETYLAB_REQUIRES_WHITEBOX_OPTIMIZER_SUPPORT,
-    AI_INFRAGUARD_ATTACK_CONVERTER_COMPATIBLE,
-    AI_INFRAGUARD_ATTACK_EXECUTOR_COMPATIBLE,
-    AI_INFRAGUARD_CURRENT_ATTACK_METHOD_INVENTORY,
-    AI_INFRAGUARD_REQUIRES_OBFUSCATION_SUITE_SUPPORT,
-    AI_INFRAGUARD_REQUIRES_TREE_SEARCH_SUPPORT,
-    JAILBREAKLLM_ATTACK_CONVERTER_COMPATIBLE,
-    JAILBREAKLLM_ATTACK_EXECUTOR_COMPATIBLE,
-    JAILBREAKLLM_CURRENT_ATTACK_VECTOR_INVENTORY,
-    JAILBREAKLLM_REQUIRES_AGENTIC_ATTACK_SUPPORT,
-    JAILBREAKLLM_REQUIRES_GRAMMAR_DECODING_SUPPORT,
-    JAILBREAKLLM_REQUIRES_INTERPRETABILITY_ATTACK_SUPPORT,
-    JAILBREAKLLM_REQUIRES_MULTI_TURN_ORCHESTRATION_SUPPORT,
-    JAILBREAKLLM_REQUIRES_WHITEBOX_OPTIMIZER_SUPPORT,
     AGENTDOJO_ATTACK_CONVERTER_COMPATIBLE,
     AGENTDOJO_CURRENT_ATTACK_INVENTORY,
     AGENTDOJO_REQUIRES_ATTACK_HARNESS_SUPPORT,
@@ -47,13 +28,22 @@ from airedteam.builtins.converters.frameworks.coverage import (
     AGENTVIGIL_REQUIRES_ATTACK_GOAL_SUPPORT,
     AGENTVIGIL_REQUIRES_BLACK_BOX_FUZZING_SUPPORT,
     AGENTVIGIL_REQUIRES_MULTI_PARENT_MUTATOR_SUPPORT,
-    ASB_CURRENT_ATTACK_MODE_INVENTORY,
-    ASB_CURRENT_PROMPT_INJECTION_PAYLOAD_INVENTORY,
-    ASB_PROMPT_INJECTION_PAYLOAD_CONVERTER_COMPATIBLE,
-    ASB_REQUIRES_AGENT_PROMPT_INJECTION_BENCHMARK_SUPPORT,
-    ASB_REQUIRES_MEMORY_POISONING_SUPPORT,
-    ASB_REQUIRES_MIXED_ATTACK_HARNESS_SUPPORT,
-    ASB_REQUIRES_PLAN_OF_THOUGHT_BACKDOOR_SUPPORT,
+    AI_INFRAGUARD_ATTACK_CONVERTER_COMPATIBLE,
+    AI_INFRAGUARD_ATTACK_EXECUTOR_COMPATIBLE,
+    AI_INFRAGUARD_CURRENT_ATTACK_METHOD_INVENTORY,
+    AI_INFRAGUARD_REQUIRES_OBFUSCATION_SUITE_SUPPORT,
+    AI_INFRAGUARD_REQUIRES_TREE_SEARCH_SUPPORT,
+    AISAFETYLAB_ATTACK_CONVERTER_COMPATIBLE,
+    AISAFETYLAB_ATTACK_EXECUTOR_COMPATIBLE,
+    AISAFETYLAB_CURRENT_ATTACK_METHOD_INVENTORY,
+    AISAFETYLAB_REQUIRES_ADAPTIVE_ATTACK_SUPPORT,
+    AISAFETYLAB_REQUIRES_FUZZER_SUPPORT,
+    AISAFETYLAB_REQUIRES_GENETIC_OPTIMIZER_SUPPORT,
+    AISAFETYLAB_REQUIRES_LEARNED_PROMPTER_SUPPORT,
+    AISAFETYLAB_REQUIRES_LLM_REFINEMENT_SUPPORT,
+    AISAFETYLAB_REQUIRES_TEMPLATE_RECIPE_SUPPORT,
+    AISAFETYLAB_REQUIRES_TREE_SEARCH_SUPPORT,
+    AISAFETYLAB_REQUIRES_WHITEBOX_OPTIMIZER_SUPPORT,
     ARMS_CURRENT_ADVERSARIAL_PATTERN_INVENTORY,
     ARMS_CURRENT_ATTACK_STRATEGY_INVENTORY,
     ARMS_CURRENT_FRAMEWORK_MECHANISM_INVENTORY,
@@ -68,6 +58,17 @@ from airedteam.builtins.converters.frameworks.coverage import (
     ART_REQUIRES_EXTRACTION_ATTACK_SUPPORT,
     ART_REQUIRES_INFERENCE_PRIVACY_ATTACK_SUPPORT,
     ART_REQUIRES_POISONING_ATTACK_SUPPORT,
+    ASB_CURRENT_ATTACK_MODE_INVENTORY,
+    ASB_CURRENT_PROMPT_INJECTION_PAYLOAD_INVENTORY,
+    ASB_PROMPT_INJECTION_PAYLOAD_CONVERTER_COMPATIBLE,
+    ASB_REQUIRES_AGENT_PROMPT_INJECTION_BENCHMARK_SUPPORT,
+    ASB_REQUIRES_MEMORY_POISONING_SUPPORT,
+    ASB_REQUIRES_MIXED_ATTACK_HARNESS_SUPPORT,
+    ASB_REQUIRES_PLAN_OF_THOUGHT_BACKDOOR_SUPPORT,
+    AUTODAN_CURRENT_ATTACK_INVENTORY,
+    AUTODAN_REQUIRES_GENETIC_OPTIMIZER_SUPPORT,
+    AUTODAN_REQUIRES_HIERARCHICAL_GENETIC_OPTIMIZER_SUPPORT,
+    AUTODAN_REQUIRES_LLM_MUTATION_SUPPORT,
     AUTOREDTEAMER_CURRENT_ATTACK_METHOD_INVENTORY,
     AUTOREDTEAMER_INITIAL_ATTACK_CONVERTER_COMPATIBLE,
     AUTOREDTEAMER_INITIAL_ATTACK_EXECUTOR_COMPATIBLE,
@@ -77,15 +78,6 @@ from airedteam.builtins.converters.frameworks.coverage import (
     AUTOREDTEAMER_REQUIRES_RED_TEAMING_AGENT_SUPPORT,
     AUTOREDTEAMER_REQUIRES_STRATEGY_PROPOSER_SUPPORT,
     AUTOREDTEAMER_REQUIRES_TRAINING_DATASET_SUPPORT,
-    AUTODAN_CURRENT_ATTACK_INVENTORY,
-    AUTODAN_REQUIRES_GENETIC_OPTIMIZER_SUPPORT,
-    AUTODAN_REQUIRES_HIERARCHICAL_GENETIC_OPTIMIZER_SUPPORT,
-    AUTODAN_REQUIRES_LLM_MUTATION_SUPPORT,
-    ADVERTORCH_CURRENT_ATTACK_INVENTORY,
-    ADVERTORCH_REQUIRES_GRADIENT_EVASION_SUPPORT,
-    ADVERTORCH_REQUIRES_OPTIMIZATION_EVASION_SUPPORT,
-    ADVERTORCH_REQUIRES_SEARCH_EVASION_SUPPORT,
-    ADVERTORCH_REQUIRES_SPATIAL_EVASION_SUPPORT,
     AZURE_AI_EVALUATION_CURRENT_ATTACK_STRATEGY_INVENTORY,
     AZURE_AI_EVALUATION_GROUP_STRATEGY_COMPATIBLE,
     AZURE_AI_EVALUATION_STRATEGY_CONVERTER_COMPATIBLE,
@@ -97,20 +89,10 @@ from airedteam.builtins.converters.frameworks.coverage import (
     BACKDOORBENCH_REQUIRES_MODEL_MODIFICATION_BACKDOOR_SUPPORT,
     BACKDOORBENCH_REQUIRES_SELF_SUPERVISED_BACKDOOR_SUPPORT,
     BIPIA_CURRENT_ATTACK_CATEGORY_INVENTORY,
-    BIPIA_TEXT_ATTACK_CONVERTER_COMPATIBLE,
     BIPIA_REQUIRES_APPLICATION_GOAL_INJECTION_SUPPORT,
     BIPIA_REQUIRES_CODE_ABUSE_BENCHMARK_SUPPORT,
     BIPIA_REQUIRES_CONTENT_OUTCOME_SUPPORT,
-    CYBERSECEVAL_CURRENT_BENCHMARK_INVENTORY,
-    CYBERSECEVAL_PROMPT_INJECTION_CONVERTER_COMPATIBLE,
-    CYBERSECEVAL_REQUIRES_AUTONOMOUS_CYBER_RANGE_SUPPORT,
-    CYBERSECEVAL_REQUIRES_CODE_INTERPRETER_ABUSE_SUPPORT,
-    CYBERSECEVAL_REQUIRES_CYBER_ATTACK_HELPFULNESS_SUPPORT,
-    CYBERSECEVAL_REQUIRES_DEFENSIVE_CYBER_REASONING_SUPPORT,
-    CYBERSECEVAL_REQUIRES_FALSE_REFUSAL_BENCHMARK_SUPPORT,
-    CYBERSECEVAL_REQUIRES_SECURE_CODE_BENCHMARK_SUPPORT,
-    CYBERSECEVAL_REQUIRES_SPEAR_PHISHING_SIMULATION_SUPPORT,
-    CYBERSECEVAL_REQUIRES_VULNERABILITY_EXPLOITATION_SUPPORT,
+    BIPIA_TEXT_ATTACK_CONVERTER_COMPATIBLE,
     CLEVERHANS_CURRENT_ATTACK_INVENTORY,
     CLEVERHANS_REQUIRES_DECISION_BASED_EVASION_SUPPORT,
     CLEVERHANS_REQUIRES_GRADIENT_EVASION_SUPPORT,
@@ -125,11 +107,20 @@ from airedteam.builtins.converters.frameworks.coverage import (
     COUNTERFIT_REQUIRES_AUGLY_IMAGE_TRANSFORM_SUPPORT,
     COUNTERFIT_REQUIRES_TEXTATTACK_RECIPE_SUPPORT,
     COUNTERFIT_TEXT_ATTACK_CONVERTER_COMPATIBLE,
+    CYBERSECEVAL_CURRENT_BENCHMARK_INVENTORY,
+    CYBERSECEVAL_PROMPT_INJECTION_CONVERTER_COMPATIBLE,
+    CYBERSECEVAL_REQUIRES_AUTONOMOUS_CYBER_RANGE_SUPPORT,
+    CYBERSECEVAL_REQUIRES_CODE_INTERPRETER_ABUSE_SUPPORT,
+    CYBERSECEVAL_REQUIRES_CYBER_ATTACK_HELPFULNESS_SUPPORT,
+    CYBERSECEVAL_REQUIRES_DEFENSIVE_CYBER_REASONING_SUPPORT,
+    CYBERSECEVAL_REQUIRES_FALSE_REFUSAL_BENCHMARK_SUPPORT,
+    CYBERSECEVAL_REQUIRES_SECURE_CODE_BENCHMARK_SUPPORT,
+    CYBERSECEVAL_REQUIRES_SPEAR_PHISHING_SIMULATION_SUPPORT,
+    CYBERSECEVAL_REQUIRES_VULNERABILITY_EXPLOITATION_SUPPORT,
     DEEPTEAM_CURRENT_MULTI_TURN_ATTACK_INVENTORY,
     DEEPTEAM_CURRENT_SINGLE_TURN_ATTACK_INVENTORY,
     DEEPTEAM_REQUIRES_MULTI_TURN_ATTACK_SUPPORT,
     DEEPTEAM_TEXT_COMPATIBLE,
-    EASYJAILBREAK_SOURCE_METHOD_COMPATIBLE,
     EASYJAILBREAK_ATTACKER_RECIPE_CONVERTER_COMPATIBLE,
     EASYJAILBREAK_ATTACKER_RECIPE_EXECUTOR_COMPATIBLE,
     EASYJAILBREAK_COMPOSITION_COMPATIBLE,
@@ -147,6 +138,7 @@ from airedteam.builtins.converters.frameworks.coverage import (
     EASYJAILBREAK_REQUIRES_TEMPLATE_RECIPE_SUPPORT,
     EASYJAILBREAK_REQUIRES_TREE_SEARCH_SUPPORT,
     EASYJAILBREAK_REQUIRES_WHITEBOX_GRADIENT_SUPPORT,
+    EASYJAILBREAK_SOURCE_METHOD_COMPATIBLE,
     EASYJAILBREAK_TEXT_COMPATIBLE,
     FOOLBOX_CURRENT_ATTACK_INVENTORY,
     FOOLBOX_REQUIRES_DECISION_BASED_EVASION_SUPPORT,
@@ -218,6 +210,14 @@ from airedteam.builtins.converters.frameworks.coverage import (
     JAILBREAKBENCH_CURRENT_ARTIFACT_METHOD_INVENTORY,
     JAILBREAKBENCH_REQUIRES_BLACK_BOX_RANDOM_SEARCH_SUPPORT,
     JAILBREAKBENCH_REQUIRES_WHITEBOX_OPTIMIZER_SUPPORT,
+    JAILBREAKLLM_ATTACK_CONVERTER_COMPATIBLE,
+    JAILBREAKLLM_ATTACK_EXECUTOR_COMPATIBLE,
+    JAILBREAKLLM_CURRENT_ATTACK_VECTOR_INVENTORY,
+    JAILBREAKLLM_REQUIRES_AGENTIC_ATTACK_SUPPORT,
+    JAILBREAKLLM_REQUIRES_GRAMMAR_DECODING_SUPPORT,
+    JAILBREAKLLM_REQUIRES_INTERPRETABILITY_ATTACK_SUPPORT,
+    JAILBREAKLLM_REQUIRES_MULTI_TURN_ORCHESTRATION_SUPPORT,
+    JAILBREAKLLM_REQUIRES_WHITEBOX_OPTIMIZER_SUPPORT,
     JAILTRICKBENCH_ATTACK_CONVERTER_COMPATIBLE,
     JAILTRICKBENCH_ATTACK_EXECUTOR_COMPATIBLE,
     JAILTRICKBENCH_CURRENT_ATTACK_METHOD_INVENTORY,
@@ -236,6 +236,24 @@ from airedteam.builtins.converters.frameworks.coverage import (
     MOONSHOT_ATTACK_MODULE_CONVERTER_COMPATIBLE,
     MOONSHOT_CURRENT_ATTACK_MODULE_INVENTORY,
     MOONSHOT_REQUIRES_MULTI_TURN_AGENT_SUPPORT,
+    OPEN_PROMPT_INJECTION_ATTACKER_CONVERTER_COMPATIBLE,
+    OPEN_PROMPT_INJECTION_CURRENT_ATTACKER_INVENTORY,
+    OPENATTACK_ATTACKER_CONVERTER_COMPATIBLE,
+    OPENATTACK_CURRENT_ATTACKER_INVENTORY,
+    OPENATTACK_REQUIRES_GAN_ATTACK_SUPPORT,
+    OPENATTACK_REQUIRES_GENETIC_OPTIMIZER_SUPPORT,
+    OPENATTACK_REQUIRES_GEOMETRIC_ATTACK_SUPPORT,
+    OPENATTACK_REQUIRES_MODEL_GUIDED_RECIPE_SUPPORT,
+    OPENATTACK_REQUIRES_PARTICLE_SWARM_OPTIMIZER_SUPPORT,
+    OPENATTACK_REQUIRES_UNIVERSAL_TRIGGER_SUPPORT,
+    OPENATTACK_REQUIRES_WHITEBOX_OPTIMIZER_SUPPORT,
+    OPENBACKDOOR_ATTACK_CONVERTER_COMPATIBLE,
+    OPENBACKDOOR_CURRENT_ATTACK_INVENTORY,
+    OPENBACKDOOR_REQUIRES_EMBEDDING_POISONING_SUPPORT,
+    OPENBACKDOOR_REQUIRES_NEURON_BACKDOOR_SUPPORT,
+    OPENBACKDOOR_REQUIRES_PRETRAINED_MODEL_BACKDOOR_SUPPORT,
+    OPENBACKDOOR_REQUIRES_STEALTHY_BACKDOOR_TRAINING_SUPPORT,
+    OPENBACKDOOR_REQUIRES_WEIGHT_POISONING_SUPPORT,
     OPENRT_CURRENT_ATTACK_METHOD_INVENTORY,
     OPENRT_METHOD_CONVERTER_COMPATIBLE,
     OPENRT_METHOD_EXECUTOR_COMPATIBLE,
@@ -256,24 +274,6 @@ from airedteam.builtins.converters.frameworks.coverage import (
     OSHARM_REQUIRES_COMPUTER_USE_BENCHMARK_SUPPORT,
     OSHARM_REQUIRES_PROMPT_INJECTION_GOAL_SUPPORT,
     OSHARM_REQUIRES_PROMPT_INJECTION_VECTOR_SUPPORT,
-    OPEN_PROMPT_INJECTION_ATTACKER_CONVERTER_COMPATIBLE,
-    OPEN_PROMPT_INJECTION_CURRENT_ATTACKER_INVENTORY,
-    OPENATTACK_ATTACKER_CONVERTER_COMPATIBLE,
-    OPENATTACK_CURRENT_ATTACKER_INVENTORY,
-    OPENATTACK_REQUIRES_GAN_ATTACK_SUPPORT,
-    OPENATTACK_REQUIRES_GENETIC_OPTIMIZER_SUPPORT,
-    OPENATTACK_REQUIRES_GEOMETRIC_ATTACK_SUPPORT,
-    OPENATTACK_REQUIRES_MODEL_GUIDED_RECIPE_SUPPORT,
-    OPENATTACK_REQUIRES_PARTICLE_SWARM_OPTIMIZER_SUPPORT,
-    OPENATTACK_REQUIRES_UNIVERSAL_TRIGGER_SUPPORT,
-    OPENATTACK_REQUIRES_WHITEBOX_OPTIMIZER_SUPPORT,
-    OPENBACKDOOR_ATTACK_CONVERTER_COMPATIBLE,
-    OPENBACKDOOR_CURRENT_ATTACK_INVENTORY,
-    OPENBACKDOOR_REQUIRES_EMBEDDING_POISONING_SUPPORT,
-    OPENBACKDOOR_REQUIRES_NEURON_BACKDOOR_SUPPORT,
-    OPENBACKDOOR_REQUIRES_PRETRAINED_MODEL_BACKDOOR_SUPPORT,
-    OPENBACKDOOR_REQUIRES_STEALTHY_BACKDOOR_TRAINING_SUPPORT,
-    OPENBACKDOOR_REQUIRES_WEIGHT_POISONING_SUPPORT,
     OTHER_FRAMEWORKS_PENDING_INVENTORY,
     PANDAGUARD_ATTACK_CONVERTER_COMPATIBLE,
     PANDAGUARD_ATTACK_EXECUTOR_COMPATIBLE,
@@ -286,15 +286,15 @@ from airedteam.builtins.converters.frameworks.coverage import (
     PANDAGUARD_REQUIRES_TEMPLATE_RECIPE_SUPPORT,
     PANDAGUARD_REQUIRES_TREE_SEARCH_SUPPORT,
     PANDAGUARD_REQUIRES_WHITEBOX_OPTIMIZER_SUPPORT,
+    PROMPTBENCH_ATTACK_CONVERTER_COMPATIBLE,
+    PROMPTBENCH_CURRENT_ATTACK_INVENTORY,
     PROMPTFOO_COMPOSITION_COMPATIBLE,
     PROMPTFOO_CURRENT_STRATEGY_INVENTORY,
     PROMPTFOO_EXECUTOR_COMPATIBLE,
     PROMPTFOO_NOOP_COMPATIBLE,
-    PROMPTFOO_REQUIRES_CUSTOM_STRATEGY_SUPPORT,
     PROMPTFOO_REQUIRES_ATTACKER_OR_EXECUTOR_SUPPORT,
+    PROMPTFOO_REQUIRES_CUSTOM_STRATEGY_SUPPORT,
     PROMPTFOO_TEXT_COMPATIBLE,
-    PROMPTBENCH_ATTACK_CONVERTER_COMPATIBLE,
-    PROMPTBENCH_CURRENT_ATTACK_INVENTORY,
     PYRIT_ARTIFACT_COMPATIBLE,
     PYRIT_CURRENT_CONVERTER_INVENTORY,
     PYRIT_CURRENT_TEXT_SELECTION_STRATEGY_INVENTORY,
@@ -343,8 +343,8 @@ from airedteam.builtins.converters.frameworks.coverage import (
     UDORA_CURRENT_ATTACK_METHOD_INVENTORY,
     UDORA_CURRENT_INJECAGENT_ATTACK_TYPE_INVENTORY,
     UDORA_CURRENT_WEBSHOP_ATTACK_GOAL_INVENTORY,
-    UDORA_REQUIRES_AGENT_BENCHMARK_SUPPORT,
     UDORA_REQUIRES_ADVERSARIAL_STRING_OPTIMIZER_SUPPORT,
+    UDORA_REQUIRES_AGENT_BENCHMARK_SUPPORT,
     UDORA_REQUIRES_POSITION_SELECTION_SUPPORT,
     UDORA_REQUIRES_REASONING_HIJACK_SUPPORT,
     VWA_ADV_ATTACK_CONVERTER_COMPATIBLE,
@@ -586,9 +586,7 @@ def test_redteam_attack_union_document_lists_all_manifested_current_methods():
     )
     missing = sorted(name for name in manifested if f"`{name}`" not in doc)
     assert missing == []
-    missing_converters = sorted(
-        name for name in _registered_converters() if f"| `{name}` |" not in doc
-    )
+    missing_converters = sorted(name for name in _registered_converters() if f"| `{name}` |" not in doc)
     assert missing_converters == []
 
 
@@ -613,9 +611,7 @@ def test_converter_coverage_manifest_classifies_current_pyrit_converters():
     pyrit_covered = set(PYRIT_TEXT_COMPATIBLE) | set(PYRIT_ARTIFACT_COMPATIBLE)
     assert set(PYRIT_CURRENT_CONVERTER_INVENTORY).issubset(registered)
     assert PYRIT_CURRENT_CONVERTER_INVENTORY - pyrit_covered == set()
-    assert {"char_swap", "code_chameleon", "unicode_substitution"}.issubset(
-        PYRIT_CURRENT_CONVERTER_INVENTORY
-    )
+    assert {"char_swap", "code_chameleon", "unicode_substitution"}.issubset(PYRIT_CURRENT_CONVERTER_INVENTORY)
 
 
 def test_converter_coverage_manifest_classifies_pyrit_text_selection_strategies():
@@ -638,11 +634,7 @@ def test_converter_coverage_manifest_classifies_pyrit_text_selection_strategies(
         "word_selection_strategy",
     }
     assert PYRIT_CURRENT_TEXT_SELECTION_STRATEGY_INVENTORY == expected
-    assert (
-        PYRIT_CURRENT_TEXT_SELECTION_STRATEGY_INVENTORY
-        - PYRIT_TEXT_SELECTION_STRATEGY_COMPATIBLE
-        == set()
-    )
+    assert PYRIT_CURRENT_TEXT_SELECTION_STRATEGY_INVENTORY - PYRIT_TEXT_SELECTION_STRATEGY_COMPATIBLE == set()
     assert PYRIT_TEXT_SELECTION_STRATEGY_COMPATIBLE.isdisjoint(registered)
     assert PYRIT_TEXT_SELECTION_STRATEGY_COMPATIBLE.isdisjoint(PYRIT_TEXT_COMPATIBLE)
     assert "selective_text" in registered
@@ -709,29 +701,19 @@ def test_converter_coverage_manifest_classifies_current_easyjailbreak_generation
     assert {
         "llm_variation",
         "llm_tone",
-        "llm_variation",
-        "llm_variation",
         "noise",
         "char_corrupt",
-        "llm_variation",
     }.issubset(EASYJAILBREAK_TEXT_COMPATIBLE)
     assert {
         "llm_variation",
         "llm_tone",
-        "llm_variation",
-        "llm_variation",
         "noise",
         "char_corrupt",
-        "llm_variation",
     }.issubset(registered)
     assert {"llm_variation", "translation_llm"}.issubset(EASYJAILBREAK_TEXT_COMPATIBLE)
     assert {"llm_variation", "translation_llm"}.issubset(registered)
-    assert {"historical_insight", "introspect_generation"}.issubset(
-        EASYJAILBREAK_REQUIRES_ATTACKER_OR_EXECUTOR_SUPPORT
-    )
-    assert EASYJAILBREAK_REQUIRES_CANDIDATE_PROMPT_MUTATION_SUPPORT == {
-        "apply_gpt_mutation"
-    }
+    assert {"historical_insight", "introspect_generation"}.issubset(EASYJAILBREAK_REQUIRES_ATTACKER_OR_EXECUTOR_SUPPORT)
+    assert EASYJAILBREAK_REQUIRES_CANDIDATE_PROMPT_MUTATION_SUPPORT == {"apply_gpt_mutation"}
 
 
 def test_converter_coverage_manifest_classifies_current_easyjailbreak_attack_recipes():
@@ -773,9 +755,7 @@ def test_converter_coverage_manifest_classifies_current_easyjailbreak_attack_rec
     for converter_names in EASYJAILBREAK_ATTACKER_RECIPE_CONVERTER_COMPATIBLE.values():
         assert set(converter_names).issubset(registered_converters)
     assert EASYJAILBREAK_ATTACKER_RECIPE_EXECUTOR_COMPATIBLE == {"pair": "pair"}
-    assert set(EASYJAILBREAK_ATTACKER_RECIPE_EXECUTOR_COMPATIBLE.values()).issubset(
-        registered_executors
-    )
+    assert set(EASYJAILBREAK_ATTACKER_RECIPE_EXECUTOR_COMPATIBLE.values()).issubset(registered_executors)
     assert EASYJAILBREAK_REQUIRES_IN_CONTEXT_ATTACK_SUPPORT == {"ica", "mjp"}
     assert EASYJAILBREAK_REQUIRES_WHITEBOX_GRADIENT_SUPPORT == {"gcg"}
     assert EASYJAILBREAK_REQUIRES_FUZZER_SUPPORT == {"gptfuzzer"}
@@ -793,9 +773,9 @@ def test_converter_coverage_manifest_classifies_current_aegisrt_converters():
         "hex",
         "caesar",
         "url_encode",
-            "morse",
-            "homoglyph",
-            "zero_width",
+        "morse",
+        "homoglyph",
+        "zero_width",
         "whitespace",
         "case_swap",
         "flip_text",
@@ -857,22 +837,14 @@ def test_converter_coverage_manifest_classifies_current_deepteam_multi_turn_atta
         "sequential_break",
         "tree_jailbreaking",
     }
-    assert (
-        DEEPTEAM_CURRENT_MULTI_TURN_ATTACK_INVENTORY
-        - DEEPTEAM_REQUIRES_MULTI_TURN_ATTACK_SUPPORT
-        == set()
-    )
+    assert DEEPTEAM_CURRENT_MULTI_TURN_ATTACK_INVENTORY - DEEPTEAM_REQUIRES_MULTI_TURN_ATTACK_SUPPORT == set()
     assert DEEPTEAM_REQUIRES_MULTI_TURN_ATTACK_SUPPORT.isdisjoint(DEEPTEAM_TEXT_COMPATIBLE)
 
 
 def test_converter_coverage_manifest_classifies_current_giskard_prompt_injection_converters():
     registered = _registered_converters()
     assert set(GISKARD_CURRENT_PROMPT_INJECTION_CONVERTER_INVENTORY).issubset(registered)
-    assert (
-        GISKARD_CURRENT_PROMPT_INJECTION_CONVERTER_INVENTORY
-        - set(GISKARD_TEXT_COMPATIBLE)
-        == set()
-    )
+    assert GISKARD_CURRENT_PROMPT_INJECTION_CONVERTER_INVENTORY - set(GISKARD_TEXT_COMPATIBLE) == set()
     assert {
         "ascii_smuggling",
         "base64",
@@ -985,9 +957,8 @@ def test_converter_coverage_manifest_classifies_current_agentharm_methods_withou
     assert AGENTHARM_JAILBREAK_CONVERTER_COMPATIBLE == {
         "Simple Universal Jailbreak Templates": {"template_jailbreak"},
     }
-    for converter_names in (
-        list(AGENTHARM_DIRECT_PROMPTING_CONVERTER_COMPATIBLE.values())
-        + list(AGENTHARM_JAILBREAK_CONVERTER_COMPATIBLE.values())
+    for converter_names in list(AGENTHARM_DIRECT_PROMPTING_CONVERTER_COMPATIBLE.values()) + list(
+        AGENTHARM_JAILBREAK_CONVERTER_COMPATIBLE.values()
     ):
         assert set(converter_names).issubset(registered)
 
@@ -1027,10 +998,7 @@ def test_converter_coverage_manifest_classifies_current_safearena_methods_withou
 
 def test_converter_coverage_manifest_classifies_current_osharm_methods_without_duplicates():
     registered = _registered_converters()
-    categorized_methods = (
-        set(OSHARM_ATTACK_CONVERTER_COMPATIBLE)
-        | OSHARM_REQUIRES_COMPUTER_USE_BENCHMARK_SUPPORT
-    )
+    categorized_methods = set(OSHARM_ATTACK_CONVERTER_COMPATIBLE) | OSHARM_REQUIRES_COMPUTER_USE_BENCHMARK_SUPPORT
     assert OSHARM_CURRENT_ATTACK_METHOD_INVENTORY == {
         "Direct Request",
         "Jailbreak Template",
@@ -1072,8 +1040,7 @@ def test_converter_coverage_manifest_classifies_current_osharm_methods_without_d
     }
     assert OSHARM_CURRENT_ATTACK_METHOD_INVENTORY - categorized_methods == set()
     assert OSHARM_REQUIRES_COMPUTER_USE_BENCHMARK_SUPPORT == (
-        OSHARM_CURRENT_HARM_VECTOR_INVENTORY
-        | OSHARM_CURRENT_MISUSE_CATEGORY_INVENTORY
+        OSHARM_CURRENT_HARM_VECTOR_INVENTORY | OSHARM_CURRENT_MISUSE_CATEGORY_INVENTORY
     )
     assert OSHARM_REQUIRES_PROMPT_INJECTION_VECTOR_SUPPORT == OSHARM_CURRENT_INJECTION_VECTOR_INVENTORY
     assert OSHARM_REQUIRES_PROMPT_INJECTION_GOAL_SUPPORT == OSHARM_CURRENT_INJECTION_GOAL_INVENTORY
@@ -1116,9 +1083,7 @@ def test_converter_coverage_manifest_classifies_current_asb_methods_without_dupl
     }
     assert ASB_CURRENT_ATTACK_MODE_INVENTORY - categorized_modes == set()
     assert (
-        ASB_CURRENT_PROMPT_INJECTION_PAYLOAD_INVENTORY
-        - set(ASB_PROMPT_INJECTION_PAYLOAD_CONVERTER_COMPATIBLE)
-        == set()
+        ASB_CURRENT_PROMPT_INJECTION_PAYLOAD_INVENTORY - set(ASB_PROMPT_INJECTION_PAYLOAD_CONVERTER_COMPATIBLE) == set()
     )
     assert ASB_CURRENT_ATTACK_MODE_INVENTORY.isdisjoint(registered)
     assert ASB_CURRENT_PROMPT_INJECTION_PAYLOAD_INVENTORY.isdisjoint(registered)
@@ -1210,10 +1175,9 @@ def test_converter_coverage_manifest_classifies_current_injecagent_methods_witho
     }
     for converter_names in INJECAGENT_ATTACK_CONVERTER_COMPATIBLE.values():
         assert set(converter_names).issubset(registered)
-    assert (
-        INJECAGENT_CURRENT_ATTACK_METHOD_INVENTORY
-        | INJECAGENT_REQUIRES_ATTACK_OUTCOME_SUPPORT
-    ).isdisjoint(registered)
+    assert (INJECAGENT_CURRENT_ATTACK_METHOD_INVENTORY | INJECAGENT_REQUIRES_ATTACK_OUTCOME_SUPPORT).isdisjoint(
+        registered
+    )
 
 
 def test_converter_coverage_manifest_classifies_current_agentvigil_methods_without_duplicates():
@@ -1284,9 +1248,8 @@ def test_converter_coverage_manifest_classifies_current_agentvigil_methods_witho
         "Goal Misdirection",
         "Illusioning",
     }
-    for converter_names in (
-        list(AGENTVIGIL_ATTACK_CONVERTER_COMPATIBLE.values())
-        + list(AGENTVIGIL_MUTATOR_CONVERTER_COMPATIBLE.values())
+    for converter_names in list(AGENTVIGIL_ATTACK_CONVERTER_COMPATIBLE.values()) + list(
+        AGENTVIGIL_MUTATOR_CONVERTER_COMPATIBLE.values()
     ):
         assert set(converter_names).issubset(registered)
     support_only = (
@@ -1554,7 +1517,6 @@ def test_converter_coverage_manifest_classifies_current_arms_strategies_without_
     assert ARMS_STRATEGY_CONVERTER_COMPATIBLE == {
         "Rule-based": {
             "add_text_image",
-            "add_text_image",
             "template_jailbreak",
         },
         "Email thread": {
@@ -1583,7 +1545,6 @@ def test_converter_coverage_manifest_classifies_current_arms_strategies_without_
         },
         "Numbered-list image": {
             "add_text_image",
-            "add_text_image",
         },
         "Actor attack": {
             "fictional",
@@ -1610,14 +1571,11 @@ def test_converter_coverage_manifest_classifies_current_arms_strategies_without_
         "Multimodal shuffling",
     }
     assert ARMS_REQUIRES_ADAPTIVE_AGENT_SUPPORT == (
-        ARMS_CURRENT_ADVERSARIAL_PATTERN_INVENTORY
-        | ARMS_CURRENT_FRAMEWORK_MECHANISM_INVENTORY
+        ARMS_CURRENT_ADVERSARIAL_PATTERN_INVENTORY | ARMS_CURRENT_FRAMEWORK_MECHANISM_INVENTORY
     )
     for converter_names in ARMS_STRATEGY_CONVERTER_COMPATIBLE.values():
         assert set(converter_names).issubset(registered_converters)
-    assert set(ARMS_STRATEGY_EXECUTOR_COMPATIBLE.values()).issubset(
-        registered_executors
-    )
+    assert set(ARMS_STRATEGY_EXECUTOR_COMPATIBLE.values()).issubset(registered_executors)
     support_only = (
         ARMS_REQUIRES_VISUAL_DIAGRAM_SUPPORT
         | ARMS_REQUIRES_REASONING_HIJACK_SUPPORT
@@ -1701,9 +1659,7 @@ def test_converter_coverage_manifest_classifies_current_xteaming_methods_without
     }
     for converter_names in XTEAMING_PLAN_CONVERTER_COMPATIBLE.values():
         assert set(converter_names).issubset(registered_converters)
-    assert set(XTEAMING_TURN_EXECUTOR_COMPATIBLE.values()).issubset(
-        registered_executors
-    )
+    assert set(XTEAMING_TURN_EXECUTOR_COMPATIBLE.values()).issubset(registered_executors)
     support_only = (
         XTEAMING_REQUIRES_ADAPTIVE_PLANNING_SUPPORT
         | XTEAMING_REQUIRES_PROMPT_OPTIMIZER_SUPPORT
@@ -1771,7 +1727,6 @@ def test_converter_coverage_manifest_classifies_current_autoredteamer_methods_wi
             "composite_jailbreak",
             "skeleton_key",
             "template_jailbreak",
-            "template_jailbreak",
         },
     }
     assert AUTOREDTEAMER_INITIAL_ATTACK_EXECUTOR_COMPATIBLE == {
@@ -1780,7 +1735,6 @@ def test_converter_coverage_manifest_classifies_current_autoredteamer_methods_wi
     assert AUTOREDTEAMER_PROPOSED_ATTACK_CONVERTER_COMPATIBLE == {
         "Technical Slang": {
             "llm_tone",
-            "llm_scientific_translation",
             "llm_scientific_translation",
         },
         "Reframe": {
@@ -1805,7 +1759,6 @@ def test_converter_coverage_manifest_classifies_current_autoredteamer_methods_wi
             "dan",
             "skeleton_key",
             "template_jailbreak",
-            "template_jailbreak",
         },
         "Historical Scenarios": {
             "fictional",
@@ -1815,7 +1768,6 @@ def test_converter_coverage_manifest_classifies_current_autoredteamer_methods_wi
         "Uncommon Dialects": {
             "llm_tone",
             "low_resource_language",
-            "llm_tone",
         },
         "FewShot": {"few_shot"},
         "Past Tense": {"tense"},
@@ -1825,7 +1777,6 @@ def test_converter_coverage_manifest_classifies_current_autoredteamer_methods_wi
             "research",
         },
         "Reasoning Puzzles": {
-            "math_prompt",
             "math_prompt",
             "negation_trap",
         },
@@ -1838,12 +1789,8 @@ def test_converter_coverage_manifest_classifies_current_autoredteamer_methods_wi
         assert set(converter_names).issubset(registered_converters)
     for converter_names in AUTOREDTEAMER_PROPOSED_ATTACK_CONVERTER_COMPATIBLE.values():
         assert set(converter_names).issubset(registered_converters)
-    assert set(AUTOREDTEAMER_INITIAL_ATTACK_EXECUTOR_COMPATIBLE.values()).issubset(
-        registered_executors
-    )
-    assert set(AUTOREDTEAMER_PROPOSED_ATTACK_EXECUTOR_COMPATIBLE.values()).issubset(
-        registered_executors
-    )
+    assert set(AUTOREDTEAMER_INITIAL_ATTACK_EXECUTOR_COMPATIBLE.values()).issubset(registered_executors)
+    assert set(AUTOREDTEAMER_PROPOSED_ATTACK_EXECUTOR_COMPATIBLE.values()).issubset(registered_executors)
     support_only = (
         AUTOREDTEAMER_REQUIRES_LIFELONG_ATTACK_INTEGRATION_SUPPORT
         | AUTOREDTEAMER_REQUIRES_STRATEGY_PROPOSER_SUPPORT
@@ -1929,7 +1876,6 @@ def test_converter_coverage_manifest_classifies_current_llamator_methods_without
         },
         "Semantic Game": {
             "emoji_substitution",
-            "emoji_substitution",
             "roleplay",
             "semantic_manipulation",
         },
@@ -1966,7 +1912,6 @@ def test_converter_coverage_manifest_classifies_current_llamator_methods_without
         "M-Attack": {"image_noise"},
         "Text Hallucination Attack": {
             "add_text_image",
-            "add_text_image",
         },
     }
     assert LLAMATOR_REQUIRES_AGENTIC_ATTACK_SUPPORT == {
@@ -1980,12 +1925,8 @@ def test_converter_coverage_manifest_classifies_current_llamator_methods_without
     ):
         for converter_names in mapping.values():
             assert set(converter_names).issubset(registered_converters)
-    assert set(LLAMATOR_SINGLE_STAGE_ATTACK_EXECUTOR_COMPATIBLE.values()).issubset(
-        registered_executors
-    )
-    assert set(LLAMATOR_MULTI_STAGE_ATTACK_EXECUTOR_COMPATIBLE.values()).issubset(
-        registered_executors
-    )
+    assert set(LLAMATOR_SINGLE_STAGE_ATTACK_EXECUTOR_COMPATIBLE.values()).issubset(registered_executors)
+    assert set(LLAMATOR_MULTI_STAGE_ATTACK_EXECUTOR_COMPATIBLE.values()).issubset(registered_executors)
     assert LLAMATOR_REQUIRES_AGENTIC_ATTACK_SUPPORT.isdisjoint(registered_converters)
     assert LLAMATOR_REQUIRES_AGENTIC_ATTACK_SUPPORT.isdisjoint(registered_executors)
 
@@ -1993,11 +1934,7 @@ def test_converter_coverage_manifest_classifies_current_llamator_methods_without
 def test_converter_coverage_manifest_classifies_inspect_evals_agentdojo_attack():
     registered = _registered_converters()
     assert INSPECT_EVALS_AGENTDOJO_CURRENT_ATTACK_INVENTORY == {"important_instructions"}
-    assert (
-        INSPECT_EVALS_AGENTDOJO_CURRENT_ATTACK_INVENTORY
-        - set(INSPECT_EVALS_AGENTDOJO_CONVERTER_COMPATIBLE)
-        == set()
-    )
+    assert INSPECT_EVALS_AGENTDOJO_CURRENT_ATTACK_INVENTORY - set(INSPECT_EVALS_AGENTDOJO_CONVERTER_COMPATIBLE) == set()
     assert INSPECT_EVALS_AGENTDOJO_CURRENT_ATTACK_INVENTORY.isdisjoint(registered)
     for converter_names in INSPECT_EVALS_AGENTDOJO_CONVERTER_COMPATIBLE.values():
         assert set(converter_names).issubset(registered)
@@ -2049,9 +1986,7 @@ def test_converter_coverage_manifest_classifies_current_harmbench_methods_withou
     for converter_names in HARMBENCH_METHOD_CONVERTER_COMPATIBLE.values():
         assert set(converter_names).issubset(registered_converters)
     assert HARMBENCH_METHOD_EXECUTOR_COMPATIBLE == {"PAIR": "pair"}
-    assert set(HARMBENCH_METHOD_EXECUTOR_COMPATIBLE.values()).issubset(
-        registered_executors
-    )
+    assert set(HARMBENCH_METHOD_EXECUTOR_COMPATIBLE.values()).issubset(registered_executors)
     assert HARMBENCH_METHOD_CONVERTER_COMPATIBLE["DirectRequest"] == {"identity"}
     assert HARMBENCH_METHOD_CONVERTER_COMPATIBLE["ArtPrompt"] == {"ascii_art"}
     assert HARMBENCH_METHOD_CONVERTER_COMPATIBLE["PAP"] == {"llm_persuasion"}
@@ -2093,22 +2028,14 @@ def test_converter_coverage_manifest_classifies_current_jailbreakbench_artifacts
         "prompt_with_random_search",
     }
     assert JAILBREAKBENCH_CURRENT_ARTIFACT_METHOD_INVENTORY - categorized == set()
-    assert JAILBREAKBENCH_CURRENT_ARTIFACT_METHOD_INVENTORY.isdisjoint(
-        registered_converters
-    )
+    assert JAILBREAKBENCH_CURRENT_ARTIFACT_METHOD_INVENTORY.isdisjoint(registered_converters)
     for converter_names in JAILBREAKBENCH_ARTIFACT_CONVERTER_COMPATIBLE.values():
         assert set(converter_names).issubset(registered_converters)
-    assert JAILBREAKBENCH_ARTIFACT_CONVERTER_COMPATIBLE == {
-        "JBC": {"human_in_the_loop", "template_jailbreak"}
-    }
+    assert JAILBREAKBENCH_ARTIFACT_CONVERTER_COMPATIBLE == {"JBC": {"human_in_the_loop", "template_jailbreak"}}
     assert JAILBREAKBENCH_ARTIFACT_EXECUTOR_COMPATIBLE == {"PAIR": "pair"}
-    assert set(JAILBREAKBENCH_ARTIFACT_EXECUTOR_COMPATIBLE.values()).issubset(
-        registered_executors
-    )
+    assert set(JAILBREAKBENCH_ARTIFACT_EXECUTOR_COMPATIBLE.values()).issubset(registered_executors)
     assert JAILBREAKBENCH_REQUIRES_WHITEBOX_OPTIMIZER_SUPPORT == {"DSN", "GCG"}
-    assert JAILBREAKBENCH_REQUIRES_BLACK_BOX_RANDOM_SEARCH_SUPPORT == {
-        "prompt_with_random_search"
-    }
+    assert JAILBREAKBENCH_REQUIRES_BLACK_BOX_RANDOM_SEARCH_SUPPORT == {"prompt_with_random_search"}
 
 
 def test_converter_coverage_manifest_classifies_current_jailtrickbench_methods_without_duplicates():
@@ -2135,9 +2062,7 @@ def test_converter_coverage_manifest_classifies_current_jailtrickbench_methods_w
         "MultiJail",
     }
     assert JAILTRICKBENCH_CURRENT_ATTACK_METHOD_INVENTORY - categorized == set()
-    assert JAILTRICKBENCH_CURRENT_ATTACK_METHOD_INVENTORY.isdisjoint(
-        registered_converters
-    )
+    assert JAILTRICKBENCH_CURRENT_ATTACK_METHOD_INVENTORY.isdisjoint(registered_converters)
     assert JAILTRICKBENCH_ATTACK_CONVERTER_COMPATIBLE == {
         "MultiJail": {
             "low_resource_language",
@@ -2157,9 +2082,7 @@ def test_converter_coverage_manifest_classifies_current_jailtrickbench_methods_w
     assert JAILTRICKBENCH_REQUIRES_LLM_REFINEMENT_SUPPORT == {"DrAttack"}
     for converter_names in JAILTRICKBENCH_ATTACK_CONVERTER_COMPATIBLE.values():
         assert set(converter_names).issubset(registered_converters)
-    assert set(JAILTRICKBENCH_ATTACK_EXECUTOR_COMPATIBLE.values()).issubset(
-        registered_executors
-    )
+    assert set(JAILTRICKBENCH_ATTACK_EXECUTOR_COMPATIBLE.values()).issubset(registered_executors)
     support_only = (
         JAILTRICKBENCH_REQUIRES_WHITEBOX_OPTIMIZER_SUPPORT
         | JAILTRICKBENCH_REQUIRES_GENETIC_OPTIMIZER_SUPPORT
@@ -2205,13 +2128,10 @@ def test_converter_coverage_manifest_classifies_current_pandaguard_methods_witho
         "ReNeLLM",
     }
     assert PANDAGUARD_CURRENT_ATTACK_METHOD_INVENTORY - categorized == set()
-    assert PANDAGUARD_CURRENT_ATTACK_METHOD_INVENTORY.isdisjoint(
-        registered_converters
-    )
+    assert PANDAGUARD_CURRENT_ATTACK_METHOD_INVENTORY.isdisjoint(registered_converters)
     assert PANDAGUARD_ATTACK_CONVERTER_COMPATIBLE == {
         "Transfer-based Attacks": {
             "composite_jailbreak",
-            "template_jailbreak",
             "template_jailbreak",
         },
         "Rewrite Attack": {
@@ -2248,9 +2168,7 @@ def test_converter_coverage_manifest_classifies_current_pandaguard_methods_witho
     assert PANDAGUARD_REQUIRES_REPRESENTATION_ATTACK_SUPPORT == {"SCAV"}
     for converter_names in PANDAGUARD_ATTACK_CONVERTER_COMPATIBLE.values():
         assert set(converter_names).issubset(registered_converters)
-    assert set(PANDAGUARD_ATTACK_EXECUTOR_COMPATIBLE.values()).issubset(
-        registered_executors
-    )
+    assert set(PANDAGUARD_ATTACK_EXECUTOR_COMPATIBLE.values()).issubset(registered_executors)
     support_only = (
         PANDAGUARD_REQUIRES_WHITEBOX_OPTIMIZER_SUPPORT
         | PANDAGUARD_REQUIRES_GENETIC_OPTIMIZER_SUPPORT
@@ -2296,9 +2214,7 @@ def test_converter_coverage_manifest_classifies_current_aisafetylab_methods_with
         "TAP",
     }
     assert AISAFETYLAB_CURRENT_ATTACK_METHOD_INVENTORY - categorized == set()
-    assert AISAFETYLAB_CURRENT_ATTACK_METHOD_INVENTORY.isdisjoint(
-        registered_converters
-    )
+    assert AISAFETYLAB_CURRENT_ATTACK_METHOD_INVENTORY.isdisjoint(registered_converters)
     assert AISAFETYLAB_ATTACK_CONVERTER_COMPATIBLE == {
         "Cipher": {
             "base64",
@@ -2323,7 +2239,6 @@ def test_converter_coverage_manifest_classifies_current_aisafetylab_methods_with
             "low_resource_language",
             "multilingual",
             "translation_llm",
-            "translation_llm",
         },
     }
     assert AISAFETYLAB_ATTACK_EXECUTOR_COMPATIBLE == {"PAIR": "pair"}
@@ -2337,9 +2252,7 @@ def test_converter_coverage_manifest_classifies_current_aisafetylab_methods_with
     assert AISAFETYLAB_REQUIRES_TREE_SEARCH_SUPPORT == {"TAP"}
     for converter_names in AISAFETYLAB_ATTACK_CONVERTER_COMPATIBLE.values():
         assert set(converter_names).issubset(registered_converters)
-    assert set(AISAFETYLAB_ATTACK_EXECUTOR_COMPATIBLE.values()).issubset(
-        registered_executors
-    )
+    assert set(AISAFETYLAB_ATTACK_EXECUTOR_COMPATIBLE.values()).issubset(registered_executors)
     support_only = (
         AISAFETYLAB_REQUIRES_WHITEBOX_OPTIMIZER_SUPPORT
         | AISAFETYLAB_REQUIRES_LEARNED_PROMPTER_SUPPORT
@@ -2410,34 +2323,30 @@ def test_converter_coverage_manifest_classifies_current_strongreject_jailbreaks_
         "random_case",
         "word_scramble",
     }
-    assert STRONGREJECT_JAILBREAK_CONVERTER_COMPATIBLE[
-        "auto_payload_splitting"
-    ] == {"payload_split"}
-    assert STRONGREJECT_JAILBREAK_CONVERTER_COMPATIBLE[
-        "translation_scotts_gaelic"
-    ] == {"low_resource_language", "translation_llm"}
-    assert STRONGREJECT_JAILBREAK_CONVERTER_COMPATIBLE[
-        "gcg_transfer_harmbench"
-    ] == {"gcg", "suffix", "suffix_append"}
-    assert STRONGREJECT_JAILBREAK_CONVERTER_COMPATIBLE[
-        "few_shot_json"
-    ] == {"embedded_instruction_json", "few_shot", "json_string"}
-    assert STRONGREJECT_JAILBREAK_CONVERTER_COMPATIBLE[
-        "refusal_suppression"
-    ] == {"skeleton_key", "system_override", "template_jailbreak"}
+    assert STRONGREJECT_JAILBREAK_CONVERTER_COMPATIBLE["auto_payload_splitting"] == {"payload_split"}
+    assert STRONGREJECT_JAILBREAK_CONVERTER_COMPATIBLE["translation_scotts_gaelic"] == {
+        "low_resource_language",
+        "translation_llm",
+    }
+    assert STRONGREJECT_JAILBREAK_CONVERTER_COMPATIBLE["gcg_transfer_harmbench"] == {"gcg", "suffix", "suffix_append"}
+    assert STRONGREJECT_JAILBREAK_CONVERTER_COMPATIBLE["few_shot_json"] == {
+        "embedded_instruction_json",
+        "few_shot",
+        "json_string",
+    }
+    assert STRONGREJECT_JAILBREAK_CONVERTER_COMPATIBLE["refusal_suppression"] == {
+        "skeleton_key",
+        "system_override",
+        "template_jailbreak",
+    }
     assert STRONGREJECT_JAILBREAK_CONVERTER_COMPATIBLE["none"] == {"identity"}
     assert STRONGREJECT_JAILBREAK_EXECUTOR_COMPATIBLE == {"pair": "pair"}
     assert STRONGREJECT_REQUIRES_LLM_OBFUSCATION_SUPPORT == {"auto_obfuscation"}
     assert STRONGREJECT_REQUIRES_LLM_REFINEMENT_SUPPORT == {"renellm"}
     for converter_names in STRONGREJECT_JAILBREAK_CONVERTER_COMPATIBLE.values():
         assert set(converter_names).issubset(registered_converters)
-    assert set(STRONGREJECT_JAILBREAK_EXECUTOR_COMPATIBLE.values()).issubset(
-        registered_executors
-    )
-    support_only = (
-        STRONGREJECT_REQUIRES_LLM_OBFUSCATION_SUPPORT
-        | STRONGREJECT_REQUIRES_LLM_REFINEMENT_SUPPORT
-    )
+    assert set(STRONGREJECT_JAILBREAK_EXECUTOR_COMPATIBLE.values()).issubset(registered_executors)
+    support_only = STRONGREJECT_REQUIRES_LLM_OBFUSCATION_SUPPORT | STRONGREJECT_REQUIRES_LLM_REFINEMENT_SUPPORT
     assert support_only.isdisjoint(registered_converters)
     assert support_only.isdisjoint(registered_executors)
 
@@ -2505,9 +2414,7 @@ def test_converter_coverage_manifest_classifies_current_guidedbench_methods_with
         "DeepInception",
         "MultiJail",
     }
-    assert GUIDEDBENCH_CURRENT_EVALUATED_METHOD_INVENTORY.issubset(
-        GUIDEDBENCH_CURRENT_SURVEY_METHOD_INVENTORY
-    )
+    assert GUIDEDBENCH_CURRENT_EVALUATED_METHOD_INVENTORY.issubset(GUIDEDBENCH_CURRENT_SURVEY_METHOD_INVENTORY)
     assert GUIDEDBENCH_CURRENT_SURVEY_METHOD_INVENTORY - categorized == set()
     assert GUIDEDBENCH_EVALUATED_METHOD_CONVERTER_COMPATIBLE == {
         "FSJ": {"few_shot"},
@@ -2578,9 +2485,7 @@ def test_converter_coverage_manifest_classifies_current_guidedbench_methods_with
     }
     for converter_names in GUIDEDBENCH_SURVEY_METHOD_CONVERTER_COMPATIBLE.values():
         assert set(converter_names).issubset(registered_converters)
-    assert set(GUIDEDBENCH_SURVEY_METHOD_EXECUTOR_COMPATIBLE.values()).issubset(
-        registered_executors
-    )
+    assert set(GUIDEDBENCH_SURVEY_METHOD_EXECUTOR_COMPATIBLE.values()).issubset(registered_executors)
     support_only = (
         GUIDEDBENCH_REQUIRES_GRADIENT_OPTIMIZER_SUPPORT
         | GUIDEDBENCH_REQUIRES_EVOLUTIONARY_OPTIMIZER_SUPPORT
@@ -2613,12 +2518,8 @@ def test_converter_coverage_manifest_classifies_current_autodan_standalone_attac
     assert AUTODAN_CURRENT_ATTACK_INVENTORY.isdisjoint(registered_converters)
     assert AUTODAN_CURRENT_ATTACK_INVENTORY.isdisjoint(registered_executors)
     assert AUTODAN_REQUIRES_GENETIC_OPTIMIZER_SUPPORT == {"AutoDAN-GA"}
-    assert AUTODAN_REQUIRES_HIERARCHICAL_GENETIC_OPTIMIZER_SUPPORT == {
-        "AutoDAN-HGA"
-    }
-    assert AUTODAN_REQUIRES_LLM_MUTATION_SUPPORT == {
-        "AutoDAN-HGA with GPT mutation"
-    }
+    assert AUTODAN_REQUIRES_HIERARCHICAL_GENETIC_OPTIMIZER_SUPPORT == {"AutoDAN-HGA"}
+    assert AUTODAN_REQUIRES_LLM_MUTATION_SUPPORT == {"AutoDAN-HGA with GPT mutation"}
 
 
 def test_converter_coverage_manifest_classifies_current_ai_infraguard_attacks_without_duplicates():
@@ -2647,12 +2548,8 @@ def test_converter_coverage_manifest_classifies_current_ai_infraguard_attacks_wi
         "Zalgo",
     }
     assert AI_INFRAGUARD_CURRENT_ATTACK_METHOD_INVENTORY - categorized == set()
-    assert AI_INFRAGUARD_CURRENT_ATTACK_METHOD_INVENTORY.isdisjoint(
-        registered_converters
-    )
-    assert AI_INFRAGUARD_CURRENT_ATTACK_METHOD_INVENTORY.isdisjoint(
-        registered_executors
-    )
+    assert AI_INFRAGUARD_CURRENT_ATTACK_METHOD_INVENTORY.isdisjoint(registered_converters)
+    assert AI_INFRAGUARD_CURRENT_ATTACK_METHOD_INVENTORY.isdisjoint(registered_executors)
     assert AI_INFRAGUARD_ATTACK_CONVERTER_COMPATIBLE == {
         "A1Z26": {"a1z26"},
         "AffineCipher": {"affine_cipher"},
@@ -2660,7 +2557,7 @@ def test_converter_coverage_manifest_classifies_current_ai_infraguard_attacks_wi
         "Aurebesh": {"unicode_substitution"},
         "Caesar": {"caesar"},
         "Leetspeak": {"leetspeak"},
-        "MirrorText": {"flip_text", "flip_text"},
+        "MirrorText": {"flip_text"},
         "Ogham": {"ogham"},
         "Stego": {
             "ascii_smuggler",
@@ -2673,18 +2570,11 @@ def test_converter_coverage_manifest_classifies_current_ai_infraguard_attacks_wi
     }
     assert AI_INFRAGUARD_ATTACK_EXECUTOR_COMPATIBLE == {"Crescendo": "crescendo"}
     assert AI_INFRAGUARD_REQUIRES_TREE_SEARCH_SUPPORT == {"TAP"}
-    assert AI_INFRAGUARD_REQUIRES_OBFUSCATION_SUITE_SUPPORT == {
-        "StrataSword suite"
-    }
+    assert AI_INFRAGUARD_REQUIRES_OBFUSCATION_SUITE_SUPPORT == {"StrataSword suite"}
     for converter_names in AI_INFRAGUARD_ATTACK_CONVERTER_COMPATIBLE.values():
         assert set(converter_names).issubset(registered_converters)
-    assert set(AI_INFRAGUARD_ATTACK_EXECUTOR_COMPATIBLE.values()).issubset(
-        registered_executors
-    )
-    support_only = (
-        AI_INFRAGUARD_REQUIRES_TREE_SEARCH_SUPPORT
-        | AI_INFRAGUARD_REQUIRES_OBFUSCATION_SUITE_SUPPORT
-    )
+    assert set(AI_INFRAGUARD_ATTACK_EXECUTOR_COMPATIBLE.values()).issubset(registered_executors)
+    support_only = AI_INFRAGUARD_REQUIRES_TREE_SEARCH_SUPPORT | AI_INFRAGUARD_REQUIRES_OBFUSCATION_SUITE_SUPPORT
     assert support_only.isdisjoint(registered_converters)
     assert support_only.isdisjoint(registered_executors)
 
@@ -2743,12 +2633,8 @@ def test_converter_coverage_manifest_classifies_current_jailbreakllm_vectors_wit
         "Cyber-Ops Role-play",
     }
     assert JAILBREAKLLM_CURRENT_ATTACK_VECTOR_INVENTORY - categorized == set()
-    assert JAILBREAKLLM_CURRENT_ATTACK_VECTOR_INVENTORY.isdisjoint(
-        registered_converters
-    )
-    assert JAILBREAKLLM_CURRENT_ATTACK_VECTOR_INVENTORY.isdisjoint(
-        registered_executors
-    )
+    assert JAILBREAKLLM_CURRENT_ATTACK_VECTOR_INVENTORY.isdisjoint(registered_converters)
+    assert JAILBREAKLLM_CURRENT_ATTACK_VECTOR_INVENTORY.isdisjoint(registered_executors)
     assert JAILBREAKLLM_ATTACK_CONVERTER_COMPATIBLE == {
         "Direct Request (Professional Frame)": {
             "authority_escalation",
@@ -2921,9 +2807,7 @@ def test_converter_coverage_manifest_classifies_current_jailbreakllm_vectors_wit
     }
     for converter_names in JAILBREAKLLM_ATTACK_CONVERTER_COMPATIBLE.values():
         assert set(converter_names).issubset(registered_converters)
-    assert set(JAILBREAKLLM_ATTACK_EXECUTOR_COMPATIBLE.values()).issubset(
-        registered_executors
-    )
+    assert set(JAILBREAKLLM_ATTACK_EXECUTOR_COMPATIBLE.values()).issubset(registered_executors)
     support_only = (
         JAILBREAKLLM_REQUIRES_MULTI_TURN_ORCHESTRATION_SUPPORT
         | JAILBREAKLLM_REQUIRES_GRAMMAR_DECODING_SUPPORT
@@ -2937,10 +2821,7 @@ def test_converter_coverage_manifest_classifies_current_jailbreakllm_vectors_wit
 
 def test_converter_coverage_manifest_classifies_current_h4rm3l_primitives_without_duplicates():
     registered = _registered_converters()
-    categorized = (
-        set(H4RM3L_PRIMITIVE_CONVERTER_COMPATIBLE)
-        | H4RM3L_REQUIRES_ARBITRARY_TRANSFORM_SUPPORT
-    )
+    categorized = set(H4RM3L_PRIMITIVE_CONVERTER_COMPATIBLE) | H4RM3L_REQUIRES_ARBITRARY_TRANSFORM_SUPPORT
     assert H4RM3L_CURRENT_PRIMITIVE_INVENTORY == {
         "AIMDecorator",
         "AffirmativePrefixInjectionDecorator",
@@ -2979,21 +2860,11 @@ def test_converter_coverage_manifest_classifies_current_h4rm3l_primitives_withou
     }
     assert H4RM3L_CURRENT_PRIMITIVE_INVENTORY - categorized == set()
     assert H4RM3L_CURRENT_PRIMITIVE_INVENTORY.isdisjoint(registered)
-    assert H4RM3L_PRIMITIVE_CONVERTER_COMPATIBLE["CharDropout"] == {
-        "char_dropout"
-    }
-    assert H4RM3L_PRIMITIVE_CONVERTER_COMPATIBLE["CharCorrupt"] == {
-        "char_corrupt"
-    }
-    assert H4RM3L_PRIMITIVE_CONVERTER_COMPATIBLE["WordMixInDecorator"] == {
-        "word_mixin"
-    }
-    assert H4RM3L_PRIMITIVE_CONVERTER_COMPATIBLE["HexStringMixInDecorator"] == {
-        "hex_mixin"
-    }
-    assert H4RM3L_PRIMITIVE_CONVERTER_COMPATIBLE["ChainofThoughtDecorator"] == {
-        "chain_of_thought"
-    }
+    assert H4RM3L_PRIMITIVE_CONVERTER_COMPATIBLE["CharDropout"] == {"char_dropout"}
+    assert H4RM3L_PRIMITIVE_CONVERTER_COMPATIBLE["CharCorrupt"] == {"char_corrupt"}
+    assert H4RM3L_PRIMITIVE_CONVERTER_COMPATIBLE["WordMixInDecorator"] == {"word_mixin"}
+    assert H4RM3L_PRIMITIVE_CONVERTER_COMPATIBLE["HexStringMixInDecorator"] == {"hex_mixin"}
+    assert H4RM3L_PRIMITIVE_CONVERTER_COMPATIBLE["ChainofThoughtDecorator"] == {"chain_of_thought"}
     for converter_names in H4RM3L_PRIMITIVE_CONVERTER_COMPATIBLE.values():
         assert set(converter_names).issubset(registered)
     assert H4RM3L_REQUIRES_ARBITRARY_TRANSFORM_SUPPORT == {"TransformFxDecorator"}
@@ -3030,12 +2901,8 @@ def test_converter_coverage_manifest_classifies_current_h4rm3l_baseline_attacks_
     assert H4RM3L_CURRENT_BASELINE_ATTACK_INVENTORY - categorized == set()
     assert H4RM3L_CURRENT_BASELINE_ATTACK_INVENTORY.isdisjoint(registered)
     assert H4RM3L_BASELINE_ATTACK_CONVERTER_COMPATIBLE["sota_b64"] == {"base64"}
-    assert H4RM3L_BASELINE_ATTACK_CONVERTER_COMPATIBLE[
-        "sota_obf_pyld_splitting"
-    ] == {"payload_split"}
-    assert H4RM3L_BASELINE_ATTACK_CONVERTER_COMPATIBLE["sota_cot"] == {
-        "chain_of_thought"
-    }
+    assert H4RM3L_BASELINE_ATTACK_CONVERTER_COMPATIBLE["sota_obf_pyld_splitting"] == {"payload_split"}
+    assert H4RM3L_BASELINE_ATTACK_CONVERTER_COMPATIBLE["sota_cot"] == {"chain_of_thought"}
     assert H4RM3L_BASELINE_ATTACK_CONVERTER_COMPATIBLE["handcrafted_04"] == {
         "char_corrupt",
         "char_dropout",
@@ -3049,10 +2916,7 @@ def test_converter_coverage_manifest_classifies_current_h4rm3l_baseline_attacks_
         "Offspring ASR Rewarded Bandits",
         "Random Bandits",
     }
-    assert (
-        H4RM3L_CURRENT_SYNTHESIS_METHOD_INVENTORY
-        == H4RM3L_REQUIRES_PROGRAM_SYNTHESIS_SUPPORT
-    )
+    assert H4RM3L_CURRENT_SYNTHESIS_METHOD_INVENTORY == H4RM3L_REQUIRES_PROGRAM_SYNTHESIS_SUPPORT
     assert H4RM3L_REQUIRES_PROGRAM_SYNTHESIS_SUPPORT.isdisjoint(registered)
     for converter_names in H4RM3L_BASELINE_ATTACK_CONVERTER_COMPATIBLE.values():
         assert set(converter_names).issubset(registered)
@@ -3060,10 +2924,7 @@ def test_converter_coverage_manifest_classifies_current_h4rm3l_baseline_attacks_
 
 def test_converter_coverage_manifest_classifies_current_gptfuzzer_components_without_duplicates():
     registered = _registered_converters()
-    categorized_mutators = (
-        set(GPTFUZZER_MUTATOR_CONVERTER_COMPATIBLE)
-        | GPTFUZZER_REQUIRES_MULTI_PROMPT_MUTATOR_SUPPORT
-    )
+    categorized_mutators = set(GPTFUZZER_MUTATOR_CONVERTER_COMPATIBLE) | GPTFUZZER_REQUIRES_MULTI_PROMPT_MUTATOR_SUPPORT
     assert GPTFUZZER_CURRENT_MUTATOR_INVENTORY == {
         "OpenAIMutatorCrossOver",
         "OpenAIMutatorExpand",
@@ -3075,8 +2936,8 @@ def test_converter_coverage_manifest_classifies_current_gptfuzzer_components_wit
     assert GPTFUZZER_CURRENT_MUTATOR_INVENTORY.isdisjoint(registered)
     assert GPTFUZZER_MUTATOR_CONVERTER_COMPATIBLE == {
         "OpenAIMutatorExpand": {"llm_variation"},
-        "OpenAIMutatorGenerateSimilar": {"llm_variation", "llm_variation"},
-        "OpenAIMutatorRephrase": {"llm_variation", "llm_variation"},
+        "OpenAIMutatorGenerateSimilar": {"llm_variation"},
+        "OpenAIMutatorRephrase": {"llm_variation"},
         "OpenAIMutatorShorten": {"llm_variation"},
     }
     assert GPTFUZZER_REQUIRES_MULTI_PROMPT_MUTATOR_SUPPORT == {
@@ -3091,18 +2952,14 @@ def test_converter_coverage_manifest_classifies_current_gptfuzzer_components_wit
         "RoundRobinSelectPolicy",
         "UCBSelectPolicy",
     }
-    assert (
-        GPTFUZZER_CURRENT_SELECTION_POLICY_INVENTORY
-        == GPTFUZZER_REQUIRES_SELECTION_POLICY_SUPPORT
-    )
+    assert GPTFUZZER_CURRENT_SELECTION_POLICY_INVENTORY == GPTFUZZER_REQUIRES_SELECTION_POLICY_SUPPORT
     assert GPTFUZZER_CURRENT_FUZZING_COMPONENT_INVENTORY == {
         "Fine-tuned RoBERTa judgment model",
         "GPTFuzzer fuzzing loop",
         "Human-written jailbreak seed templates",
     }
     assert GPTFUZZER_CURRENT_FUZZING_COMPONENT_INVENTORY == (
-        GPTFUZZER_REQUIRES_FUZZING_LOOP_SUPPORT
-        | GPTFUZZER_REQUIRES_JUDGMENT_MODEL_SUPPORT
+        GPTFUZZER_REQUIRES_FUZZING_LOOP_SUPPORT | GPTFUZZER_REQUIRES_JUDGMENT_MODEL_SUPPORT
     )
     support_only = (
         GPTFUZZER_REQUIRES_MULTI_PROMPT_MUTATOR_SUPPORT
@@ -3133,20 +2990,14 @@ def test_converter_coverage_manifest_classifies_current_raccoonbench_singular_at
         "Translation",
     }
     assert (
-        RACCOONBENCH_CURRENT_SINGULAR_ATTACK_INVENTORY
-        - set(RACCOONBENCH_SINGULAR_ATTACK_CONVERTER_COMPATIBLE)
-        == set()
+        RACCOONBENCH_CURRENT_SINGULAR_ATTACK_INVENTORY - set(RACCOONBENCH_SINGULAR_ATTACK_CONVERTER_COMPATIBLE) == set()
     )
     assert RACCOONBENCH_CURRENT_SINGULAR_ATTACK_INVENTORY.isdisjoint(registered)
     for converter_names in RACCOONBENCH_SINGULAR_ATTACK_CONVERTER_COMPATIBLE.values():
         assert set(converter_names).issubset(registered)
     assert RACCOONBENCH_SINGULAR_ATTACK_CONVERTER_COMPATIBLE["Plain"] == {"identity"}
-    assert RACCOONBENCH_SINGULAR_ATTACK_CONVERTER_COMPATIBLE[
-        "Payload Splitting"
-    ] == {"payload_split"}
-    assert RACCOONBENCH_SINGULAR_ATTACK_CONVERTER_COMPATIBLE[
-        "Few Shot Prompt"
-    ] == {"few_shot"}
+    assert RACCOONBENCH_SINGULAR_ATTACK_CONVERTER_COMPATIBLE["Payload Splitting"] == {"payload_split"}
+    assert RACCOONBENCH_SINGULAR_ATTACK_CONVERTER_COMPATIBLE["Few Shot Prompt"] == {"few_shot"}
     assert {
         "base64",
         "leetspeak",
@@ -3157,20 +3008,12 @@ def test_converter_coverage_manifest_classifies_current_raccoonbench_singular_at
         "prompt_injection",
         "deepset_injection_dataset",
         "prompt_probing",
-    }.issubset(
-        RACCOONBENCH_SINGULAR_ATTACK_CONVERTER_COMPATIBLE[
-            "Context Ignoring Attack"
-        ]
-    )
+    }.issubset(RACCOONBENCH_SINGULAR_ATTACK_CONVERTER_COMPATIBLE["Context Ignoring Attack"])
     assert {
         "skeleton_key",
         "system_override",
         "template_jailbreak",
-    }.issubset(
-        RACCOONBENCH_SINGULAR_ATTACK_CONVERTER_COMPATIBLE[
-            "Refusal Suppression Attack"
-        ]
-    )
+    }.issubset(RACCOONBENCH_SINGULAR_ATTACK_CONVERTER_COMPATIBLE["Refusal Suppression Attack"])
 
 
 def test_converter_coverage_manifest_classifies_current_openrt_attack_methods():
@@ -3236,9 +3079,7 @@ def test_converter_coverage_manifest_classifies_current_openrt_attack_methods():
     assert OPENRT_CURRENT_ATTACK_METHOD_INVENTORY.isdisjoint(registered_converters)
     for converter_names in OPENRT_METHOD_CONVERTER_COMPATIBLE.values():
         assert set(converter_names).issubset(registered_converters)
-    assert set(OPENRT_METHOD_EXECUTOR_COMPATIBLE.values()).issubset(
-        registered_executors
-    )
+    assert set(OPENRT_METHOD_EXECUTOR_COMPATIBLE.values()).issubset(registered_executors)
     assert OPENRT_METHOD_EXECUTOR_COMPATIBLE == {
         "Crescendo": "crescendo",
         "PAIR": "pair",
@@ -3247,8 +3088,6 @@ def test_converter_coverage_manifest_classifies_current_openrt_attack_methods():
     assert OPENRT_METHOD_CONVERTER_COMPATIBLE["Past Tense"] == {"tense"}
     assert OPENRT_METHOD_CONVERTER_COMPATIBLE["CodeAttack"] == {"code_chameleon"}
     assert OPENRT_METHOD_CONVERTER_COMPATIBLE["FigStep"] == {
-        "add_text_image",
-        "add_text_image",
         "add_text_image",
     }
     assert {"base64", "caesar", "char_code", "morse", "rot13"}.issubset(
@@ -3314,22 +3153,16 @@ def test_converter_coverage_manifest_classifies_current_fuzzyai_attacks():
     assert FUZZYAI_CURRENT_ATTACK_INVENTORY.isdisjoint(registered_converters)
     for converter_names in FUZZYAI_ATTACK_CONVERTER_COMPATIBLE.values():
         assert set(converter_names).issubset(registered_converters)
-    assert set(FUZZYAI_ATTACK_EXECUTOR_COMPATIBLE.values()).issubset(
-        registered_executors
-    )
+    assert set(FUZZYAI_ATTACK_EXECUTOR_COMPATIBLE.values()).issubset(registered_executors)
     assert FUZZYAI_ATTACK_CONVERTER_COMPATIBLE["ArtPrompt"] == {"ascii_art"}
-    assert FUZZYAI_ATTACK_CONVERTER_COMPATIBLE["ASCII smuggling"] == {
-        "ascii_smuggler"
-    }
+    assert FUZZYAI_ATTACK_CONVERTER_COMPATIBLE["ASCII smuggling"] == {"ascii_smuggler"}
     assert FUZZYAI_ATTACK_CONVERTER_COMPATIBLE["Default"] == {"identity"}
     assert FUZZYAI_ATTACK_CONVERTER_COMPATIBLE["ManyShot"] == {"few_shot"}
     assert {
         "llm_variation",
         "odd_even",
         "word_scramble",
-    }.issubset(
-        FUZZYAI_ATTACK_CONVERTER_COMPATIBLE["Shuffle Inconsistency attack"]
-    )
+    }.issubset(FUZZYAI_ATTACK_CONVERTER_COMPATIBLE["Shuffle Inconsistency attack"])
     assert FUZZYAI_ATTACK_EXECUTOR_COMPATIBLE == {
         "Best-of-n jailbreaking": "best_of_n",
         "Crescendo": "crescendo",
@@ -3352,11 +3185,7 @@ def test_converter_coverage_manifest_classifies_current_promptbench_attacks():
         "TextBugger",
         "TextFooler",
     }
-    assert (
-        PROMPTBENCH_CURRENT_ATTACK_INVENTORY
-        - set(PROMPTBENCH_ATTACK_CONVERTER_COMPATIBLE)
-        == set()
-    )
+    assert PROMPTBENCH_CURRENT_ATTACK_INVENTORY - set(PROMPTBENCH_ATTACK_CONVERTER_COMPATIBLE) == set()
     assert PROMPTBENCH_CURRENT_ATTACK_INVENTORY.isdisjoint(registered)
     for converter_names in PROMPTBENCH_ATTACK_CONVERTER_COMPATIBLE.values():
         assert set(converter_names).issubset(registered)
@@ -3390,7 +3219,6 @@ def test_converter_coverage_manifest_classifies_current_promptbench_attacks():
     }.issubset(PROMPTBENCH_ATTACK_CONVERTER_COMPATIBLE["StressTest"])
     assert {
         "llm_variation",
-        "translation_llm",
         "translation_llm",
     }.issubset(PROMPTBENCH_ATTACK_CONVERTER_COMPATIBLE["Semantic"])
 
@@ -3464,9 +3292,7 @@ def test_converter_coverage_manifest_classifies_current_textattack_recipes():
         "Improved Genetic Algorithm",
     }
     assert TEXTATTACK_REQUIRES_WHITEBOX_OPTIMIZER_SUPPORT == {"HotFlip"}
-    assert TEXTATTACK_REQUIRES_PARTICLE_SWARM_OPTIMIZER_SUPPORT == {
-        "Particle Swarm Optimization"
-    }
+    assert TEXTATTACK_REQUIRES_PARTICLE_SWARM_OPTIMIZER_SUPPORT == {"Particle Swarm Optimization"}
     assert TEXTATTACK_REQUIRES_SEQ2SEQ_ATTACK_SUPPORT == {
         "MORPHEUS2020",
         "Seq2Sick",
@@ -3511,7 +3337,6 @@ def test_converter_coverage_manifest_classifies_current_openattack_attackers():
         "homoglyph",
         "insert_punctuation",
         "noise",
-        "homoglyph",
         "word_scramble",
     }.issubset(OPENATTACK_ATTACKER_CONVERTER_COMPATIBLE["DeepWordBugAttacker"])
     assert {
@@ -3523,7 +3348,6 @@ def test_converter_coverage_manifest_classifies_current_openattack_attackers():
         "word_substitution",
     }.issubset(OPENATTACK_ATTACKER_CONVERTER_COMPATIBLE["TextBuggerAttacker"])
     assert OPENATTACK_ATTACKER_CONVERTER_COMPATIBLE["VIPERAttacker"] == {
-        "homoglyph",
         "homoglyph",
     }
     assert OPENATTACK_REQUIRES_MODEL_GUIDED_RECIPE_SUPPORT == {
@@ -3581,13 +3405,10 @@ def test_converter_coverage_manifest_classifies_current_openbackdoor_attacks():
     }.issubset(OPENBACKDOOR_ATTACK_CONVERTER_COMPATIBLE["AddSent"])
     assert OPENBACKDOOR_ATTACK_CONVERTER_COMPATIBLE["SynBkd"] == {
         "llm_variation",
-        "llm_variation",
     }
     assert {
         "llm_tone",
-        "llm_tone",
         "llm_variation",
-        "llm_tone",
     }.issubset(OPENBACKDOOR_ATTACK_CONVERTER_COMPATIBLE["StyleBkd"])
     assert OPENBACKDOOR_ATTACK_CONVERTER_COMPATIBLE["LWS"] == {
         "llm_variation",
@@ -3651,9 +3472,7 @@ def test_converter_coverage_manifest_classifies_current_backdoorbench_attacks():
         "LIRA",
         "Wanet",
     }
-    assert BACKDOORBENCH_REQUIRES_MODEL_MODIFICATION_BACKDOOR_SUPPORT == {
-        "TrojanNN"
-    }
+    assert BACKDOORBENCH_REQUIRES_MODEL_MODIFICATION_BACKDOOR_SUPPORT == {"TrojanNN"}
     assert BACKDOORBENCH_REQUIRES_SELF_SUPERVISED_BACKDOOR_SUPPORT == {"CTRL"}
 
 
@@ -4347,9 +4166,8 @@ def test_converter_coverage_manifest_classifies_current_counterfit_attacks():
 def test_converter_coverage_manifest_classifies_current_azure_ai_evaluation_strategies():
     registered_converters = _registered_converters()
     registered_executors = _registered_executors()
-    categorized = (
-        set(AZURE_AI_EVALUATION_STRATEGY_CONVERTER_COMPATIBLE)
-        | set(AZURE_AI_EVALUATION_STRATEGY_EXECUTOR_COMPATIBLE)
+    categorized = set(AZURE_AI_EVALUATION_STRATEGY_CONVERTER_COMPATIBLE) | set(
+        AZURE_AI_EVALUATION_STRATEGY_EXECUTOR_COMPATIBLE
     )
     assert AZURE_AI_EVALUATION_CURRENT_ATTACK_STRATEGY_INVENTORY == {
         "AnsiAttack",
@@ -4378,14 +4196,10 @@ def test_converter_coverage_manifest_classifies_current_azure_ai_evaluation_stra
         "Url",
     }
     assert AZURE_AI_EVALUATION_CURRENT_ATTACK_STRATEGY_INVENTORY - categorized == set()
-    assert AZURE_AI_EVALUATION_CURRENT_ATTACK_STRATEGY_INVENTORY.isdisjoint(
-        registered_converters
-    )
+    assert AZURE_AI_EVALUATION_CURRENT_ATTACK_STRATEGY_INVENTORY.isdisjoint(registered_converters)
     for converter_names in AZURE_AI_EVALUATION_STRATEGY_CONVERTER_COMPATIBLE.values():
         assert set(converter_names).issubset(registered_converters)
-    assert set(AZURE_AI_EVALUATION_STRATEGY_EXECUTOR_COMPATIBLE.values()).issubset(
-        registered_executors
-    )
+    assert set(AZURE_AI_EVALUATION_STRATEGY_EXECUTOR_COMPATIBLE.values()).issubset(registered_executors)
     assert AZURE_AI_EVALUATION_STRATEGY_CONVERTER_COMPATIBLE == {
         "AnsiAttack": {"ansi_escape"},
         "AsciiArt": {"ascii_art"},
@@ -4399,7 +4213,7 @@ def test_converter_coverage_manifest_classifies_current_azure_ai_evaluation_stra
         "Diacritic": {"diacritic"},
         "Flip": {"flip_text"},
         "IndirectAttack": {"indirect_web_pwn"},
-        "Jailbreak": {"template_jailbreak", "template_jailbreak"},
+        "Jailbreak": {"template_jailbreak"},
         "Leetspeak": {"leetspeak"},
         "Morse": {"morse"},
         "ROT13": {"rot13"},
@@ -4419,9 +4233,11 @@ def test_converter_coverage_manifest_classifies_current_azure_ai_evaluation_stra
         "MODERATE": {"Tense"},
         "DIFFICULT": {"Base64", "Tense"},
     }
-    assert set().union(
-        *AZURE_AI_EVALUATION_GROUP_STRATEGY_COMPATIBLE.values()
-    ).issubset(AZURE_AI_EVALUATION_CURRENT_ATTACK_STRATEGY_INVENTORY)
+    assert (
+        set()
+        .union(*AZURE_AI_EVALUATION_GROUP_STRATEGY_COMPATIBLE.values())
+        .issubset(AZURE_AI_EVALUATION_CURRENT_ATTACK_STRATEGY_INVENTORY)
+    )
 
 
 def test_converter_coverage_manifest_classifies_current_cyberseceval_benchmarks():
@@ -4469,29 +4285,17 @@ def test_converter_coverage_manifest_classifies_current_cyberseceval_benchmarks(
             "prompt_injection",
         },
     }
-    assert CYBERSECEVAL_REQUIRES_CYBER_ATTACK_HELPFULNESS_SUPPORT == {
-        "MITRE Tests"
-    }
-    assert CYBERSECEVAL_REQUIRES_FALSE_REFUSAL_BENCHMARK_SUPPORT == {
-        "MITRE False Refusal Rate Tests"
-    }
+    assert CYBERSECEVAL_REQUIRES_CYBER_ATTACK_HELPFULNESS_SUPPORT == {"MITRE Tests"}
+    assert CYBERSECEVAL_REQUIRES_FALSE_REFUSAL_BENCHMARK_SUPPORT == {"MITRE False Refusal Rate Tests"}
     assert CYBERSECEVAL_REQUIRES_SECURE_CODE_BENCHMARK_SUPPORT == {
         "Secure Code Generation Instruct Tests",
         "Secure Code Generation Autocomplete Tests",
         "AutoPatch Tests",
     }
-    assert CYBERSECEVAL_REQUIRES_CODE_INTERPRETER_ABUSE_SUPPORT == {
-        "Code Interpreter Abuse Tests"
-    }
-    assert CYBERSECEVAL_REQUIRES_VULNERABILITY_EXPLOITATION_SUPPORT == {
-        "Vulnerability Exploitation Tests"
-    }
-    assert CYBERSECEVAL_REQUIRES_SPEAR_PHISHING_SIMULATION_SUPPORT == {
-        "Spear Phishing Capability Tests"
-    }
-    assert CYBERSECEVAL_REQUIRES_AUTONOMOUS_CYBER_RANGE_SUPPORT == {
-        "Autonomous Offensive Cyber Operations Tests"
-    }
+    assert CYBERSECEVAL_REQUIRES_CODE_INTERPRETER_ABUSE_SUPPORT == {"Code Interpreter Abuse Tests"}
+    assert CYBERSECEVAL_REQUIRES_VULNERABILITY_EXPLOITATION_SUPPORT == {"Vulnerability Exploitation Tests"}
+    assert CYBERSECEVAL_REQUIRES_SPEAR_PHISHING_SIMULATION_SUPPORT == {"Spear Phishing Capability Tests"}
+    assert CYBERSECEVAL_REQUIRES_AUTONOMOUS_CYBER_RANGE_SUPPORT == {"Autonomous Offensive Cyber Operations Tests"}
     assert CYBERSECEVAL_REQUIRES_DEFENSIVE_CYBER_REASONING_SUPPORT == {
         "Malware Analysis Tests",
         "Threat Intelligence Reasoning Tests",
@@ -4558,9 +4362,7 @@ def test_converter_coverage_manifest_classifies_current_spikee_attacks():
         assert set(converter_names).issubset(registered_converters)
     for converter_names in SPIKEE_EVASION_PLUGIN_CONVERTER_COMPATIBLE.values():
         assert set(converter_names).issubset(registered_converters)
-    assert set(SPIKEE_EVASION_PLUGIN_EXECUTOR_COMPATIBLE.values()).issubset(
-        registered_executors
-    )
+    assert set(SPIKEE_EVASION_PLUGIN_EXECUTOR_COMPATIBLE.values()).issubset(registered_executors)
     assert SPIKEE_JAILBREAK_CONVERTER_COMPATIBLE["dan"] == {
         "dan",
         "template_jailbreak",
@@ -4694,10 +4496,7 @@ def test_converter_coverage_manifest_classifies_current_bipia_attack_categories(
 
 def test_converter_coverage_manifest_classifies_current_moonshot_attack_modules():
     registered = _registered_converters()
-    categorized = (
-        set(MOONSHOT_ATTACK_MODULE_CONVERTER_COMPATIBLE)
-        | MOONSHOT_REQUIRES_MULTI_TURN_AGENT_SUPPORT
-    )
+    categorized = set(MOONSHOT_ATTACK_MODULE_CONVERTER_COMPATIBLE) | MOONSHOT_REQUIRES_MULTI_TURN_AGENT_SUPPORT
     assert MOONSHOT_CURRENT_ATTACK_MODULE_INVENTORY == {
         "Character Swap Attack",
         "Colloquial Wordswap",
@@ -4718,8 +4517,8 @@ def test_converter_coverage_manifest_classifies_current_moonshot_attack_modules(
     assert MOONSHOT_ATTACK_MODULE_CONVERTER_COMPATIBLE == {
         "Character Swap Attack": {"char_swap"},
         "Colloquial Wordswap": {"colloquial_wordswap"},
-        "Homoglyph Attack": {"homoglyph", "homoglyph"},
-        "Homoglyph V2 Attack": {"homoglyph", "homoglyph"},
+        "Homoglyph Attack": {"homoglyph"},
+        "Homoglyph V2 Attack": {"homoglyph"},
         "Insert Punctuation Attack": {"insert_punctuation"},
         "Job Role Generator Module": {"job_role_generator"},
         "Malicious Question Generator": {"llm_malicious_question"},
@@ -4778,9 +4577,9 @@ def test_converter_coverage_manifest_tracks_garak_and_other_framework_scope():
         "char_swap",
         "code_chameleon",
         "emoji_substitution",
-            "flip_text",
-            "human_in_the_loop",
-            "llm_generic",
+        "flip_text",
+        "human_in_the_loop",
+        "llm_generic",
         "llm_malicious_question",
         "math_obfuscation",
         "llm_persuasion",

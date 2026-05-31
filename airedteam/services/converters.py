@@ -6,7 +6,6 @@ from typing import Any
 from airedteam.core.types import Prompt
 from airedteam.engine.factory import build_converter, build_target
 
-
 _LLM_CONVERTERS = {
     "llm_variation",
     "llm_tone",
@@ -85,10 +84,12 @@ class ConverterChainService:
                 if plugin == "template_jailbreak":
                     await self._resolve_attack_template(params)
                 converter = build_converter({"plugin": plugin, "params": params})
-                converters.append({
-                    "plugin": plugin,
-                    "params": dict(ref.get("params") or {}),
-                })
+                converters.append(
+                    {
+                        "plugin": plugin,
+                        "params": dict(ref.get("params") or {}),
+                    }
+                )
                 prompt = await converter.convert(prompt)
                 chain.append(converter.name)
         finally:

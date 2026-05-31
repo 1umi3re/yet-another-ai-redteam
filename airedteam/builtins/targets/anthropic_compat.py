@@ -1,13 +1,27 @@
 from __future__ import annotations
+
 import time
+
 import httpx
-from airedteam.core.types import Prompt, Response, Message
-from airedteam.core.plugins import BaseTarget
+
 from airedteam.builtins.targets.artifact_content import anthropic_content
+from airedteam.core.plugins import BaseTarget
+from airedteam.core.types import Message, Prompt, Response
 
 
 class AnthropicCompatTarget(BaseTarget):
-    def __init__(self, *, name: str, base_url: str, model: str, api_key: str, anthropic_version: str = "2023-06-01", max_tokens: int = 1024, system_prompt: str | None = None, timeout: float = 60.0) -> None:
+    def __init__(
+        self,
+        *,
+        name: str,
+        base_url: str,
+        model: str,
+        api_key: str,
+        anthropic_version: str = "2023-06-01",
+        max_tokens: int = 1024,
+        system_prompt: str | None = None,
+        timeout: float = 60.0,
+    ) -> None:
         self.name = name
         self.base_url = base_url.rstrip("/")
         self.model = model
@@ -28,7 +42,13 @@ class AnthropicCompatTarget(BaseTarget):
         data = r.json()
         text = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
         usage = data.get("usage") or {}
-        return Response(text=text, raw=data, latency_ms=latency, tokens_in=usage.get("input_tokens"), tokens_out=usage.get("output_tokens"))
+        return Response(
+            text=text,
+            raw=data,
+            latency_ms=latency,
+            tokens_in=usage.get("input_tokens"),
+            tokens_out=usage.get("output_tokens"),
+        )
 
     async def generate(self, prompt: Prompt) -> Response:
         body: dict = {
@@ -43,9 +63,7 @@ class AnthropicCompatTarget(BaseTarget):
     async def chat(self, messages: list[Message]) -> Response:
         system_msgs = [m.text for m in messages if m.role == "system"]
         other_msgs = [
-            {"role": m.role, "content": anthropic_content(m.text, m.artifacts)}
-            for m in messages
-            if m.role != "system"
+            {"role": m.role, "content": anthropic_content(m.text, m.artifacts)} for m in messages if m.role != "system"
         ]
         body: dict = {
             "model": self.model,

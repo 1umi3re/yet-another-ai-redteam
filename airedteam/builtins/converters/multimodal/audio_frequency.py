@@ -2,16 +2,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from airedteam.core.types import Prompt
 from airedteam.builtins.converters.support.artifact_utils import artifact_prompt, write_wav_tone
+from airedteam.core.types import Prompt
 
 
 class AudioFrequencyConverter:
     name = "audio_frequency"
 
-    def __init__(
-        self, *, output_dir: str | Path | None = None, frequency_hz: int = 440
-    ) -> None:
+    def __init__(self, *, output_dir: str | Path | None = None, frequency_hz: int = 440) -> None:
         self.output_dir = output_dir
         self.frequency_hz = int(frequency_hz)
 

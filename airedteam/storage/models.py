@@ -1,8 +1,18 @@
 from __future__ import annotations
+
 import uuid
 from datetime import UTC, datetime
+
 from sqlalchemy import (
-    String, Integer, DateTime, ForeignKey, JSON, LargeBinary, Text, Index, Boolean,
+    JSON,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    LargeBinary,
+    String,
+    Text,
     UniqueConstraint,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship

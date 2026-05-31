@@ -1,15 +1,25 @@
 from __future__ import annotations
+
 import pytest
-from airedteam.core.types import Prompt, Response
-from airedteam.core.plugins import BaseTarget
+
 from airedteam.builtins.converters.llm_rewrite.translation_llm import TranslationLLMConverter
+from airedteam.core.plugins import BaseTarget
+from airedteam.core.types import Prompt, Response
 
 
 class FakeTranslator(BaseTarget):
     name = "tr"
-    def __init__(self, out): self.out = out; self.seen = []
-    async def generate(self, p): self.seen.append(p.text); return Response(text=self.out, raw={}, latency_ms=1)
-    async def aclose(self): pass
+
+    def __init__(self, out):
+        self.out = out
+        self.seen = []
+
+    async def generate(self, p):
+        self.seen.append(p.text)
+        return Response(text=self.out, raw={}, latency_ms=1)
+
+    async def aclose(self):
+        pass
 
 
 @pytest.mark.asyncio

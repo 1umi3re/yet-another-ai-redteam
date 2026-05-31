@@ -7,7 +7,6 @@ from pydantic import BaseModel, Field
 
 from airedteam.api.deps import AppState, get_state, require_admin
 
-
 router = APIRouter()
 
 
@@ -22,15 +21,14 @@ class PreviewIn(BaseModel):
 
 
 @router.post("/converters/preview")
-async def preview_converters(body: PreviewIn, _=Depends(require_admin),
-                             state: AppState = Depends(get_state)):
+async def preview_converters(body: PreviewIn, _=Depends(require_admin), state: AppState = Depends(get_state)):
     try:
         result = await state.converters.apply(
             body.text,
             [c.model_dump() for c in body.converters],
         )
     except Exception as e:
-        raise HTTPException(400, detail=str(e))
+        raise HTTPException(400, detail=str(e)) from e
     return {
         "original_text": result.original_text,
         "transformed_text": result.transformed_text,

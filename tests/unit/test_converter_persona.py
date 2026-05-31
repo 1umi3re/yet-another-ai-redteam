@@ -1,6 +1,10 @@
 from __future__ import annotations
+
 import pytest
-from airedteam.builtins.converters.prompt_framing.persona_role_play_prefix import PersonaRolePlayPrefixConverter
+
+from airedteam.builtins.converters.prompt_framing.persona_role_play_prefix import (
+    PersonaRolePlayPrefixConverter,
+)
 from airedteam.core.types import Prompt
 
 

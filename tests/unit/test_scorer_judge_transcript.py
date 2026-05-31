@@ -1,17 +1,22 @@
 from __future__ import annotations
+
 import pytest
+
 from airedteam.builtins.scorers.llm_judge import LLMJudgeScorer
-from airedteam.core.types import AttemptResult, Prompt, Response, Message
+from airedteam.core.types import AttemptResult, Message, Prompt, Response
 
 
 class RecordingJudge:
     name = "fake"
+
     def __init__(self, reply):
         self.reply = reply
         self.last_prompt: str | None = None
+
     async def generate(self, p):
         self.last_prompt = p.text
         return Response(text=self.reply, raw={}, latency_ms=1)
+
     async def aclose(self):
         pass
 

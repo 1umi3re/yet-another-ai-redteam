@@ -18,6 +18,7 @@ async def test_dataset_items_preview(monkeypatch, tmp_path):
     monkeypatch.setenv("AIREDTEAM_BLOB_DIR", str(tmp_path / "blobs"))
 
     import airedteam.api.deps as deps
+
     deps._STATE = None
     from airedteam.api.app import create_app
     from airedteam.storage import models
@@ -34,10 +35,14 @@ async def test_dataset_items_preview(monkeypatch, tmp_path):
         files = {
             "file": (
                 "items.json",
-                json.dumps({"items": [
-                    {"id": "p1", "prompt": "Prompt one", "category": "a"},
-                    {"id": "p2", "prompt": "Prompt two", "category": "b"},
-                ]}),
+                json.dumps(
+                    {
+                        "items": [
+                            {"id": "p1", "prompt": "Prompt one", "category": "a"},
+                            {"id": "p2", "prompt": "Prompt two", "category": "b"},
+                        ]
+                    }
+                ),
                 "application/json",
             )
         }
@@ -46,11 +51,13 @@ async def test_dataset_items_preview(monkeypatch, tmp_path):
 
         items = await c.get(f"/api/datasets/{ds_id}/items?limit=1", headers=h)
         assert items.status_code == 200
-        assert items.json()["items"] == [{
-            "id": "p1",
-            "text": "Prompt one",
-            "metadata": {"id": "p1", "category": "a"},
-        }]
+        assert items.json()["items"] == [
+            {
+                "id": "p1",
+                "text": "Prompt one",
+                "metadata": {"id": "p1", "category": "a"},
+            }
+        ]
         assert items.json()["total_returned"] == 1
         assert items.json()["total"] == 2
         assert items.json()["has_more"] is True

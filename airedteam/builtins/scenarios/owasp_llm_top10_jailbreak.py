@@ -1,9 +1,13 @@
 from __future__ import annotations
+
 from importlib.resources import files
+
 from airedteam.core.scenario import Scenario
 
 
-def _runspec_template(*, target_config_id: str | None = None, target_inline: dict | None = None, dataset_blob_path: str | None = None) -> dict:
+def _runspec_template(
+    *, target_config_id: str | None = None, target_inline: dict | None = None, dataset_blob_path: str | None = None
+) -> dict:
     if not (target_config_id or target_inline):
         raise ValueError("target_config_id or target_inline required")
     if target_config_id:

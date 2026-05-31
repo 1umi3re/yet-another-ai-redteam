@@ -1,17 +1,21 @@
 from __future__ import annotations
+
 from dataclasses import dataclass
+
 from fastapi import Depends, Header, HTTPException
+
 from airedteam.config import Settings, get_settings
-from airedteam.storage.db import make_engine, make_sessionmaker
-from airedteam.storage.blobs import LocalBlobStore
-from airedteam.storage.secretbox import SecretBox
 from airedteam.engine.progress import ProgressBus
-from airedteam.services.target_configs import TargetConfigService
+from airedteam.services.converters import ConverterChainService
 from airedteam.services.datasets import DatasetService
-from airedteam.services.runs import RunService
 from airedteam.services.manual import ManualService
 from airedteam.services.prompt_assets import PromptAssetService
-from airedteam.services.converters import ConverterChainService
+from airedteam.services.runs import RunService
+from airedteam.services.target_configs import TargetConfigService
+from airedteam.storage.blobs import LocalBlobStore
+from airedteam.storage.db import make_engine, make_sessionmaker
+from airedteam.storage.secretbox import SecretBox
+
 from .auth import verify_token
 
 
@@ -41,14 +45,30 @@ def build_state(settings: Settings | None = None) -> AppState:
     datasets = DatasetService(SessionLocal, blob)
     prompt_assets = PromptAssetService(SessionLocal, blob)
     converters = ConverterChainService(targets, prompt_assets)
-    runs = RunService(SessionLocal, blob, box, targets, datasets, bus,
-                      prompt_assets=prompt_assets,
-                      response_inline_max_bytes=s.response_inline_max_bytes,
-                      max_concurrency=s.max_concurrency)
+    runs = RunService(
+        SessionLocal,
+        blob,
+        box,
+        targets,
+        datasets,
+        bus,
+        prompt_assets=prompt_assets,
+        response_inline_max_bytes=s.response_inline_max_bytes,
+        max_concurrency=s.max_concurrency,
+    )
     manual = ManualService(SessionLocal, blob, targets, converters, prompt_assets)
     return AppState(
-        s, SessionLocal, blob, box, bus, targets, datasets, converters,
-        prompt_assets, runs, manual,
+        s,
+        SessionLocal,
+        blob,
+        box,
+        bus,
+        targets,
+        datasets,
+        converters,
+        prompt_assets,
+        runs,
+        manual,
     )
 
 
@@ -69,4 +89,4 @@ def require_admin(authorization: str = Header(default=""), state: AppState = Dep
     try:
         return verify_token(token, secret=state.settings.jwt_secret)
     except PermissionError:
-        raise HTTPException(401, "invalid token")
+        raise HTTPException(401, "invalid token") from None

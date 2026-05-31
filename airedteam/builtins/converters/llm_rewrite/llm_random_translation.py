@@ -5,10 +5,7 @@ from airedteam.core.plugins import Target
 from airedteam.core.types import Prompt
 
 DEFAULT_PROMPT_ASSET_ID = "llm_random_translation.rewrite.v1"
-FALLBACK_TEMPLATE = (
-    "Translate the following prompt into {language}. Return only the translation.\n\n"
-    "PROMPT:\n{prompt}"
-)
+FALLBACK_TEMPLATE = "Translate the following prompt into {language}. Return only the translation.\n\nPROMPT:\n{prompt}"
 
 
 class LLMRandomTranslationConverter:
@@ -26,10 +23,7 @@ class LLMRandomTranslationConverter:
         prompt_asset_id: str = DEFAULT_PROMPT_ASSET_ID,
     ) -> None:
         if converter is None:
-            raise ValueError(
-                "llm_random_translation requires a 'converter_config_id' pointing at "
-                "a configured target"
-            )
+            raise ValueError("llm_random_translation requires a 'converter_config_id' pointing at a configured target")
         self._converter = converter
         self.languages = languages or ["French", "Spanish", "Arabic", "Hindi", "Swahili"]
         self.seed = int(seed)

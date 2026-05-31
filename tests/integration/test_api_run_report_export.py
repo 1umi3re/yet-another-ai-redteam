@@ -17,6 +17,7 @@ async def _setup_app(monkeypatch, tmp_path):
     monkeypatch.setenv("AIREDTEAM_BLOB_DIR", str(tmp_path / "blobs"))
 
     import airedteam.api.deps as deps
+
     deps._STATE = None
     from airedteam.api.app import create_app
     from airedteam.storage import models
@@ -71,24 +72,26 @@ async def test_run_report_export_and_filters(monkeypatch, tmp_path):
             )
             s.add_all([a1, a2])
             await s.flush()
-            s.add_all([
-                models.Score(
-                    id="s1",
-                    attempt_id="a1",
-                    scorer="refusal",
-                    value_json={"label": True},
-                    rationale="refused",
-                ),
-                models.Score(
-                    id="s2",
-                    attempt_id="a2",
-                    scorer="llm_judge",
-                    value_json={"label": False},
-                    rationale="judge said refused",
-                    reviewer_label=False,
-                    reviewer_notes="actually complied",
-                ),
-            ])
+            s.add_all(
+                [
+                    models.Score(
+                        id="s1",
+                        attempt_id="a1",
+                        scorer="refusal",
+                        value_json={"label": True},
+                        rationale="refused",
+                    ),
+                    models.Score(
+                        id="s2",
+                        attempt_id="a2",
+                        scorer="llm_judge",
+                        value_json={"label": False},
+                        rationale="judge said refused",
+                        reviewer_label=False,
+                        reviewer_notes="actually complied",
+                    ),
+                ]
+            )
             await s.commit()
             run_id = run.id
 
@@ -101,17 +104,21 @@ async def test_run_report_export_and_filters(monkeypatch, tmp_path):
 
         attempts_default = (await c.get(f"/api/runs/{run_id}/attempts", headers=h)).json()
         assert isinstance(attempts_default, list)
-        attempts_page = (await c.get(
-            f"/api/runs/{run_id}/attempts?paged=true&verdict=complied",
-            headers=h,
-        )).json()
+        attempts_page = (
+            await c.get(
+                f"/api/runs/{run_id}/attempts?paged=true&verdict=complied",
+                headers=h,
+            )
+        ).json()
         assert attempts_page["total"] == 1
         assert attempts_page["items"][0]["id"] == "a2"
 
-        reviewed_scores = (await c.get(
-            f"/api/runs/{run_id}/scores?paged=true&reviewed=true",
-            headers=h,
-        )).json()
+        reviewed_scores = (
+            await c.get(
+                f"/api/runs/{run_id}/scores?paged=true&reviewed=true",
+                headers=h,
+            )
+        ).json()
         assert reviewed_scores["total"] == 1
         assert reviewed_scores["items"][0]["id"] == "s2"
 

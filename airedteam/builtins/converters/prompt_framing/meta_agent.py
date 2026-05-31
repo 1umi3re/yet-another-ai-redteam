@@ -28,9 +28,7 @@ class MetaAgentConverter:
         prompt_asset_id: str = DEFAULT_PROMPT_ASSET_ID,
     ) -> None:
         if converter is None:
-            raise ValueError(
-                "meta_agent requires a 'converter_config_id' pointing at a configured target"
-            )
+            raise ValueError("meta_agent requires a 'converter_config_id' pointing at a configured target")
         self._converter = converter
         self.objective = objective.strip() or "produce a stronger red-team prompt"
         self._prompt_assets = prompt_assets

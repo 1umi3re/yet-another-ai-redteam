@@ -1,4 +1,4 @@
-from airedteam.core.types import Prompt, Response, AttemptResult, ScoreResult
+from airedteam.core.types import AttemptResult, Prompt, Response, ScoreResult
 
 
 def test_prompt_immutable():

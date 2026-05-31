@@ -24,11 +24,13 @@ class ScriptedTarget:
 
 @pytest.mark.asyncio
 async def test_best_of_n_runs_variants_and_selects_non_refusal_response():
-    target = ScriptedTarget([
-        "I cannot help with that.",
-        "Here is the detailed answer with more content.",
-        "short answer",
-    ])
+    target = ScriptedTarget(
+        [
+            "I cannot help with that.",
+            "Here is the detailed answer with more content.",
+            "short answer",
+        ]
+    )
     executor = BestOfNExecutor(attempts=3, seed=7)
 
     result = await executor.run(Prompt(text="answer this"), target, [])

@@ -1,6 +1,12 @@
 from __future__ import annotations
+
 from typing import Any
-from airedteam.core.types import Prompt, Response, Message, AttemptResult
+
+from airedteam.core.types import AttemptResult, Message, Prompt, Response
+from airedteam.engine.input_limits import (
+    ensure_text_within_target_limit,
+    target_max_input_chars,
+)
 
 
 class MultiTurnExecutor:
@@ -18,24 +24,41 @@ class MultiTurnExecutor:
     (list[Message]), ``state['seed']`` (the original dataset Prompt *before*
     conversion), and ``state['first_user']`` (the converted first user Prompt).
     """
+
     name: str = "multi_turn_base"
     max_turns: int = 5
 
     async def next_user_message(
-        self, state: dict[str, Any], last_response: Response | None,
+        self,
+        state: dict[str, Any],
+        last_response: Response | None,
     ) -> Message | None:
         raise NotImplementedError
 
     async def should_stop(
-        self, state: dict[str, Any], last_response: Response | None,
+        self,
+        state: dict[str, Any],
+        last_response: Response | None,
     ) -> bool:
         return state["turn"] >= self.max_turns
 
     async def on_turn(
-        self, state: dict[str, Any], user: Message, assistant: Response,
+        self,
+        state: dict[str, Any],
+        user: Message,
+        assistant: Response,
     ) -> None:
         """Hook for subclasses (e.g. PAIR's judge between turns). Default no-op."""
         return None
+
+    async def repair_user_message(
+        self,
+        state: dict[str, Any],
+        last_response: Response | None,
+        user: Message,
+    ) -> Message:
+        """Allow subclasses to shorten generated follow-up turns before send."""
+        return user
 
     async def run(self, prompt: Prompt, target, converters: list) -> AttemptResult:
         chain: list[str] = []
@@ -50,6 +73,7 @@ class MultiTurnExecutor:
             "prompt_snapshots": [],
             "seed": prompt,
             "first_user": cur,
+            "max_input_chars": target_max_input_chars(target),
         }
         last_response: Response | None = None
         last_user: Message | None = None
@@ -68,13 +92,22 @@ class MultiTurnExecutor:
                     if nxt is None:
                         break
                     user = nxt
+                    if state.get("max_input_chars") is not None and len(user.text) > state["max_input_chars"]:
+                        user = await self.repair_user_message(state, last_response, user)
+
+                ensure_text_within_target_limit(
+                    user.text,
+                    target,
+                    executor_name=self.name,
+                    recommendation=(
+                        "Use split_executor for long seed prompts, or configure the attacker to emit shorter turns."
+                    ),
+                )
 
                 state["conversation"].append(user)
                 last_user = user
                 last_response = await target.chat(list(state["conversation"]))
-                state["conversation"].append(
-                    Message(role="assistant", text=last_response.text)
-                )
+                state["conversation"].append(Message(role="assistant", text=last_response.text))
                 await self.on_turn(state, user, last_response)
                 state["turn"] += 1
                 if await self.should_stop(state, last_response):

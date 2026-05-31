@@ -1,6 +1,6 @@
 import base64
-from airedteam.core.types import Prompt
 
+from airedteam.core.types import Prompt
 
 _DECODE_INSTRUCTION = (
     "The following text is base64-encoded. Decode it in your head and "
@@ -14,6 +14,7 @@ class Base64Converter:
     a short decode-and-follow instruction so the target model actually
     attempts to act on the encoded payload — a classic evasion technique.
     Set ``wrap=False`` to emit the raw base64 only."""
+
     name = "base64"
 
     def __init__(self, *, wrap: bool = True) -> None:

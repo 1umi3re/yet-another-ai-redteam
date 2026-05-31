@@ -1,19 +1,30 @@
 from __future__ import annotations
+
 from typing import Literal
+
 from airedteam.core.types import Prompt
 
-
 _HOMOGLYPHS = {
-    "a": "а", "c": "с", "e": "е", "i": "і", "o": "о", "p": "р", "s": "ѕ", "x": "х",
+    "a": "а",
+    "c": "с",
+    "e": "е",
+    "i": "і",
+    "o": "о",
+    "p": "р",
+    "s": "ѕ",
+    "x": "х",
 }
 
 
 class UnicodeObfuscationConverter:
     """Insert zero-width characters or replace latin letters with Cyrillic homoglyphs."""
+
     name = "unicode_obfuscation"
 
     def __init__(
-        self, *, strategy: Literal["zero_width", "homoglyph"] = "zero_width",
+        self,
+        *,
+        strategy: Literal["zero_width", "homoglyph"] = "zero_width",
         every: int = 2,
     ) -> None:
         self.strategy = strategy

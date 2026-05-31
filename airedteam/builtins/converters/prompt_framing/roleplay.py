@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from airedteam.core.types import Prompt
 from airedteam.builtins.converters.support.template_helpers import converted_prompt
+from airedteam.core.types import Prompt
 
 
 class RoleplayConverter:
@@ -15,8 +15,5 @@ class RoleplayConverter:
     async def convert(self, prompt: Prompt) -> Prompt:
         return converted_prompt(
             prompt,
-            (
-                f"Roleplay as a {self.persona}. Stay in character and respond "
-                f"to this scenario:\n\n{prompt.text}"
-            ),
+            (f"Roleplay as a {self.persona}. Stay in character and respond to this scenario:\n\n{prompt.text}"),
         )

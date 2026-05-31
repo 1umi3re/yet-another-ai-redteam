@@ -25,10 +25,7 @@ class LLMToxicSentenceConverter:
         prompt_asset_id: str = DEFAULT_PROMPT_ASSET_ID,
     ) -> None:
         if converter is None:
-            raise ValueError(
-                "llm_toxic_sentence requires a 'converter_config_id' pointing at "
-                "a configured target"
-            )
+            raise ValueError("llm_toxic_sentence requires a 'converter_config_id' pointing at a configured target")
         self._converter = converter
         self._prompt_assets = prompt_assets
         self._prompt_asset_id = prompt_asset_id or DEFAULT_PROMPT_ASSET_ID

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from airedteam.core.types import Prompt
 from airedteam.builtins.converters.support.artifact_utils import artifact_prompt, write_pdf_text
+from airedteam.core.types import Prompt
 
 
 class PDFConverter:

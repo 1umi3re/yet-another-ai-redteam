@@ -1,15 +1,21 @@
 from __future__ import annotations
+
 from airedteam.core.types import Prompt
 
-
 SUBS = {
-    "bomb": "💣", "gun": "🔫", "knife": "🔪", "fire": "🔥",
-    "money": "💰", "key": "🔑", "poison": "☠",
+    "bomb": "💣",
+    "gun": "🔫",
+    "knife": "🔪",
+    "fire": "🔥",
+    "money": "💰",
+    "key": "🔑",
+    "poison": "☠",
 }
 
 
 class EmojiSubstitutionConverter:
     """Replace flagged keywords with their emoji equivalents."""
+
     name = "emoji_substitution"
 
     def __init__(self, *, words: dict[str, str] | None = None) -> None:

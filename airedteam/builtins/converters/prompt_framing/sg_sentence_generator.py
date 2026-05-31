@@ -23,8 +23,5 @@ class SGSentenceGeneratorConverter:
     async def convert(self, prompt: Prompt) -> Prompt:
         seed = prompt.text.rstrip()
         suffix = f" {self.slang_suffix}" if self.slang_suffix else ""
-        text = (
-            f"In a {self.context} {self.dialect} context, complete this sentence naturally:\n"
-            f"{seed}{suffix}"
-        )
+        text = f"In a {self.context} {self.dialect} context, complete this sentence naturally:\n{seed}{suffix}"
         return converted_prompt(prompt, text)

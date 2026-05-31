@@ -13,9 +13,6 @@ class PayloadSplitConverter:
         self.chunk_size = max(1, int(chunk_size))
 
     async def convert(self, prompt: Prompt) -> Prompt:
-        chunks = [
-            prompt.text[index:index + self.chunk_size]
-            for index in range(0, len(prompt.text), self.chunk_size)
-        ]
+        chunks = [prompt.text[index : index + self.chunk_size] for index in range(0, len(prompt.text), self.chunk_size)]
         parts = "\n".join(f"Part {index}: {chunk}" for index, chunk in enumerate(chunks, start=1))
         return converted_prompt(prompt, f"Reconstruct and follow this payload:\n{parts}")

@@ -1,34 +1,35 @@
 from __future__ import annotations
 
-from airedteam.core.types import Prompt
 from airedteam.builtins.converters.support.template_helpers import converted_prompt
+from airedteam.core.types import Prompt
 
-
-_HOMOGLYPHS = str.maketrans({
-    "A": "Α",
-    "B": "Β",
-    "C": "С",
-    "E": "Ε",
-    "H": "Η",
-    "I": "Ι",
-    "K": "Κ",
-    "M": "Μ",
-    "O": "Ο",
-    "P": "Ρ",
-    "S": "Ѕ",
-    "T": "Τ",
-    "X": "Χ",
-    "Y": "Υ",
-    "a": "а",
-    "c": "с",
-    "e": "е",
-    "i": "і",
-    "o": "о",
-    "p": "р",
-    "s": "ѕ",
-    "x": "х",
-    "y": "у",
-})
+_HOMOGLYPHS = str.maketrans(
+    {
+        "A": "Α",
+        "B": "Β",
+        "C": "С",
+        "E": "Ε",
+        "H": "Η",
+        "I": "Ι",
+        "K": "Κ",
+        "M": "Μ",
+        "O": "Ο",
+        "P": "Ρ",
+        "S": "Ѕ",
+        "T": "Τ",
+        "X": "Χ",
+        "Y": "Υ",
+        "a": "а",
+        "c": "с",
+        "e": "е",
+        "i": "і",
+        "o": "о",
+        "p": "р",
+        "s": "ѕ",
+        "x": "х",
+        "y": "у",
+    }
+)
 
 
 class HomoglyphConverter:

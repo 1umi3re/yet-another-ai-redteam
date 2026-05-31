@@ -1,11 +1,18 @@
 from __future__ import annotations
+
 import json
 import uuid
 from datetime import UTC, datetime
+
 from sqlalchemy import select
-from airedteam.storage import models
+
 from airedteam.core.types import AttemptResult, Message, Prompt, Response
 from airedteam.engine.factory import build_scorer, build_target
+from airedteam.engine.input_limits import (
+    apply_target_input_limit,
+    ensure_text_within_target_limit,
+)
+from airedteam.storage import models
 
 
 class ManualService:
@@ -64,9 +71,9 @@ class ManualService:
                 target_id=target_id,
                 target_name=tgt_cfg.name,
                 prompt_text=(seed_messages[0]["text"] if seed_messages else ""),
-                response_text=(seed_messages[-1]["text"]
-                               if seed_messages and seed_messages[-1]["role"] == "assistant"
-                               else None),
+                response_text=(
+                    seed_messages[-1]["text"] if seed_messages and seed_messages[-1]["role"] == "assistant" else None
+                ),
                 conversation_blob_path=blob_path,
             )
             s.add(att)
@@ -82,12 +89,14 @@ class ManualService:
             tgt_cfg = await self._targets.get(target_id)
             if tgt_cfg is None:
                 raise ValueError(f"target_id {target_id!r} not found")
-            attempt = (await s.execute(
-                select(models.Attempt)
-                .where(models.Attempt.run_id == run.id)
-                .order_by(models.Attempt.created_at.desc())
-                .limit(1)
-            )).scalar_one_or_none()
+            attempt = (
+                await s.execute(
+                    select(models.Attempt)
+                    .where(models.Attempt.run_id == run.id)
+                    .order_by(models.Attempt.created_at.desc())
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
             if attempt is None:
                 attempt_id, messages = await self.create_conversation(run_id)
             else:
@@ -96,11 +105,13 @@ class ManualService:
                 if not messages and attempt.prompt_text:
                     messages = [{"role": "user", "text": attempt.prompt_text, "metadata": {}}]
                     if attempt.response_text:
-                        messages.append({
-                            "role": "assistant",
-                            "text": attempt.response_text,
-                            "metadata": {},
-                        })
+                        messages.append(
+                            {
+                                "role": "assistant",
+                                "text": attempt.response_text,
+                                "metadata": {},
+                            }
+                        )
             return {
                 "run_id": run.id,
                 "attempt_id": attempt_id,
@@ -140,9 +151,16 @@ class ManualService:
 
         cfg = await self._targets.resolve_for_runtime(att.target_id)
         target = build_target(cfg)
+        apply_target_input_limit(target, cfg)
         try:
-            resp = await target.chat([Message(role=m["role"], text=m["text"],
-                                               metadata=m.get("metadata")) for m in messages])
+            ensure_text_within_target_limit(
+                preview.transformed_text,
+                target,
+                executor_name="manual",
+            )
+            resp = await target.chat(
+                [Message(role=m["role"], text=m["text"], metadata=m.get("metadata")) for m in messages]
+            )
         finally:
             await target.aclose()
 
@@ -190,11 +208,7 @@ class ManualService:
             prompt_snapshot_path = await self._prompt_assets.write_snapshot(
                 run_id, f"score-{score_id}", score_result.prompt_snapshot
             )
-        value = (
-            score_result.value
-            if isinstance(score_result.value, dict)
-            else {"value": score_result.value}
-        )
+        value = score_result.value if isinstance(score_result.value, dict) else {"value": score_result.value}
         async with self._sf() as s:
             row = models.Score(
                 id=score_id,
@@ -225,11 +239,17 @@ class ManualService:
 
     async def scores_for_attempt(self, attempt_id: str) -> list[dict]:
         async with self._sf() as s:
-            rows = (await s.execute(
-                select(models.Score)
-                .where(models.Score.attempt_id == attempt_id)
-                .order_by(models.Score.created_at.desc())
-            )).scalars().all()
+            rows = (
+                (
+                    await s.execute(
+                        select(models.Score)
+                        .where(models.Score.attempt_id == attempt_id)
+                        .order_by(models.Score.created_at.desc())
+                    )
+                )
+                .scalars()
+                .all()
+            )
             return [_score_public(row) for row in rows]
 
     async def _build_scorer(self, scorer_ref: dict):
@@ -242,6 +262,7 @@ class ManualService:
                 raise ValueError("llm_judge scorer requires params.judge_config_id")
             judge_ref = await self._targets.resolve_for_runtime(judge_cfg_id)
             judge = build_target(judge_ref)
+            apply_target_input_limit(judge, judge_ref)
             closeables.append(judge)
             params["judge"] = judge
             if self._prompt_assets is not None:
@@ -250,10 +271,7 @@ class ManualService:
 
     @staticmethod
     def _attempt_result_from_row(att, messages_raw: list[dict]) -> AttemptResult:
-        messages = [
-            Message(role=m["role"], text=m["text"], metadata=m.get("metadata") or {})
-            for m in messages_raw
-        ]
+        messages = [Message(role=m["role"], text=m["text"], metadata=m.get("metadata") or {}) for m in messages_raw]
         response_text = att.response_text or ""
         for msg in reversed(messages):
             if msg.role == "assistant":

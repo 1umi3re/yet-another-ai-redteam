@@ -1,13 +1,14 @@
 from __future__ import annotations
+
 import json
 import uuid
 from typing import Any
 
 from sqlalchemy import func, select
 
-from airedteam.storage.models import DatasetMeta, DatasetVersion
-from airedteam.storage.blobs import BlobStore
 from airedteam.engine.factory import build_dataset
+from airedteam.storage.blobs import BlobStore
+from airedteam.storage.models import DatasetMeta, DatasetVersion
 
 
 def _extract_items(raw: Any) -> list[Any]:
@@ -50,28 +51,44 @@ class DatasetService:
         key = f"datasets/{uuid.uuid4()}.json"
         await self._blob.put(key, _items_bytes(items))
         async with self._sf() as s:
-            row = DatasetMeta(name=name, plugin="json_upload",
-                              params_json={"blob_path": key},
-                              blob_path=key, item_count=len(items), current_version=1)
-            s.add(row)
-            await s.flush()
-            s.add(DatasetVersion(
-                dataset_id=row.id,
-                version=1,
+            row = DatasetMeta(
+                name=name,
+                plugin="json_upload",
+                params_json={"blob_path": key},
                 blob_path=key,
                 item_count=len(items),
-                note="Initial upload",
-            ))
+                current_version=1,
+            )
+            s.add(row)
+            await s.flush()
+            s.add(
+                DatasetVersion(
+                    dataset_id=row.id,
+                    version=1,
+                    blob_path=key,
+                    item_count=len(items),
+                    note="Initial upload",
+                )
+            )
             await s.commit()
             await s.refresh(row)
             return row
 
-    async def create_hf(self, *, name: str, repo: str, split: str = "train", prompt_field: str = "prompt", limit: int | None = None) -> DatasetMeta:
+    async def create_hf(
+        self, *, name: str, repo: str, split: str = "train", prompt_field: str = "prompt", limit: int | None = None
+    ) -> DatasetMeta:
         async with self._sf() as s:
-            row = DatasetMeta(name=name, plugin="hf",
-                              params_json={"repo": repo, "split": split, "prompt_field": prompt_field, "limit": limit},
-                              blob_path=None, item_count=limit)
-            s.add(row); await s.commit(); await s.refresh(row); return row
+            row = DatasetMeta(
+                name=name,
+                plugin="hf",
+                params_json={"repo": repo, "split": split, "prompt_field": prompt_field, "limit": limit},
+                blob_path=None,
+                item_count=limit,
+            )
+            s.add(row)
+            await s.commit()
+            await s.refresh(row)
+            return row
 
     async def list(self) -> list[DatasetMeta]:
         async with self._sf() as s:
@@ -113,9 +130,9 @@ class DatasetService:
                 raise KeyError(ds_id)
             if ds.plugin != "json_upload":
                 raise ValueError("only uploaded JSON datasets can be edited")
-            max_version = (await s.execute(
-                select(func.max(DatasetVersion.version)).where(DatasetVersion.dataset_id == ds_id)
-            )).scalar_one()
+            max_version = (
+                await s.execute(select(func.max(DatasetVersion.version)).where(DatasetVersion.dataset_id == ds_id))
+            ).scalar_one()
             next_version = int(max_version or getattr(ds, "current_version", 1) or 1) + 1
             key = f"datasets/{uuid.uuid4()}.json"
             await self._blob.put(key, _items_bytes(normalized_items))
@@ -123,13 +140,15 @@ class DatasetService:
             ds.params_json = {**dict(ds.params_json or {}), "blob_path": key}
             ds.item_count = len(normalized_items)
             ds.current_version = next_version
-            s.add(DatasetVersion(
-                dataset_id=ds.id,
-                version=next_version,
-                blob_path=key,
-                item_count=len(normalized_items),
-                note=(note or "").strip() or None,
-            ))
+            s.add(
+                DatasetVersion(
+                    dataset_id=ds.id,
+                    version=next_version,
+                    blob_path=key,
+                    item_count=len(normalized_items),
+                    note=(note or "").strip() or None,
+                )
+            )
             await s.commit()
             await s.refresh(ds)
             return ds
@@ -141,22 +160,30 @@ class DatasetService:
         if ds.plugin != "json_upload":
             return []
         async with self._sf() as s:
-            rows = (await s.execute(
-                select(DatasetVersion)
-                .where(DatasetVersion.dataset_id == ds_id)
-                .order_by(DatasetVersion.version.desc())
-            )).scalars().all()
+            rows = (
+                (
+                    await s.execute(
+                        select(DatasetVersion)
+                        .where(DatasetVersion.dataset_id == ds_id)
+                        .order_by(DatasetVersion.version.desc())
+                    )
+                )
+                .scalars()
+                .all()
+            )
         current_version = getattr(ds, "current_version", None) or 1
         if not rows and ds.blob_path:
-            return [{
-                "id": None,
-                "dataset_id": ds.id,
-                "version": current_version,
-                "item_count": ds.item_count,
-                "note": "Current dataset",
-                "created_at": ds.created_at.isoformat() if ds.created_at else None,
-                "is_current": True,
-            }]
+            return [
+                {
+                    "id": None,
+                    "dataset_id": ds.id,
+                    "version": current_version,
+                    "item_count": ds.item_count,
+                    "note": "Current dataset",
+                    "created_at": ds.created_at.isoformat() if ds.created_at else None,
+                    "is_current": True,
+                }
+            ]
         return [_version_public(row, current_version) for row in rows]
 
     async def restore_version(self, ds_id: str, version: int) -> DatasetMeta:
@@ -166,12 +193,14 @@ class DatasetService:
                 raise KeyError(ds_id)
             if ds.plugin != "json_upload":
                 raise ValueError("only uploaded JSON datasets can restore versions")
-            row = (await s.execute(
-                select(DatasetVersion).where(
-                    DatasetVersion.dataset_id == ds_id,
-                    DatasetVersion.version == version,
+            row = (
+                await s.execute(
+                    select(DatasetVersion).where(
+                        DatasetVersion.dataset_id == ds_id,
+                        DatasetVersion.version == version,
+                    )
                 )
-            )).scalar_one_or_none()
+            ).scalar_one_or_none()
             if row is None:
                 if version == (getattr(ds, "current_version", None) or 1) and ds.blob_path:
                     return ds
@@ -213,7 +242,7 @@ class DatasetService:
             if q_norm and q_norm not in item["text"].lower() and q_norm not in item["id"].lower():
                 continue
             matches.append(item)
-        items = matches[offset: offset + limit]
+        items = matches[offset : offset + limit]
         return {
             "items": items,
             "total_returned": len(items),

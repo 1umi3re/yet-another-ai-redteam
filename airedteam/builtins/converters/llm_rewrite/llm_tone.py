@@ -27,9 +27,7 @@ class LLMToneConverter:
         prompt_asset_id: str = DEFAULT_PROMPT_ASSET_ID,
     ) -> None:
         if converter is None:
-            raise ValueError(
-                "llm_tone requires a 'converter_config_id' pointing at a configured target"
-            )
+            raise ValueError("llm_tone requires a 'converter_config_id' pointing at a configured target")
         self._converter = converter
         self.tone = tone.strip() or "professional"
         self._prompt_assets = prompt_assets

@@ -1,5 +1,6 @@
 from __future__ import annotations
-from airedteam.core.types import Message, Prompt, Response, AttemptResult
+
+from airedteam.core.types import AttemptResult, Message, Prompt, Response
 
 
 def test_message_roundtrip():
@@ -13,8 +14,9 @@ def test_attempt_result_holds_conversation():
         Message(role="user", text="hi"),
         Message(role="assistant", text="hello"),
     ]
-    ar = AttemptResult(prompt=Prompt(text="hi"), response=Response(text="hello", raw={}, latency_ms=1),
-                       conversation=conv)
+    ar = AttemptResult(
+        prompt=Prompt(text="hi"), response=Response(text="hello", raw={}, latency_ms=1), conversation=conv
+    )
     assert len(ar.conversation) == 2
     assert ar.conversation[1].role == "assistant"
 

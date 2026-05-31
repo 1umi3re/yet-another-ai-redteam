@@ -6,9 +6,7 @@ from airedteam.core.types import Prompt
 
 DEFAULT_PROMPT_ASSET_ID = "llm_generic.rewrite.v1"
 FALLBACK_TEMPLATE = (
-    "{instruction}\n\n"
-    "Return only the rewritten prompt text. Do not add labels or explanation.\n\n"
-    "PROMPT:\n{prompt}"
+    "{instruction}\n\nReturn only the rewritten prompt text. Do not add labels or explanation.\n\nPROMPT:\n{prompt}"
 )
 
 
@@ -26,9 +24,7 @@ class LLMGenericConverter:
         prompt_asset_id: str = DEFAULT_PROMPT_ASSET_ID,
     ) -> None:
         if converter is None:
-            raise ValueError(
-                "llm_generic requires a 'converter_config_id' pointing at a configured target"
-            )
+            raise ValueError("llm_generic requires a 'converter_config_id' pointing at a configured target")
         self._converter = converter
         self.instruction = instruction.strip() or "Rewrite the prompt while preserving intent."
         self._prompt_assets = prompt_assets

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from airedteam.core.types import Prompt
 
-
 DEFAULT_MAPPING = {
     "a": "\u0251",
     "e": "\u0258",

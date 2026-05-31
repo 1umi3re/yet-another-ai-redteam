@@ -5,6 +5,7 @@ Revises: 0004_custom_prompt_assets
 Create Date: 2026-05-26 00:00:00.000000
 
 """
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa

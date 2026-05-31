@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 from sqlalchemy import select
+
 from airedteam.storage.models import TargetConfig
 from airedteam.storage.secretbox import SecretBox
 
@@ -13,7 +15,10 @@ class TargetConfigService:
         async with self._sf() as s:
             ct = self._box.encrypt(secret) if secret else None
             row = TargetConfig(name=name, plugin=plugin, params_json=params, secret_ciphertext=ct)
-            s.add(row); await s.commit(); await s.refresh(row); return row
+            s.add(row)
+            await s.commit()
+            await s.refresh(row)
+            return row
 
     async def list(self) -> list[TargetConfig]:
         async with self._sf() as s:
@@ -28,7 +33,8 @@ class TargetConfigService:
         async with self._sf() as s:
             row = await s.get(TargetConfig, cfg_id)
             if row:
-                await s.delete(row); await s.commit()
+                await s.delete(row)
+                await s.commit()
 
     async def update_limits(
         self,
@@ -38,6 +44,10 @@ class TargetConfigService:
         timeout: float | None = None,
         max_concurrency_set: bool = False,
         max_concurrency: int | None = None,
+        max_input_chars_set: bool = False,
+        max_input_chars: int | None = None,
+        input_limit_unit_set: bool = False,
+        input_limit_unit: str | None = None,
     ) -> TargetConfig:
         async with self._sf() as s:
             row = await s.get(TargetConfig, cfg_id)
@@ -54,6 +64,16 @@ class TargetConfigService:
                     params.pop("max_concurrency", None)
                 else:
                     params["max_concurrency"] = max_concurrency
+            if max_input_chars_set:
+                if max_input_chars is None:
+                    params.pop("max_input_chars", None)
+                else:
+                    params["max_input_chars"] = max_input_chars
+            if input_limit_unit_set:
+                if input_limit_unit is None:
+                    params.pop("input_limit_unit", None)
+                else:
+                    params["input_limit_unit"] = input_limit_unit
             row.params_json = params
             await s.commit()
             await s.refresh(row)

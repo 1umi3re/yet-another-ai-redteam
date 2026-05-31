@@ -1,7 +1,9 @@
 from __future__ import annotations
+
 import pytest
-from airedteam.core.types import Prompt
+
 from airedteam.builtins.converters.obfuscation.emoji_substitution import EmojiSubstitutionConverter
+from airedteam.core.types import Prompt
 
 
 @pytest.mark.asyncio

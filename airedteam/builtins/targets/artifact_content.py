@@ -25,27 +25,33 @@ def openai_content(text: str, artifacts: list[PromptArtifact]) -> str | list[dic
     content: list[dict[str, Any]] = [{"type": "text", "text": text}]
     for artifact in artifacts:
         if artifact.kind == "image":
-            content.append({
-                "type": "image_url",
-                "image_url": {"url": _data_uri(artifact)},
-            })
+            content.append(
+                {
+                    "type": "image_url",
+                    "image_url": {"url": _data_uri(artifact)},
+                }
+            )
         elif artifact.kind == "audio":
             audio_format = Path(artifact.path).suffix.lstrip(".") or "wav"
-            content.append({
-                "type": "input_audio",
-                "input_audio": {
-                    "data": _read_base64(artifact),
-                    "format": audio_format,
-                },
-            })
+            content.append(
+                {
+                    "type": "input_audio",
+                    "input_audio": {
+                        "data": _read_base64(artifact),
+                        "format": audio_format,
+                    },
+                }
+            )
         else:
-            content.append({
-                "type": "file",
-                "file": {
-                    "filename": _filename(artifact),
-                    "file_data": _data_uri(artifact),
-                },
-            })
+            content.append(
+                {
+                    "type": "file",
+                    "file": {
+                        "filename": _filename(artifact),
+                        "file_data": _data_uri(artifact),
+                    },
+                }
+            )
     return content
 
 
@@ -55,30 +61,36 @@ def anthropic_content(text: str, artifacts: list[PromptArtifact]) -> str | list[
     content: list[dict[str, Any]] = [{"type": "text", "text": text}]
     for artifact in artifacts:
         if artifact.kind == "image":
-            content.append({
-                "type": "image",
-                "source": {
-                    "type": "base64",
-                    "media_type": artifact.media_type,
-                    "data": _read_base64(artifact),
-                },
-            })
+            content.append(
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": artifact.media_type,
+                        "data": _read_base64(artifact),
+                    },
+                }
+            )
         elif artifact.kind == "binary" and artifact.media_type == "application/pdf":
-            content.append({
-                "type": "document",
-                "source": {
-                    "type": "base64",
-                    "media_type": artifact.media_type,
-                    "data": _read_base64(artifact),
-                },
-            })
+            content.append(
+                {
+                    "type": "document",
+                    "source": {
+                        "type": "base64",
+                        "media_type": artifact.media_type,
+                        "data": _read_base64(artifact),
+                    },
+                }
+            )
         else:
-            content.append({
-                "type": "text",
-                "text": (
-                    f"[artifact: {_filename(artifact)}; "
-                    f"kind={artifact.kind}; media_type={artifact.media_type}; "
-                    f"path={artifact.path}]"
-                ),
-            })
+            content.append(
+                {
+                    "type": "text",
+                    "text": (
+                        f"[artifact: {_filename(artifact)}; "
+                        f"kind={artifact.kind}; media_type={artifact.media_type}; "
+                        f"path={artifact.path}]"
+                    ),
+                }
+            )
     return content

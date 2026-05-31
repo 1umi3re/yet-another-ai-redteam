@@ -1,8 +1,13 @@
 import json
+
+import httpx
 import pytest
 import respx
-import httpx
-from airedteam.builtins.targets.openai_compat import OpenAICompatNewSessionTarget, OpenAICompatTarget
+
+from airedteam.builtins.targets.openai_compat import (
+    OpenAICompatNewSessionTarget,
+    OpenAICompatTarget,
+)
 from airedteam.core.types import Prompt, PromptArtifact
 
 
@@ -10,10 +15,13 @@ from airedteam.core.types import Prompt, PromptArtifact
 @respx.mock
 async def test_generate_returns_response():
     route = respx.post("https://api.example.com/v1/chat/completions").mock(
-        return_value=httpx.Response(200, json={
-            "choices": [{"message": {"content": "ok"}}],
-            "usage": {"prompt_tokens": 5, "completion_tokens": 2},
-        })
+        return_value=httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": "ok"}}],
+                "usage": {"prompt_tokens": 5, "completion_tokens": 2},
+            },
+        )
     )
     t = OpenAICompatTarget(name="t1", base_url="https://api.example.com/v1", model="gpt-x", api_key="sk")
     r = await t.generate(Prompt(text="hi"))
@@ -28,7 +36,7 @@ async def test_generate_returns_response():
 async def test_generate_raises_on_http_error():
     respx.post("https://api.example.com/v1/chat/completions").mock(return_value=httpx.Response(500, text="boom"))
     t = OpenAICompatTarget(name="t1", base_url="https://api.example.com/v1", model="m", api_key="k")
-    with pytest.raises(Exception):
+    with pytest.raises(httpx.HTTPStatusError):
         await t.generate(Prompt(text="x"))
     await t.aclose()
 
@@ -37,14 +45,21 @@ async def test_generate_raises_on_http_error():
 @respx.mock
 async def test_generate_preserves_system_prompt_and_temperature():
     route = respx.post("https://oai.example.com/v1/chat/completions").mock(
-        return_value=httpx.Response(200, json={
-            "choices": [{"message": {"content": "ok"}}],
-            "usage": {"prompt_tokens": 1, "completion_tokens": 1},
-        })
+        return_value=httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": "ok"}}],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+            },
+        )
     )
     t = OpenAICompatTarget(
-        name="t", base_url="https://oai.example.com/v1", model="m", api_key="k",
-        system_prompt="be helpful", temperature=0.7,
+        name="t",
+        base_url="https://oai.example.com/v1",
+        model="m",
+        api_key="k",
+        system_prompt="be helpful",
+        temperature=0.7,
     )
     await t.generate(Prompt(text="hi"))
     body = json.loads(route.calls.last.request.content)
@@ -65,20 +80,25 @@ async def test_generate_serializes_prompt_artifacts_as_multimodal_content(tmp_pa
     pdf.write_bytes(b"%PDF-1.4 payload")
 
     route = respx.post("https://oai.example.com/v1/chat/completions").mock(
-        return_value=httpx.Response(200, json={
-            "choices": [{"message": {"content": "ok"}}],
-            "usage": {"prompt_tokens": 1, "completion_tokens": 1},
-        })
+        return_value=httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": "ok"}}],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+            },
+        )
     )
     t = OpenAICompatTarget(name="t", base_url="https://oai.example.com/v1", model="m", api_key="k")
-    await t.generate(Prompt(
-        text="converted artifact prompt",
-        artifacts=[
-            PromptArtifact(path=str(img), kind="image", media_type="image/svg+xml"),
-            PromptArtifact(path=str(wav), kind="audio", media_type="audio/wav"),
-            PromptArtifact(path=str(pdf), kind="binary", media_type="application/pdf"),
-        ],
-    ))
+    await t.generate(
+        Prompt(
+            text="converted artifact prompt",
+            artifacts=[
+                PromptArtifact(path=str(img), kind="image", media_type="image/svg+xml"),
+                PromptArtifact(path=str(wav), kind="audio", media_type="audio/wav"),
+                PromptArtifact(path=str(pdf), kind="binary", media_type="application/pdf"),
+            ],
+        )
+    )
 
     body = json.loads(route.calls.last.request.content)
     content = body["messages"][-1]["content"]
@@ -97,13 +117,19 @@ async def test_generate_serializes_prompt_artifacts_as_multimodal_content(tmp_pa
 @respx.mock
 async def test_new_session_target_generate_adds_new_session_flag():
     route = respx.post("https://oai.example.com/v1/chat/completions").mock(
-        return_value=httpx.Response(200, json={
-            "choices": [{"message": {"content": "ok"}}],
-            "usage": {"prompt_tokens": 1, "completion_tokens": 1},
-        })
+        return_value=httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": "ok"}}],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+            },
+        )
     )
     t = OpenAICompatNewSessionTarget(
-        name="t", base_url="https://oai.example.com/v1", model="m", api_key="k",
+        name="t",
+        base_url="https://oai.example.com/v1",
+        model="m",
+        api_key="k",
     )
     await t.generate(Prompt(text="hi"))
     body = json.loads(route.calls.last.request.content)
@@ -119,10 +145,7 @@ async def test_check_stream_support_posts_stream_true():
         return_value=httpx.Response(
             200,
             headers={"content-type": "text/event-stream"},
-            content=(
-                b'data: {"choices":[{"delta":{"content":"o"}}]}\n\n'
-                b'data: [DONE]\n\n'
-            ),
+            content=(b'data: {"choices":[{"delta":{"content":"o"}}]}\n\ndata: [DONE]\n\n'),
         )
     )
     t = OpenAICompatTarget(name="t", base_url="https://oai.example.com/v1", model="m", api_key="k")

@@ -1,17 +1,23 @@
 from __future__ import annotations
+
 import pytest
-from airedteam.core.types import Prompt, Response, Message
+
 from airedteam.core.plugins import BaseTarget
+from airedteam.core.types import Message, Prompt, Response
 
 
 class DummyTarget(BaseTarget):
     name = "dummy"
+
     def __init__(self):
         self.seen: list[str] = []
+
     async def generate(self, prompt: Prompt) -> Response:
         self.seen.append(prompt.text)
         return Response(text=f"echo:{prompt.text}", raw={}, latency_ms=1)
-    async def aclose(self): pass
+
+    async def aclose(self):
+        pass
 
 
 @pytest.mark.asyncio

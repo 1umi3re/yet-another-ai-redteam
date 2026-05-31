@@ -2,7 +2,6 @@ from __future__ import annotations
 
 PYRIT_TEXT_COMPATIBLE = {
     "ansi_escape",
-    "ansi_escape",
     "add_image_text",
     "add_image_to_video",
     "add_text_image",
@@ -18,8 +17,6 @@ PYRIT_TEXT_COMPATIBLE = {
     "azure_speech_audio_to_text",
     "azure_speech_text_to_audio",
     "base2048",
-    "add_text_image",
-    "add_text_image",
     "base64",
     "bin_ascii",
     "binary",
@@ -27,9 +24,7 @@ PYRIT_TEXT_COMPATIBLE = {
     "caesar",
     "camel_case",
     "char_swap",
-    "char_swap",
     "character_space",
-    "code_chameleon",
     "code_chameleon",
     "colloquial_wordswap",
     "control_chars_injection",
@@ -39,9 +34,7 @@ PYRIT_TEXT_COMPATIBLE = {
     "emoji_substitution",
     "emoji_byte",
     "emoji_smuggling",
-    "emoji_substitution",
     "first_letter",
-    "flip_text",
     "flip_text",
     "hex",
     "human_in_the_loop",
@@ -53,7 +46,6 @@ PYRIT_TEXT_COMPATIBLE = {
     "json_string",
     "leetspeak",
     "llm_generic",
-    "llm_generic",
     "llm_malicious_question",
     "llm_persuasion",
     "llm_random_translation",
@@ -62,7 +54,6 @@ PYRIT_TEXT_COMPATIBLE = {
     "llm_toxic_sentence",
     "llm_variation",
     "lowercase",
-    "llm_malicious_question",
     "math_obfuscation",
     "markdown_wrapper",
     "math_prompt",
@@ -73,16 +64,12 @@ PYRIT_TEXT_COMPATIBLE = {
     "noise",
     "prefix",
     "pdf",
-    "llm_persuasion",
     "prompt_injection",
     "qr_code",
     "random_case",
-    "random_case",
-    "llm_random_translation",
     "repeat_token",
     "rot13",
     "search_replace",
-    "llm_scientific_translation",
     "selective_text",
     "skeleton_key",
     "sneaky_bits_smuggler",
@@ -92,10 +79,6 @@ PYRIT_TEXT_COMPATIBLE = {
     "template_jailbreak",
     "template_segment",
     "tense",
-    "template_jailbreak",
-    "llm_tone",
-    "llm_toxic_sentence",
-    "translation_llm",
     "translation_llm",
     "transparency_attack",
     "homoglyph",
@@ -103,12 +86,9 @@ PYRIT_TEXT_COMPATIBLE = {
     "unicode_obfuscation",
     "unicode_replacement",
     "unicode_substitution",
-    "unicode_substitution",
     "unicode_tag_obfuscation",
     "url_encode",
-    "url_encode",
     "variation_selector_smuggler",
-    "llm_variation",
     "word_scramble",
     "word_doc",
     "zalgo",
@@ -143,7 +123,6 @@ AEGISRT_TEXT_COMPATIBLE = {
     "url_encode",
     "morse",
     "homoglyph",
-    "homoglyph",
     "zero_width",
     "whitespace",
     "case_swap",
@@ -173,7 +152,6 @@ AEGISRT_CURRENT_CONVERTER_INVENTORY = {
     "caesar",
     "url_encode",
     "morse",
-    "homoglyph",
     "homoglyph",
     "zero_width",
     "whitespace",
@@ -230,14 +208,10 @@ EASYJAILBREAK_CURRENT_GENERATION_MUTATOR_INVENTORY = {
     "apply_gpt_mutation",
     "llm_tone",
     "crossover",
-    "llm_variation",
-    "llm_variation",
     "historical_insight",
     "noise",
     "introspect_generation",
     "char_corrupt",
-    "llm_variation",
-    "llm_variation",
     "translation_llm",
 }
 
@@ -303,17 +277,13 @@ EASYJAILBREAK_TEXT_COMPATIBLE = {
     "binary_tree",
     "llm_tone",
     "disemvowel",
-    "llm_variation",
-    "llm_variation",
     "noise",
     "leetspeak",
     "length",
     "char_corrupt",
     "odd_even",
-    "llm_variation",
     "flip_text",
     "rot13",
-    "llm_variation",
     "translation_llm",
 }
 
@@ -366,8 +336,6 @@ PYRIT_ARTIFACT_COMPATIBLE = {
     "audio_white_noise",
     "azure_speech_audio_to_text",
     "azure_speech_text_to_audio",
-    "add_text_image",
-    "add_text_image",
     "image_color_saturation",
     "image_compression",
     "image_resizing",
@@ -725,9 +693,7 @@ AGENTHARM_REQUIRES_TASK_VARIANT_SUPPORT = {
     "Open Ended Tasks",
 }
 
-AGENTHARM_CURRENT_HARM_CATEGORY_INVENTORY = set(
-    AGENTHARM_REQUIRES_AGENTIC_BENCHMARK_SUPPORT
-)
+AGENTHARM_CURRENT_HARM_CATEGORY_INVENTORY = set(AGENTHARM_REQUIRES_AGENTIC_BENCHMARK_SUPPORT)
 
 AGENTHARM_CURRENT_ATTACK_METHOD_INVENTORY = (
     set(AGENTHARM_DIRECT_PROMPTING_CONVERTER_COMPATIBLE)
@@ -752,13 +718,10 @@ SAFEARENA_REQUIRES_WEB_AGENT_BENCHMARK_SUPPORT = {
     "Misinformation",
 }
 
-SAFEARENA_CURRENT_HARM_CATEGORY_INVENTORY = set(
-    SAFEARENA_REQUIRES_WEB_AGENT_BENCHMARK_SUPPORT
-)
+SAFEARENA_CURRENT_HARM_CATEGORY_INVENTORY = set(SAFEARENA_REQUIRES_WEB_AGENT_BENCHMARK_SUPPORT)
 
 SAFEARENA_CURRENT_ATTACK_METHOD_INVENTORY = (
-    set(SAFEARENA_ATTACK_CONVERTER_COMPATIBLE)
-    | SAFEARENA_REQUIRES_MULTI_TURN_WEB_AGENT_ATTACK_SUPPORT
+    set(SAFEARENA_ATTACK_CONVERTER_COMPATIBLE) | SAFEARENA_REQUIRES_MULTI_TURN_WEB_AGENT_ATTACK_SUPPORT
 )
 
 OSHARM_ATTACK_CONVERTER_COMPATIBLE = {
@@ -767,9 +730,7 @@ OSHARM_ATTACK_CONVERTER_COMPATIBLE = {
     "Prompt Injection Attacks": {"prompt_injection"},
 }
 
-OSHARM_CURRENT_ATTACK_METHOD_INVENTORY = set(
-    OSHARM_ATTACK_CONVERTER_COMPATIBLE
-)
+OSHARM_CURRENT_ATTACK_METHOD_INVENTORY = set(OSHARM_ATTACK_CONVERTER_COMPATIBLE)
 
 OSHARM_CURRENT_HARM_VECTOR_INVENTORY = {
     "Deliberate User Misuse",
@@ -810,17 +771,12 @@ OSHARM_CURRENT_INJECTION_GOAL_INVENTORY = {
 }
 
 OSHARM_REQUIRES_COMPUTER_USE_BENCHMARK_SUPPORT = (
-    OSHARM_CURRENT_HARM_VECTOR_INVENTORY
-    | OSHARM_CURRENT_MISUSE_CATEGORY_INVENTORY
+    OSHARM_CURRENT_HARM_VECTOR_INVENTORY | OSHARM_CURRENT_MISUSE_CATEGORY_INVENTORY
 )
 
-OSHARM_REQUIRES_PROMPT_INJECTION_VECTOR_SUPPORT = set(
-    OSHARM_CURRENT_INJECTION_VECTOR_INVENTORY
-)
+OSHARM_REQUIRES_PROMPT_INJECTION_VECTOR_SUPPORT = set(OSHARM_CURRENT_INJECTION_VECTOR_INVENTORY)
 
-OSHARM_REQUIRES_PROMPT_INJECTION_GOAL_SUPPORT = set(
-    OSHARM_CURRENT_INJECTION_GOAL_INVENTORY
-)
+OSHARM_REQUIRES_PROMPT_INJECTION_GOAL_SUPPORT = set(OSHARM_CURRENT_INJECTION_GOAL_INVENTORY)
 
 ASB_PROMPT_INJECTION_PAYLOAD_CONVERTER_COMPATIBLE = {
     "combined_attack": {
@@ -863,9 +819,7 @@ ASB_CURRENT_ATTACK_MODE_INVENTORY = (
     | ASB_REQUIRES_MIXED_ATTACK_HARNESS_SUPPORT
 )
 
-ASB_CURRENT_PROMPT_INJECTION_PAYLOAD_INVENTORY = set(
-    ASB_PROMPT_INJECTION_PAYLOAD_CONVERTER_COMPATIBLE
-)
+ASB_CURRENT_PROMPT_INJECTION_PAYLOAD_INVENTORY = set(ASB_PROMPT_INJECTION_PAYLOAD_CONVERTER_COMPATIBLE)
 
 INJECAGENT_ATTACK_CONVERTER_COMPATIBLE = {
     "Indirect Prompt Injection": {
@@ -908,8 +862,7 @@ INJECAGENT_REQUIRES_ATTACK_OUTCOME_SUPPORT = (
 )
 
 INJECAGENT_CURRENT_ATTACK_METHOD_INVENTORY = (
-    set(INJECAGENT_ATTACK_CONVERTER_COMPATIBLE)
-    | INJECAGENT_REQUIRES_TOOL_AGENT_BENCHMARK_SUPPORT
+    set(INJECAGENT_ATTACK_CONVERTER_COMPATIBLE) | INJECAGENT_REQUIRES_TOOL_AGENT_BENCHMARK_SUPPORT
 )
 
 AGENTVIGIL_ATTACK_CONVERTER_COMPATIBLE = {
@@ -1120,7 +1073,6 @@ ARMS_CURRENT_ADVERSARIAL_PATTERN_INVENTORY = {
 ARMS_STRATEGY_CONVERTER_COMPATIBLE = {
     "Rule-based": {
         "add_text_image",
-        "add_text_image",
         "template_jailbreak",
     },
     "Email thread": {
@@ -1148,7 +1100,6 @@ ARMS_STRATEGY_CONVERTER_COMPATIBLE = {
         "template_jailbreak",
     },
     "Numbered-list image": {
-        "add_text_image",
         "add_text_image",
     },
     "Actor attack": {
@@ -1200,8 +1151,7 @@ ARMS_CURRENT_FRAMEWORK_MECHANISM_INVENTORY = {
 }
 
 ARMS_REQUIRES_ADAPTIVE_AGENT_SUPPORT = (
-    ARMS_CURRENT_ADVERSARIAL_PATTERN_INVENTORY
-    | ARMS_CURRENT_FRAMEWORK_MECHANISM_INVENTORY
+    ARMS_CURRENT_ADVERSARIAL_PATTERN_INVENTORY | ARMS_CURRENT_FRAMEWORK_MECHANISM_INVENTORY
 )
 
 XTEAMING_PLAN_CONVERTER_COMPATIBLE = {
@@ -1270,7 +1220,6 @@ AUTOREDTEAMER_INITIAL_ATTACK_CONVERTER_COMPATIBLE = {
         "composite_jailbreak",
         "skeleton_key",
         "template_jailbreak",
-        "template_jailbreak",
     },
 }
 
@@ -1281,7 +1230,6 @@ AUTOREDTEAMER_INITIAL_ATTACK_EXECUTOR_COMPATIBLE = {
 AUTOREDTEAMER_PROPOSED_ATTACK_CONVERTER_COMPATIBLE = {
     "Technical Slang": {
         "llm_tone",
-        "llm_scientific_translation",
         "llm_scientific_translation",
     },
     "Reframe": {
@@ -1306,7 +1254,6 @@ AUTOREDTEAMER_PROPOSED_ATTACK_CONVERTER_COMPATIBLE = {
         "dan",
         "skeleton_key",
         "template_jailbreak",
-        "template_jailbreak",
     },
     "Historical Scenarios": {
         "fictional",
@@ -1316,7 +1263,6 @@ AUTOREDTEAMER_PROPOSED_ATTACK_CONVERTER_COMPATIBLE = {
     "Uncommon Dialects": {
         "llm_tone",
         "low_resource_language",
-        "llm_tone",
     },
     "FewShot": {"few_shot"},
     "Past Tense": {"tense"},
@@ -1326,7 +1272,6 @@ AUTOREDTEAMER_PROPOSED_ATTACK_CONVERTER_COMPATIBLE = {
         "research",
     },
     "Reasoning Puzzles": {
-        "math_prompt",
         "math_prompt",
         "negation_trap",
     },
@@ -1409,7 +1354,6 @@ LLAMATOR_SINGLE_STAGE_ATTACK_CONVERTER_COMPATIBLE = {
     },
     "Semantic Game": {
         "emoji_substitution",
-        "emoji_substitution",
         "roleplay",
         "semantic_manipulation",
     },
@@ -1449,7 +1393,6 @@ LLAMATOR_VLM_ATTACK_CONVERTER_COMPATIBLE = {
     },
     "M-Attack": {"image_noise"},
     "Text Hallucination Attack": {
-        "add_text_image",
         "add_text_image",
     },
 }
@@ -1496,7 +1439,7 @@ HARMBENCH_METHOD_CONVERTER_COMPATIBLE = {
     "ArtPrompt": {"ascii_art"},
     "DirectRequest": {"identity"},
     "HumanJailbreaks": {"template_jailbreak"},
-    "MultiModalRenderText": {"add_text_image", "add_text_image"},
+    "MultiModalRenderText": {"add_text_image"},
     "PAP": {"llm_persuasion"},
     "ZeroShot": {"llm_generic"},
 }
@@ -1610,7 +1553,6 @@ PANDAGUARD_ATTACK_CONVERTER_COMPATIBLE = {
     "Transfer-based Attacks": {
         "composite_jailbreak",
         "template_jailbreak",
-        "template_jailbreak",
     },
     "Rewrite Attack": {
         "llm_variation",
@@ -1707,7 +1649,6 @@ AISAFETYLAB_ATTACK_CONVERTER_COMPATIBLE = {
         "low_resource_language",
         "multilingual",
         "translation_llm",
-        "translation_llm",
     },
 }
 
@@ -1767,27 +1708,22 @@ STRONGREJECT_JAILBREAK_CONVERTER_COMPATIBLE = {
     "pap_evidence_based_persuasion": {
         "citation_framing",
         "llm_persuasion",
-        "llm_persuasion",
         "research",
     },
     "pap_expert_endorsement": {
         "authority_escalation",
         "llm_persuasion",
-        "llm_persuasion",
     },
     "pap_misrepresentation": {
-        "llm_persuasion",
         "llm_persuasion",
         "semantic_manipulation",
     },
     "pap_authority_endorsement": {
         "authority_escalation",
         "llm_persuasion",
-        "llm_persuasion",
     },
     "pap_logical_appeal": {
         "citation_framing",
-        "llm_persuasion",
         "llm_persuasion",
         "research",
     },
@@ -2038,7 +1974,6 @@ AI_INFRAGUARD_ATTACK_CONVERTER_COMPATIBLE = {
     "Leetspeak": {"leetspeak"},
     "MirrorText": {
         "flip_text",
-        "flip_text",
     },
     "Ogham": {"ogham"},
     "Stego": {
@@ -2278,14 +2213,12 @@ H4RM3L_PRIMITIVE_CONVERTER_COMPATIBLE = {
     "TranslateDecorator": {
         "low_resource_language",
         "translation_llm",
-        "translation_llm",
     },
     "TranslateBackDecorator": {
         "template_jailbreak",
         "translation_llm",
     },
     "PAPDecorator": {
-        "llm_persuasion",
         "llm_persuasion",
     },
     "CharCorrupt": {"char_corrupt"},
@@ -2353,7 +2286,6 @@ H4RM3L_PRIMITIVE_CONVERTER_COMPATIBLE = {
     },
     "PersuasiveDecorator": {
         "llm_persuasion",
-        "llm_persuasion",
     },
     "SynonymDecorator": {
         "llm_variation",
@@ -2371,8 +2303,7 @@ H4RM3L_REQUIRES_ARBITRARY_TRANSFORM_SUPPORT = {
 }
 
 H4RM3L_CURRENT_PRIMITIVE_INVENTORY = (
-    set(H4RM3L_PRIMITIVE_CONVERTER_COMPATIBLE)
-    | H4RM3L_REQUIRES_ARBITRARY_TRANSFORM_SUPPORT
+    set(H4RM3L_PRIMITIVE_CONVERTER_COMPATIBLE) | H4RM3L_REQUIRES_ARBITRARY_TRANSFORM_SUPPORT
 )
 
 H4RM3L_BASELINE_ATTACK_CONVERTER_COMPATIBLE = {
@@ -2385,7 +2316,6 @@ H4RM3L_BASELINE_ATTACK_CONVERTER_COMPATIBLE = {
         "template_jailbreak",
     },
     "sota_PAP": {
-        "llm_persuasion",
         "llm_persuasion",
     },
     "sota_aff_prfx_inj": {
@@ -2411,7 +2341,6 @@ H4RM3L_BASELINE_ATTACK_CONVERTER_COMPATIBLE = {
     "sota_few_shots": {"few_shot"},
     "sota_lr_translation": {
         "low_resource_language",
-        "translation_llm",
         "translation_llm",
     },
     "sota_obf_pyld_splitting": {"payload_split"},
@@ -2469,7 +2398,6 @@ H4RM3L_BASELINE_ATTACK_CONVERTER_COMPATIBLE = {
     },
     "handcrafted_06_persuasion": {
         "llm_persuasion",
-        "llm_persuasion",
         "research",
         "roleplay",
         "template_jailbreak",
@@ -2477,9 +2405,7 @@ H4RM3L_BASELINE_ATTACK_CONVERTER_COMPATIBLE = {
     },
 }
 
-H4RM3L_CURRENT_BASELINE_ATTACK_INVENTORY = set(
-    H4RM3L_BASELINE_ATTACK_CONVERTER_COMPATIBLE
-)
+H4RM3L_CURRENT_BASELINE_ATTACK_INVENTORY = set(H4RM3L_BASELINE_ATTACK_CONVERTER_COMPATIBLE)
 
 H4RM3L_REQUIRES_PROGRAM_SYNTHESIS_SUPPORT = {
     "ASR Rewarded Bandits",
@@ -2492,12 +2418,10 @@ H4RM3L_CURRENT_SYNTHESIS_METHOD_INVENTORY = H4RM3L_REQUIRES_PROGRAM_SYNTHESIS_SU
 GPTFUZZER_MUTATOR_CONVERTER_COMPATIBLE = {
     "OpenAIMutatorGenerateSimilar": {
         "llm_variation",
-        "llm_variation",
     },
     "OpenAIMutatorExpand": {"llm_variation"},
     "OpenAIMutatorShorten": {"llm_variation"},
     "OpenAIMutatorRephrase": {
-        "llm_variation",
         "llm_variation",
     },
 }
@@ -2507,8 +2431,7 @@ GPTFUZZER_REQUIRES_MULTI_PROMPT_MUTATOR_SUPPORT = {
 }
 
 GPTFUZZER_CURRENT_MUTATOR_INVENTORY = (
-    set(GPTFUZZER_MUTATOR_CONVERTER_COMPATIBLE)
-    | GPTFUZZER_REQUIRES_MULTI_PROMPT_MUTATOR_SUPPORT
+    set(GPTFUZZER_MUTATOR_CONVERTER_COMPATIBLE) | GPTFUZZER_REQUIRES_MULTI_PROMPT_MUTATOR_SUPPORT
 )
 
 GPTFUZZER_REQUIRES_SELECTION_POLICY_SUPPORT = {
@@ -2519,9 +2442,7 @@ GPTFUZZER_REQUIRES_SELECTION_POLICY_SUPPORT = {
     "UCBSelectPolicy",
 }
 
-GPTFUZZER_CURRENT_SELECTION_POLICY_INVENTORY = (
-    GPTFUZZER_REQUIRES_SELECTION_POLICY_SUPPORT
-)
+GPTFUZZER_CURRENT_SELECTION_POLICY_INVENTORY = GPTFUZZER_REQUIRES_SELECTION_POLICY_SUPPORT
 
 GPTFUZZER_REQUIRES_FUZZING_LOOP_SUPPORT = {
     "GPTFuzzer fuzzing loop",
@@ -2533,8 +2454,7 @@ GPTFUZZER_REQUIRES_JUDGMENT_MODEL_SUPPORT = {
 }
 
 GPTFUZZER_CURRENT_FUZZING_COMPONENT_INVENTORY = (
-    GPTFUZZER_REQUIRES_FUZZING_LOOP_SUPPORT
-    | GPTFUZZER_REQUIRES_JUDGMENT_MODEL_SUPPORT
+    GPTFUZZER_REQUIRES_FUZZING_LOOP_SUPPORT | GPTFUZZER_REQUIRES_JUDGMENT_MODEL_SUPPORT
 )
 
 RACCOONBENCH_CURRENT_SINGULAR_ATTACK_INVENTORY = {
@@ -2600,7 +2520,7 @@ RACCOONBENCH_SINGULAR_ATTACK_CONVERTER_COMPATIBLE = {
         "template_jailbreak",
     },
     "Special Case Attack": {"prompt_probing", "roleplay", "template_jailbreak"},
-    "Translation": {"translation_llm", "translation_llm"},
+    "Translation": {"translation_llm"},
 }
 
 OPENRT_CURRENT_ATTACK_METHOD_INVENTORY = {
@@ -2652,7 +2572,7 @@ OPENRT_METHOD_CONVERTER_COMPATIBLE = {
     "ArtPrompt": {"ascii_art"},
     "CipherChat": {"base64", "caesar", "char_code", "morse", "rot13"},
     "CodeAttack": {"code_chameleon"},
-    "FigStep": {"add_text_image", "add_text_image", "add_text_image"},
+    "FigStep": {"add_text_image"},
     "FlipAttack": {"flip_text"},
     "ICA": {"few_shot"},
     "Jailbroken": {
@@ -2665,7 +2585,6 @@ OPENRT_METHOD_CONVERTER_COMPATIBLE = {
     "Multilingual": {
         "low_resource_language",
         "multilingual",
-        "translation_llm",
         "translation_llm",
     },
     "Past Tense": {"tense"},
@@ -2769,7 +2688,6 @@ FUZZYAI_ATTACK_CONVERTER_COMPATIBLE = {
     "Taxonomy-based paraphrasing": {
         "emotional_manipulation",
         "llm_persuasion",
-        "llm_persuasion",
     },
     "ThoughtExperiment": {"fictional", "research", "template_jailbreak"},
     "WordGame": {"acronym", "first_letter", "nato", "word_scramble"},
@@ -2811,7 +2729,7 @@ PROMPTBENCH_ATTACK_CONVERTER_COMPATIBLE = {
     "BertAttack": {"llm_variation", "word_substitution"},
     "CheckList": {"context_flooding", "noise", "suffix", "suffix_append"},
     "DeepWordBug": {"char_swap", "insert_punctuation", "noise", "word_scramble"},
-    "Semantic": {"llm_variation", "translation_llm", "translation_llm"},
+    "Semantic": {"llm_variation", "translation_llm"},
     "StressTest": {"context_flooding", "suffix", "suffix_append"},
     "TextBugger": {
         "char_swap",
@@ -2912,10 +2830,9 @@ OPENATTACK_ATTACKER_CONVERTER_COMPATIBLE = {
         "homoglyph",
         "insert_punctuation",
         "noise",
-        "homoglyph",
         "word_scramble",
     },
-    "SCPNAttacker": {"llm_variation", "llm_variation"},
+    "SCPNAttacker": {"llm_variation"},
     "TextBuggerAttacker": {
         "char_swap",
         "insert_punctuation",
@@ -2925,7 +2842,7 @@ OPENATTACK_ATTACKER_CONVERTER_COMPATIBLE = {
         "word_substitution",
     },
     "TextFoolerAttacker": {"llm_variation", "word_substitution"},
-    "VIPERAttacker": {"homoglyph", "homoglyph"},
+    "VIPERAttacker": {"homoglyph"},
 }
 
 OPENATTACK_REQUIRES_MODEL_GUIDED_RECIPE_SUPPORT = {
@@ -2978,8 +2895,8 @@ OPENBACKDOOR_ATTACK_CONVERTER_COMPATIBLE = {
     "AddSent": {"prefix", "suffix", "template_jailbreak"},
     "BadNets": {"prefix", "suffix", "suffix_append", "template_jailbreak"},
     "LWS": {"llm_variation", "word_substitution"},
-    "StyleBkd": {"llm_tone", "llm_tone", "llm_variation", "llm_tone"},
-    "SynBkd": {"llm_variation", "llm_variation"},
+    "StyleBkd": {"llm_tone", "llm_variation"},
+    "SynBkd": {"llm_variation"},
 }
 
 OPENBACKDOOR_REQUIRES_PRETRAINED_MODEL_BACKDOOR_SUPPORT = {
@@ -3592,7 +3509,7 @@ AZURE_AI_EVALUATION_STRATEGY_CONVERTER_COMPATIBLE = {
     "Diacritic": {"diacritic"},
     "Flip": {"flip_text"},
     "IndirectAttack": {"indirect_web_pwn"},
-    "Jailbreak": {"template_jailbreak", "template_jailbreak"},
+    "Jailbreak": {"template_jailbreak"},
     "Leetspeak": {"leetspeak"},
     "Morse": {"morse"},
     "ROT13": {"rot13"},
@@ -3615,9 +3532,8 @@ AZURE_AI_EVALUATION_GROUP_STRATEGY_COMPATIBLE = {
     "DIFFICULT": {"Base64", "Tense"},
 }
 
-AZURE_AI_EVALUATION_CURRENT_ATTACK_STRATEGY_INVENTORY = (
-    set(AZURE_AI_EVALUATION_STRATEGY_CONVERTER_COMPATIBLE)
-    | set(AZURE_AI_EVALUATION_STRATEGY_EXECUTOR_COMPATIBLE)
+AZURE_AI_EVALUATION_CURRENT_ATTACK_STRATEGY_INVENTORY = set(AZURE_AI_EVALUATION_STRATEGY_CONVERTER_COMPATIBLE) | set(
+    AZURE_AI_EVALUATION_STRATEGY_EXECUTOR_COMPATIBLE
 )
 
 CYBERSECEVAL_PROMPT_INJECTION_CONVERTER_COMPATIBLE = {
@@ -3749,9 +3665,7 @@ OPEN_PROMPT_INJECTION_ATTACKER_CONVERTER_COMPATIBLE = {
     "naive": {"prompt_injection", "suffix_append"},
 }
 
-OPEN_PROMPT_INJECTION_CURRENT_ATTACKER_INVENTORY = set(
-    OPEN_PROMPT_INJECTION_ATTACKER_CONVERTER_COMPATIBLE
-)
+OPEN_PROMPT_INJECTION_CURRENT_ATTACKER_INVENTORY = set(OPEN_PROMPT_INJECTION_ATTACKER_CONVERTER_COMPATIBLE)
 
 BIPIA_TEXT_ATTACK_CONVERTER_COMPATIBLE = {
     "Base Encoding": {"base64", "hex"},
@@ -3800,8 +3714,8 @@ BIPIA_CURRENT_ATTACK_CATEGORY_INVENTORY = (
 MOONSHOT_ATTACK_MODULE_CONVERTER_COMPATIBLE = {
     "Character Swap Attack": {"char_swap"},
     "Colloquial Wordswap": {"colloquial_wordswap"},
-    "Homoglyph Attack": {"homoglyph", "homoglyph"},
-    "Homoglyph V2 Attack": {"homoglyph", "homoglyph"},
+    "Homoglyph Attack": {"homoglyph"},
+    "Homoglyph V2 Attack": {"homoglyph"},
     "Insert Punctuation Attack": {"insert_punctuation"},
     "Job Role Generator Module": {"job_role_generator"},
     "Malicious Question Generator": {"llm_malicious_question"},
@@ -3823,8 +3737,7 @@ MOONSHOT_REQUIRES_MULTI_TURN_AGENT_SUPPORT = {
 }
 
 MOONSHOT_CURRENT_ATTACK_MODULE_INVENTORY = (
-    set(MOONSHOT_ATTACK_MODULE_CONVERTER_COMPATIBLE)
-    | MOONSHOT_REQUIRES_MULTI_TURN_AGENT_SUPPORT
+    set(MOONSHOT_ATTACK_MODULE_CONVERTER_COMPATIBLE) | MOONSHOT_REQUIRES_MULTI_TURN_AGENT_SUPPORT
 )
 
 DEEPTEAM_TEXT_COMPATIBLE = {
@@ -3841,7 +3754,6 @@ DEEPTEAM_TEXT_COMPATIBLE = {
     "input_bypass",
     "leetspeak",
     "linguistic_confusion",
-    "math_prompt",
     "math_prompt",
     "multilingual",
     "permission_escalation",

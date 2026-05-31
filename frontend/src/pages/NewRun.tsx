@@ -74,6 +74,15 @@ export default function NewRun() {
   const scorerSchema = scorerSchemas[scorer.plugin];
   const isGeneralMultiTurnExecutor = generalMultiTurnExecutors.includes(executor.plugin);
   const showGeneralGoalImport = mode === "custom" && isGeneralMultiTurnExecutor;
+  const selectedTarget = useMemo(
+    () => targets?.find((target: any) => target.id === targetId),
+    [targets, targetId],
+  );
+  const selectedTargetMaxInputChars = selectedTarget?.params?.max_input_chars;
+  const targetHasInputLimit = selectedTargetMaxInputChars != null && selectedTargetMaxInputChars !== "";
+  const showSplitExecutorRecommendation = mode === "custom"
+    && targetHasInputLimit
+    && executor.plugin === "single_turn";
   const { data: goalDatasetItems } = useQuery({
     queryKey: ["new-run-goal-dataset-items", datasetId, goalSearch, goalPage],
     queryFn: async () => (await api.get(`/api/datasets/${datasetId}/items`, {
@@ -357,6 +366,33 @@ export default function NewRun() {
               </Select>
             </Field>
           </div>
+
+          {targetHasInputLimit && (
+            <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <div className="font-medium">
+                {t("Selected target limits each user message to {{count}} characters.", {
+                  count: selectedTargetMaxInputChars,
+                })}
+              </div>
+              {showSplitExecutorRecommendation && (
+                <div className="mt-2 flex flex-wrap items-center gap-3">
+                  <span className="text-xs">
+                    {t("For long dataset prompts, use split_executor so chunks stay within the limit.")}
+                  </span>
+                  {plugins?.executors?.includes("split_executor") && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => setExecutorPlugin("split_executor")}
+                    >
+                      {t("Use split_executor")}
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {showGeneralGoalImport && (
             <div className="mt-5 rounded-lg border border-gray-200 bg-gray-50/50 p-4 space-y-3">

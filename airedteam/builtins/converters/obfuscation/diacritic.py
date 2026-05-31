@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from airedteam.core.types import Prompt
 
-
 _MARKS = {
     "acute": "\u0301",
     "grave": "\u0300",
