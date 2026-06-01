@@ -60,7 +60,7 @@ async def test_run_engine_fan_out():
     attempts: list = []
     scores: list = []
 
-    async def on_attempt(ar, tname, item_id):
+    async def on_attempt(ar, tname, item_id, work_key):
         attempts.append((tname, item_id))
 
     async def on_score(idx, sr):
@@ -96,7 +96,7 @@ async def test_run_engine_runs_each_converter_as_separate_variant():
             r = await target.generate(prompt)
             return AttemptResult(prompt=prompt, response=r, status="completed", converter_chain=chain)
 
-    async def on_attempt(ar, tname, item_id):
+    async def on_attempt(ar, tname, item_id, work_key):
         pass
 
     async def on_score(idx, sr):
@@ -142,7 +142,7 @@ async def test_run_engine_respects_target_max_concurrency():
     target = FakeTarget("t1")
     target._airedteam_max_concurrency = 1
 
-    async def on_attempt(ar, tname, item_id):
+    async def on_attempt(ar, tname, item_id, work_key):
         pass
 
     async def on_score(idx, sr):

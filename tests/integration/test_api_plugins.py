@@ -102,7 +102,34 @@ async def test_list_plugins_and_scenarios(monkeypatch, tmp_path):
         jailbreak_params = body["params"]["executors"]["jailbreak_iterative"]
         assert jailbreak_params["judge_config_id"]["type"] == "target_ref"
         rs = await c.get("/api/scenarios", headers=h)
-        assert any(s["id"] == "owasp_llm_top10_jailbreak" for s in rs.json())
+        scenarios = rs.json()
+        assert any(s["id"] == "owasp_llm_top10_jailbreak" for s in scenarios)
+        encoding = next(s for s in scenarios if s["id"] == "encoding_bypass")
+        assert encoding["level"] == "basic"
+        assert encoding["requirements"] == []
+        pair = next(s for s in scenarios if s["id"] == "pair_iterative")
+        assert pair["level"] == "advanced"
+        assert {req["id"] for req in pair["requirements"]} == {"attacker_config_id", "judge_config_id"}
+
+        rendered = await c.post(
+            "/api/scenarios/encoding_bypass/runspec",
+            headers=h,
+            json={"target_config_id": "target-1", "dataset_config_id": "dataset-1"},
+        )
+        assert rendered.status_code == 200
+        spec = rendered.json()
+        assert spec["scenario"] == "encoding_bypass"
+        assert spec["targets"] == [{"config_id": "target-1"}]
+        assert spec["dataset"] == {"config_id": "dataset-1"}
+        assert [c["plugin"] for c in spec["converters"]] == ["base64", "rot13", "hex", "unicode_escape"]
+
+        missing_helper = await c.post(
+            "/api/scenarios/pair_iterative/runspec",
+            headers=h,
+            json={"target_config_id": "target-1", "dataset_config_id": "dataset-1"},
+        )
+        assert missing_helper.status_code == 400
+        assert "attacker_config_id" in missing_helper.json()["detail"]
 
 
 def test_general_multi_turn_variant_plugin_schema_uses_variant_defaults():

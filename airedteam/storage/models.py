@@ -112,6 +112,7 @@ class Attempt(Base):
     target_id: Mapped[str] = mapped_column(String(100))
     target_name: Mapped[str] = mapped_column(String(200))
     dataset_item_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    work_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
     prompt_text: Mapped[str] = mapped_column(Text)
     converter_chain: Mapped[list] = mapped_column(JSON, default=list)
     response_text: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -145,5 +146,6 @@ class Score(Base):
 
 
 Index("ix_attempts_run_id", Attempt.run_id)
+Index("uq_attempts_run_work_key", Attempt.run_id, Attempt.work_key, unique=True)
 Index("ix_scores_attempt_id", Score.attempt_id)
 Index("ix_dataset_versions_dataset_id", DatasetVersion.dataset_id)

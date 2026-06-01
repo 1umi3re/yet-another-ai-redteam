@@ -22,7 +22,7 @@ export default function Dashboard() {
 
   const runsArr: any[] = runs ?? [];
   const completed = runsArr.filter(r => r.status === "completed").length;
-  const running = runsArr.filter(r => r.status === "running").length;
+  const running = runsArr.filter(r => ["running", "pausing"].includes(r.status)).length;
   const recent = runsArr.slice(0, 5);
 
   return (

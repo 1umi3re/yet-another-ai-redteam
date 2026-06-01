@@ -1,9 +1,59 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
+from typing import Any
 
-from airedteam.core.types import AttemptResult, ScoreResult
+from airedteam.core.types import AttemptResult, Prompt, ScoreResult
+
+
+@dataclass(frozen=True)
+class WorkItem:
+    prompt: Prompt
+    prompt_index: int
+    target: Any
+    target_index: int
+    target_name: str
+    converter_variant: list
+    converter_index: int
+    dataset_item_id: str | None
+    work_key: str
+
+
+@dataclass(frozen=True)
+class RunEngineResult:
+    stopped: bool = False
+
+
+def work_key_for(
+    *,
+    prompt: Prompt,
+    prompt_index: int,
+    target_index: int,
+    target_name: str,
+    converter_variant: list,
+    converter_index: int,
+) -> str:
+    prompt_id = None
+    try:
+        prompt_id = prompt.metadata.get("id")
+    except Exception:
+        pass
+    payload = {
+        "version": 1,
+        "prompt_index": prompt_index,
+        "prompt_id": prompt_id,
+        "prompt_sha256": hashlib.sha256(prompt.text.encode("utf-8", errors="ignore")).hexdigest(),
+        "target_index": target_index,
+        "target_name": target_name,
+        "converter_index": converter_index,
+        "converter_names": [getattr(c, "name", type(c).__name__) for c in converter_variant],
+    }
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=repr)
+    return "v1:" + hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
 class RunEngine:
@@ -13,7 +63,7 @@ class RunEngine:
         self,
         *,
         progress_bus,
-        on_attempt: Callable[[AttemptResult, str, str | None], Awaitable[None]],
+        on_attempt: Callable[[AttemptResult, str, str | None, str], Awaitable[None]],
         on_score: Callable[[int, ScoreResult], Awaitable[None]],
     ) -> None:
         self._bus = progress_bus
@@ -33,8 +83,10 @@ class RunEngine:
         scorers: list,
         concurrency: int,
         orchestrator,
-    ) -> None:
-        sem = asyncio.Semaphore(max(1, concurrency))
+        should_stop: Callable[[], Awaitable[bool]] | None = None,
+        should_skip_work: Callable[[str], Awaitable[bool]] | None = None,
+    ) -> RunEngineResult:
+        max_active = max(1, concurrency)
         converter_variants = [[c] for c in converters] if converters else [[]]
         target_sems: dict[int, asyncio.Semaphore] = {}
         for target in targets:
@@ -42,29 +94,28 @@ class RunEngine:
             if limit is not None:
                 target_sems[id(target)] = asyncio.Semaphore(max(1, int(limit)))
 
-        async def process(prompt, target, converter_variant):
-            target_name = getattr(target, "name", "?")
-            dataset_item_id = None
-            try:
-                dataset_item_id = prompt.metadata.get("id")
-            except Exception:
-                pass
-            target_sem = target_sems.get(id(target))
+        async def stop_requested() -> bool:
+            return bool(should_stop is not None and await should_stop())
+
+        async def process(item: WorkItem):
+            target_sem = target_sems.get(id(item.target))
             if target_sem is not None:
                 async with target_sem:
-                    async with sem:
-                        await run_attempt(prompt, target, converter_variant, target_name, dataset_item_id)
-            else:
-                async with sem:
-                    await run_attempt(prompt, target, converter_variant, target_name, dataset_item_id)
+                    if not await stop_requested():
+                        await run_attempt(item)
+            elif not await stop_requested():
+                await run_attempt(item)
 
-        async def run_attempt(prompt, target, converter_variant, target_name, dataset_item_id):
-            ar = await executor.run(prompt, target, converter_variant)
+        async def run_attempt(item: WorkItem):
+            ar = await executor.run(item.prompt, item.target, item.converter_variant)
             async with self._lock:
-                await self._on_attempt(ar, target_name, dataset_item_id)
+                await self._on_attempt(ar, item.target_name, item.dataset_item_id, item.work_key)
                 idx = self._counter
                 self._counter += 1
-            await self._bus.publish(run_id, {"type": "attempt.completed", "status": ar.status})
+            await self._bus.publish(
+                run_id,
+                {"type": "attempt.completed", "status": ar.status, "work_key": item.work_key},
+            )
             for sc in scorers:
                 try:
                     sr = await sc.score(ar)
@@ -72,10 +123,66 @@ class RunEngine:
                     sr = ScoreResult(scorer=getattr(sc, "name", "?"), value={"error": str(e)}, rationale=None)
                 await self._on_score(idx, sr)
 
-        tasks: list[asyncio.Task] = []
+        async def wait_for_slot(active: set[asyncio.Task]) -> set[asyncio.Task]:
+            if len(active) < max_active:
+                return active
+            done, pending = await asyncio.wait(active, return_when=asyncio.FIRST_COMPLETED)
+            for task in done:
+                await task
+            return set(pending)
+
+        async def drain(active: set[asyncio.Task]) -> None:
+            while active:
+                done, pending = await asyncio.wait(active, return_when=asyncio.FIRST_COMPLETED)
+                for task in done:
+                    await task
+                active = set(pending)
+
+        active: set[asyncio.Task] = set()
+        stopped = False
+        prompt_index = -1
         async for prompt in orchestrator.attempts(dataset, converters):
-            for t in targets:
-                for converter_variant in converter_variants:
-                    tasks.append(asyncio.create_task(process(prompt, t, converter_variant)))
-        if tasks:
-            await asyncio.gather(*tasks)
+            prompt_index += 1
+            for target_index, target in enumerate(targets):
+                target_name = getattr(target, "name", "?")
+                dataset_item_id = None
+                try:
+                    dataset_item_id = prompt.metadata.get("id")
+                except Exception:
+                    pass
+                for converter_index, converter_variant in enumerate(converter_variants):
+                    active = await wait_for_slot(active)
+                    if await stop_requested():
+                        stopped = True
+                        break
+                    work_key = work_key_for(
+                        prompt=prompt,
+                        prompt_index=prompt_index,
+                        target_index=target_index,
+                        target_name=target_name,
+                        converter_variant=converter_variant,
+                        converter_index=converter_index,
+                    )
+                    if should_skip_work is not None and await should_skip_work(work_key):
+                        continue
+                    item = WorkItem(
+                        prompt=prompt,
+                        prompt_index=prompt_index,
+                        target=target,
+                        target_index=target_index,
+                        target_name=target_name,
+                        converter_variant=converter_variant,
+                        converter_index=converter_index,
+                        dataset_item_id=dataset_item_id,
+                        work_key=work_key,
+                    )
+                    active.add(asyncio.create_task(process(item)))
+                if stopped:
+                    break
+            if stopped:
+                break
+
+        await drain(active)
+        if not stopped and await stop_requested():
+            stopped = True
+        return RunEngineResult(stopped=stopped)

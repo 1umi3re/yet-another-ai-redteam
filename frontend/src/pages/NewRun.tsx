@@ -53,6 +53,7 @@ export default function NewRun() {
   const [mode, setMode] = useState<"preset" | "custom">("preset");
   const [name, setName] = useState(t("My run"));
   const [scenarioId, setScenarioId] = useState("");
+  const [scenarioHelpers, setScenarioHelpers] = useState<Record<string, string>>({});
   const [targetId, setTargetId] = useState("");
   const [datasetId, setDatasetId] = useState("");
   const [executor, setExecutor] = useState<ConfiguredPlugin>({ plugin: "single_turn", params: {} });
@@ -74,6 +75,19 @@ export default function NewRun() {
   const scorerSchema = scorerSchemas[scorer.plugin];
   const isGeneralMultiTurnExecutor = generalMultiTurnExecutors.includes(executor.plugin);
   const showGeneralGoalImport = mode === "custom" && isGeneralMultiTurnExecutor;
+  const selectedScenario = useMemo(
+    () => scenarios?.find((scenario: any) => scenario.id === scenarioId),
+    [scenarios, scenarioId],
+  );
+  const scenarioRequirements = selectedScenario?.requirements ?? [];
+  const scenariosByLevel = useMemo(() => {
+    const grouped: Record<string, any[]> = { basic: [], advanced: [] };
+    for (const scenario of scenarios ?? []) {
+      const level = scenario.level === "advanced" ? "advanced" : "basic";
+      grouped[level].push(scenario);
+    }
+    return grouped;
+  }, [scenarios]);
   const selectedTarget = useMemo(
     () => targets?.find((target: any) => target.id === targetId),
     [targets, targetId],
@@ -245,19 +259,28 @@ export default function NewRun() {
 
   const submit = useMutation({
     mutationFn: async () => {
-      const executorParams = { ...executor.params };
-      if (mode === "custom" && isGeneralMultiTurnExecutor && goalSource === "dataset_items") {
-        executorParams.goal = "";
+      let base: any;
+      if (mode === "preset") {
+        const rendered = await api.post(`/api/scenarios/${scenarioId}/runspec`, {
+          target_config_id: targetId,
+          dataset_config_id: datasetId,
+          helper_config_ids: scenarioHelpers,
+        });
+        base = { ...rendered.data, name };
+      } else {
+        const executorParams = { ...executor.params };
+        if (isGeneralMultiTurnExecutor && goalSource === "dataset_items") {
+          executorParams.goal = "";
+        }
+        base = {
+          name,
+          targets: [{ config_id: targetId }],
+          dataset: { config_id: datasetId },
+          executor: { plugin: executor.plugin, params: executorParams },
+          scorers: [{ plugin: scorer.plugin, params: scorer.params }],
+          converters: converters.map(c => ({ plugin: c.plugin, params: c.params })),
+        };
       }
-      const base: any = {
-        name,
-        targets: [{ config_id: targetId }],
-        dataset: { config_id: datasetId },
-        executor: { plugin: executor.plugin, params: executorParams },
-        scorers: [{ plugin: scorer.plugin, params: scorer.params }],
-        converters: converters.map(c => ({ plugin: c.plugin, params: c.params })),
-      };
-      if (mode === "preset") base.scenario = scenarioId;
       
       // Add sampling if enabled
       if (samplingEnabled) {
@@ -277,7 +300,7 @@ export default function NewRun() {
   });
 
   const canSubmit = !!targetId && !!datasetId
-    && (mode === "custom" || !!scenarioId)
+    && (mode === "custom" || (!!scenarioId && scenarioRequirements.every((req: any) => !!scenarioHelpers[req.id])))
     && paramValidation.length === 0;
 
   return (
@@ -333,13 +356,86 @@ export default function NewRun() {
             <CardTitle>{t("2. Scenario")}</CardTitle>
             <CardDescription>{t("A pre-configured combination of executor, converters, and scorer.")}</CardDescription>
           </CardHeader>
-          <CardBody>
-            <Field label={t("Scenario")}>
-              <Select value={scenarioId} onChange={e => setScenarioId(e.target.value)}>
-                <option value="">{t("-- pick scenario --")}</option>
-                {scenarios?.map((s: any) => <option key={s.id} value={s.id}>{s.title}</option>)}
-              </Select>
-            </Field>
+          <CardBody className="space-y-5">
+            {(["basic", "advanced"] as const).map(level => (
+              <div key={level}>
+                <div className="mb-2 flex items-center gap-2">
+                  <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                    {level === "basic" ? t("Basic scenarios") : t("Advanced scenarios")}
+                  </div>
+                  <Badge tone={level === "basic" ? "green" : "amber"}>
+                    {level === "basic" ? t("No extra setup") : t("Advanced methods")}
+                  </Badge>
+                </div>
+                <div className="grid grid-cols-1 gap-3">
+                  {(scenariosByLevel[level] ?? []).map((scenario: any) => {
+                    const active = scenarioId === scenario.id;
+                    const recommended = targetHasInputLimit && scenario.id === "input_limited_split";
+                    return (
+                      <button
+                        key={scenario.id}
+                        type="button"
+                        onClick={() => {
+                          setScenarioId(scenario.id);
+                          setScenarioHelpers({});
+                        }}
+                        className={clsx(
+                          "rounded-lg border px-4 py-3 text-left transition",
+                          active
+                            ? "border-brand-500 bg-brand-50/60 ring-2 ring-brand-200"
+                            : "border-gray-200 bg-white hover:border-gray-300",
+                        )}
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">{scenario.title}</div>
+                            <div className="mt-1 text-xs text-gray-500">{scenario.description}</div>
+                          </div>
+                          {recommended && <Badge tone="amber">{t("Recommended")}</Badge>}
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {(scenario.tags ?? []).map((tag: string) => (
+                            <span key={tag} className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-600">
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                        {!!scenario.requirements?.length && (
+                          <div className="mt-2 text-[11px] text-amber-700">
+                            {t("Requires")}: {scenario.requirements.map((req: any) => req.label ?? req.id).join(", ")}
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+            {scenarioRequirements.length > 0 && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-3">
+                <div>
+                  <div className="text-xs font-medium uppercase tracking-wide text-amber-800">
+                    {t("Scenario requirements")}
+                  </div>
+                  <div className="mt-1 text-xs text-amber-700">
+                    {t("Select helper targets used by this preset.")}
+                  </div>
+                </div>
+                {scenarioRequirements.map((req: any) => (
+                  <Field key={req.id} label={req.label ?? req.id} hint={req.help}>
+                    <Select
+                      value={scenarioHelpers[req.id] ?? ""}
+                      onChange={e => setScenarioHelpers(prev => ({ ...prev, [req.id]: e.target.value }))}
+                    >
+                      <option value="">{t("-- pick target --")}</option>
+                      {targets?.map((target: any) => (
+                        <option key={target.id} value={target.id}>{target.name}</option>
+                      ))}
+                    </Select>
+                  </Field>
+                ))}
+              </div>
+            )}
           </CardBody>
         </Card>
       )}

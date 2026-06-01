@@ -9,7 +9,7 @@ import { Badge, StatusBadge } from "../components/ui/Badge";
 import { ProgressBar } from "../components/ui/ProgressBar";
 import { Button } from "../components/ui/Button";
 import { Textarea } from "../components/ui/Form";
-import { ArrowLeft, X, Clock, Hash, AlertCircle, MessageSquare, Download, Ban } from "lucide-react";
+import { ArrowLeft, X, Clock, Hash, AlertCircle, MessageSquare, Download, Ban, Pause, Play, RotateCcw } from "lucide-react";
 import clsx from "clsx";
 import { toast } from "sonner";
 import { useI18n } from "../lib/i18n";
@@ -155,6 +155,26 @@ export default function RunDetail() {
     },
     onError: (e: any) => toast.error(e?.response?.data?.detail ?? t("Failed to cancel run")),
   });
+  const pauseMut = useMutation({
+    mutationFn: async () => (await api.post(`/api/runs/${id}/pause`)).data,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["run", id] });
+      queryClient.invalidateQueries({ queryKey: ["run-report", id] });
+      queryClient.invalidateQueries({ queryKey: ["run-attempts"] });
+      toast.success(t("Run pause requested"));
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.detail ?? t("Failed to pause run")),
+  });
+  const resumeMut = useMutation({
+    mutationFn: async (retryFailed: boolean) => (await api.post(`/api/runs/${id}/resume`, { retry_failed: retryFailed })).data,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["run", id] });
+      queryClient.invalidateQueries({ queryKey: ["run-report", id] });
+      queryClient.invalidateQueries({ queryKey: ["run-attempts"] });
+      toast.success(t("Run resumed"));
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.detail ?? t("Failed to resume run")),
+  });
 
   const downloadExport = async (format: "json" | "csv") => {
     const response = await api.get(`/api/runs/${id}/export`, {
@@ -198,6 +218,27 @@ export default function RunDetail() {
             {t("Export CSV")}
           </Button>
           {run?.kind === "automated" && run?.status === "running" && (
+            <Button variant="secondary" size="sm" icon={<Pause className="h-4 w-4" />}
+              loading={pauseMut.isPending}
+              onClick={() => pauseMut.mutate()}>
+              {t("Pause run")}
+            </Button>
+          )}
+          {run?.kind === "automated" && run?.status === "paused" && (
+            <>
+              <Button variant="secondary" size="sm" icon={<Play className="h-4 w-4" />}
+                loading={resumeMut.isPending && resumeMut.variables === false}
+                onClick={() => resumeMut.mutate(false)}>
+                {t("Resume run")}
+              </Button>
+              <Button variant="secondary" size="sm" icon={<RotateCcw className="h-4 w-4" />}
+                loading={resumeMut.isPending && resumeMut.variables === true}
+                onClick={() => resumeMut.mutate(true)}>
+                {t("Resume retrying failed")}
+              </Button>
+            </>
+          )}
+          {run?.kind === "automated" && ["running", "pausing", "paused"].includes(run?.status) && (
             <Button variant="danger" size="sm" icon={<Ban className="h-4 w-4" />}
               loading={cancelMut.isPending}
               onClick={() => cancelMut.mutate()}>
@@ -206,6 +247,11 @@ export default function RunDetail() {
           )}
         </div>
       </div>
+      {run?.status === "pausing" && (
+        <div className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-800">
+          {t("Pause requested. Waiting for in-flight attempts to finish.")}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <StatCard label={t("Refusal rate")} value={totals.total ? `${Math.round((totals.refused/totals.total)*100)}%` : "—"} tone="green" />

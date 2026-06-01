@@ -34,6 +34,10 @@ class RunOut(BaseModel):
     error: str | None = None
 
 
+class ResumeRun(BaseModel):
+    retry_failed: bool = False
+
+
 async def _run_to_out(r: Run, state: AppState) -> RunOut:
     target_ids = _target_ids_for_run(r)
     target_names = []
@@ -97,6 +101,28 @@ async def cancel_run(rid: str, _=Depends(require_admin), state: AppState = Depen
     except KeyError:
         raise HTTPException(404) from None
     return {"cancelled": True}
+
+
+@router.post("/runs/{rid}/pause", status_code=202)
+async def pause_run(rid: str, _=Depends(require_admin), state: AppState = Depends(get_state)):
+    try:
+        await state.runs.pause_run(rid)
+    except KeyError:
+        raise HTTPException(404) from None
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    return {"paused": True}
+
+
+@router.post("/runs/{rid}/resume", status_code=202)
+async def resume_run(rid: str, req: ResumeRun, _=Depends(require_admin), state: AppState = Depends(get_state)):
+    try:
+        await state.runs.resume_run(rid, retry_failed=req.retry_failed)
+    except KeyError:
+        raise HTTPException(404) from None
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    return {"resumed": True, "retry_failed": req.retry_failed}
 
 
 @router.get("/runs", response_model=list[RunOut])
@@ -328,7 +354,7 @@ async def sse(rid: str, state: AppState = Depends(get_state), token: str = ""):
             while True:
                 evt = await queue.get()
                 yield {"event": evt.get("event", "message"), "data": json.dumps(evt)}
-                if evt.get("event") in ("run.finished", "run.failed", "run.cancelled"):
+                if evt.get("event") in ("run.finished", "run.failed", "run.cancelled", "run.paused"):
                     break
         finally:
             state.bus.unsubscribe(rid, queue)

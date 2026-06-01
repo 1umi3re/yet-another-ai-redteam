@@ -22,6 +22,8 @@ export function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { tone: Tone; label: string }> = {
     pending:   { tone: "gray",   label: "Pending" },
     running:   { tone: "blue",   label: "Running" },
+    pausing:   { tone: "blue",   label: "Pausing" },
+    paused:    { tone: "amber",  label: "Paused" },
     completed: { tone: "green",  label: "Completed" },
     failed:    { tone: "red",    label: "Failed" },
     cancelled: { tone: "amber",  label: "Cancelled" },

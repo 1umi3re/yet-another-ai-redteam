@@ -7,6 +7,9 @@ import respx
 from cryptography.fernet import Fernet
 from httpx import ASGITransport, AsyncClient
 
+from airedteam.core.registry import default_registry
+from airedteam.core.types import Response
+
 
 async def _login(c):
     r = await c.post("/api/login", json={"password": "letmein"})
@@ -95,6 +98,110 @@ async def test_create_and_run_via_api(monkeypatch, tmp_path):
         assert attempts[0]["run_id"] == rid
         scores = (await c.get(f"/api/runs/{rid}/scores", headers=h)).json()
         assert scores[0]["value"]["label"] is True
+
+
+@pytest.mark.asyncio
+async def test_pause_and_resume_run_via_api(monkeypatch, tmp_path):
+    started = asyncio.Event()
+    release = asyncio.Event()
+    calls: list[str] = []
+
+    class BlockingApiTarget:
+        def __init__(self, *, name: str) -> None:
+            self.name = name
+
+        async def generate(self, prompt):
+            calls.append(prompt.text)
+            if len(calls) == 1:
+                started.set()
+                await release.wait()
+            return Response(text=f"ok:{prompt.text}", raw={}, latency_ms=1)
+
+        async def aclose(self):
+            pass
+
+    default_registry().register("targets", "blocking_api_pause_target", BlockingApiTarget)
+
+    monkeypatch.setenv("AIREDTEAM_MASTER_KEY", Fernet.generate_key().decode())
+    monkeypatch.setenv("AIREDTEAM_ADMIN_PASSWORD", "letmein")
+    monkeypatch.setenv("AIREDTEAM_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/x.db")
+    monkeypatch.setenv("AIREDTEAM_BLOB_DIR", str(tmp_path / "blobs"))
+    import airedteam.api.deps as deps
+
+    deps._STATE = None
+    from airedteam.api.app import create_app
+
+    app = create_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
+        state = deps.get_state()
+        from airedteam.storage import models
+        from airedteam.storage.db import make_engine
+
+        eng = make_engine(state.settings.database_url)
+        async with eng.begin() as conn:
+            await conn.run_sync(models.Base.metadata.create_all)
+
+        h = await _login(c)
+        t = await c.post(
+            "/api/targets",
+            headers=h,
+            json={"name": "t1", "plugin": "blocking_api_pause_target", "params": {"name": "t1"}},
+        )
+        tid = t.json()["id"]
+        ds = await c.post(
+            "/api/datasets/upload",
+            headers=h,
+            files={
+                "file": (
+                    "a.json",
+                    json.dumps({"items": [{"prompt": "a"}, {"prompt": "b"}]}).encode(),
+                    "application/json",
+                )
+            },
+            data={"name": "d1"},
+        )
+        did = ds.json()["id"]
+        cr = await c.post(
+            "/api/runs",
+            headers=h,
+            json={
+                "name": "r1",
+                "runspec": {
+                    "name": "r1",
+                    "targets": [{"config_id": tid}],
+                    "dataset": {"config_id": did},
+                    "executor": {"plugin": "single_turn"},
+                    "concurrency": 1,
+                },
+            },
+        )
+        rid = cr.json()["id"]
+        assert (await c.post(f"/api/runs/{rid}/start", headers=h)).status_code == 202
+        await asyncio.wait_for(started.wait(), timeout=1)
+        pause = await c.post(f"/api/runs/{rid}/pause", headers=h)
+        assert pause.status_code == 202
+        release.set()
+
+        for _ in range(50):
+            status = (await c.get(f"/api/runs/{rid}", headers=h)).json()
+            if status["status"] == "paused":
+                break
+            await asyncio.sleep(0.02)
+        assert status["status"] == "paused"
+        assert status["progress_done"] == 1
+        assert status["progress_total"] == 2
+
+        resume = await c.post(f"/api/runs/{rid}/resume", headers=h, json={"retry_failed": False})
+        assert resume.status_code == 202
+        for _ in range(50):
+            status = (await c.get(f"/api/runs/{rid}", headers=h)).json()
+            if status["status"] in ("completed", "failed"):
+                break
+            await asyncio.sleep(0.02)
+
+        assert status["status"] == "completed"
+        attempts = (await c.get(f"/api/runs/{rid}/attempts", headers=h)).json()
+        assert [a["prompt"] for a in attempts] == ["a", "b"]
 
 
 @pytest.mark.asyncio

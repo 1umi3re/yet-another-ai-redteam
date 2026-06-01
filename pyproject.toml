@@ -230,6 +230,17 @@ llm_judge = "airedteam.builtins.scorers.llm_judge:LLMJudgeScorer"
 
 [project.entry-points."airedteam.scenarios"]
 owasp_llm_top10_jailbreak = "airedteam.builtins.scenarios.owasp_llm_top10_jailbreak:scenario"
+direct_safety_baseline = "airedteam.builtins.scenarios.presets:direct_safety_baseline"
+encoding_bypass = "airedteam.builtins.scenarios.presets:encoding_bypass"
+obfuscation_robustness = "airedteam.builtins.scenarios.presets:obfuscation_robustness"
+prompt_framing_jailbreak = "airedteam.builtins.scenarios.presets:prompt_framing_jailbreak"
+structured_injection = "airedteam.builtins.scenarios.presets:structured_injection"
+input_limited_split = "airedteam.builtins.scenarios.presets:input_limited_split"
+best_of_n_jailbreak = "airedteam.builtins.scenarios.presets:best_of_n_jailbreak"
+crescendo_adaptive = "airedteam.builtins.scenarios.presets:crescendo_adaptive"
+pair_iterative = "airedteam.builtins.scenarios.presets:pair_iterative"
+general_multi_turn_adaptive = "airedteam.builtins.scenarios.presets:general_multi_turn_adaptive"
+llm_rewrite_bypass = "airedteam.builtins.scenarios.presets:llm_rewrite_bypass"
 
 [build-system]
 requires = ["hatchling"]

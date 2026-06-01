@@ -7,7 +7,7 @@ from dataclasses import asdict
 from datetime import UTC, datetime
 
 import yaml
-from sqlalchemy import update
+from sqlalchemy import delete, func, select, update
 
 from airedteam.builtins.executors.general_multi_turn import GeneralMultiTurnExecutor
 from airedteam.core.registry import default_registry
@@ -25,6 +25,9 @@ from airedteam.engine.sampling import SampledDataset
 from airedteam.runspec.models import RunSpec
 from airedteam.services.prompt_assets import PromptAssetService
 from airedteam.storage.models import Attempt, Run, Score
+
+TERMINAL_RUN_STATUSES = {"completed", "failed", "cancelled"}
+STOP_REQUEST_STATUSES = {"pausing", "paused", "cancelled"}
 
 
 def _message_payload(message) -> dict:
@@ -121,7 +124,11 @@ class RunService:
                 raise KeyError(run_id)
             if run.status == "running" and run_id in self._tasks:
                 return
-            if run.status in {"completed", "failed", "cancelled"}:
+            if run.status == "paused":
+                raise ValueError("run is paused; use resume")
+            if run.status == "pausing":
+                raise ValueError("run is pausing")
+            if run.status in TERMINAL_RUN_STATUSES:
                 raise ValueError(f"run is already {run.status}")
         task = asyncio.create_task(self.execute_run(run_id))
         self._tasks[run_id] = task
@@ -132,7 +139,7 @@ class RunService:
             run = await s.get(Run, run_id)
             if run is None:
                 raise KeyError(run_id)
-            if run.status in {"completed", "failed", "cancelled"}:
+            if run.status in TERMINAL_RUN_STATUSES:
                 return
             run.status = "cancelled"
             run.finished_at = datetime.now(UTC).replace(tzinfo=None)
@@ -141,6 +148,52 @@ class RunService:
         if task is not None and not task.done():
             task.cancel()
         await self._bus.publish(run_id, {"event": "run.cancelled", "status": "cancelled"})
+
+    async def pause_run(self, run_id: str) -> None:
+        task = self._tasks.get(run_id)
+        has_active_task = task is not None and not task.done()
+        async with self._sf() as s:
+            run = await s.get(Run, run_id)
+            if run is None:
+                raise KeyError(run_id)
+            if run.status in TERMINAL_RUN_STATUSES:
+                raise ValueError(f"run is already {run.status}")
+            if run.status == "pending":
+                raise ValueError("run has not started")
+            if run.status == "paused":
+                return
+            if run.status == "pausing":
+                return
+            if run.status != "running":
+                raise ValueError(f"run cannot be paused from {run.status}")
+            if has_active_task:
+                run.status = "pausing"
+                event = {"event": "run.pausing", "status": "pausing"}
+            else:
+                run.status = "paused"
+                event = {"event": "run.paused", "status": "paused"}
+            await s.commit()
+        await self._bus.publish(run_id, event)
+
+    async def resume_run(self, run_id: str, *, retry_failed: bool = False) -> None:
+        task = self._tasks.get(run_id)
+        has_active_task = task is not None and not task.done()
+        async with self._sf() as s:
+            run = await s.get(Run, run_id)
+            if run is None:
+                raise KeyError(run_id)
+            if run.status in TERMINAL_RUN_STATUSES:
+                raise ValueError(f"run is already {run.status}")
+            if run.status == "pending":
+                raise ValueError("run has not started")
+            if run.status == "pausing" and has_active_task:
+                raise ValueError("run is pausing")
+            if run.status == "running" and has_active_task:
+                return
+        task = asyncio.create_task(self.execute_run(run_id, retry_failed=retry_failed))
+        self._tasks[run_id] = task
+        task.add_done_callback(lambda finished: self._forget_task(run_id, finished))
+        await self._bus.publish(run_id, {"event": "run.resumed", "status": "running", "retry_failed": retry_failed})
 
     async def _resolve_plugin_ref(self, ref, kind: str) -> dict:
         if ref.config_id is not None:
@@ -166,6 +219,37 @@ class RunService:
             run = await s.get(Run, run_id)
             return run is not None and run.status == "cancelled"
 
+    async def _should_stop_run(self, run_id: str) -> bool:
+        async with self._sf() as s:
+            run = await s.get(Run, run_id)
+            return run is None or run.status in STOP_REQUEST_STATUSES
+
+    async def _run_status(self, run_id: str) -> str | None:
+        async with self._sf() as s:
+            run = await s.get(Run, run_id)
+            return run.status if run is not None else None
+
+    async def _existing_work_statuses(self, run_id: str) -> dict[str, str]:
+        async with self._sf() as s:
+            rows = await s.execute(
+                select(Attempt.work_key, Attempt.status).where(
+                    Attempt.run_id == run_id,
+                    Attempt.work_key.is_not(None),
+                )
+            )
+            return {work_key: status for work_key, status in rows if work_key}
+
+    async def _existing_work_count(self, run_id: str) -> int:
+        async with self._sf() as s:
+            return (
+                await s.execute(
+                    select(func.count(func.distinct(Attempt.work_key))).where(
+                        Attempt.run_id == run_id,
+                        Attempt.work_key.is_not(None),
+                    )
+                )
+            ).scalar_one()
+
     def _forget_task(self, run_id: str, task: asyncio.Task) -> None:
         self._tasks.pop(run_id, None)
         try:
@@ -173,7 +257,7 @@ class RunService:
         except asyncio.CancelledError:
             pass
 
-    async def execute_run(self, run_id: str) -> None:
+    async def execute_run(self, run_id: str, *, retry_failed: bool = False) -> None:
         closeables = []
         async with self._sf() as s:
             run = await s.get(Run, run_id)
@@ -183,7 +267,7 @@ class RunService:
                 return
             spec = RunSpec.model_validate(yaml.safe_load(run.runspec_yaml))
             run.status = "running"
-            run.started_at = datetime.now(UTC).replace(tzinfo=None)
+            run.started_at = run.started_at or datetime.now(UTC).replace(tzinfo=None)
             run.finished_at = None
             run.error = None
             await s.commit()
@@ -289,9 +373,17 @@ class RunService:
                     params["prompt_assets"] = self._prompt_assets
                 scorers.append(build_scorer({"plugin": ref["plugin"], "params": params}))
 
+            existing_work_statuses = await self._existing_work_statuses(run_id)
+
+            async def should_skip_work(work_key: str) -> bool:
+                status = existing_work_statuses.get(work_key)
+                if status is None:
+                    return False
+                return not (retry_failed and status == "failed")
+
             attempt_id_by_index: dict[int, str] = {}
 
-            async def on_attempt(ar, target_name, dataset_item_id):
+            async def on_attempt(ar, target_name, dataset_item_id, work_key):
                 text = ar.response.text if ar.response else None
                 blob_path = None
                 if text and len(text.encode("utf-8", errors="ignore")) > self._inline_max:
@@ -314,31 +406,46 @@ class RunService:
                     )
 
                 async with self._sf() as s:
-                    a = Attempt(
-                        id=attempt_id,
-                        run_id=run_id,
-                        target_id=target_name,
-                        target_name=target_name,
-                        dataset_item_id=dataset_item_id,
-                        prompt_text=ar.prompt.text,
-                        converter_chain=ar.converter_chain,
-                        response_text=stored_text,
-                        response_blob_path=blob_path,
-                        conversation_blob_path=conv_path,
-                        prompt_snapshot_blob_path=prompt_snapshot_path,
-                        latency_ms=(ar.response.latency_ms if ar.response else None),
-                        tokens_in=(ar.response.tokens_in if ar.response else None),
-                        tokens_out=(ar.response.tokens_out if ar.response else None),
-                        status=ar.status,
-                        error=ar.error,
+                    existing = (
+                        (
+                            await s.execute(
+                                select(Attempt).where(
+                                    Attempt.run_id == run_id,
+                                    Attempt.work_key == work_key,
+                                )
+                            )
+                        )
+                        .scalars()
+                        .first()
                     )
-                    s.add(a)
+                    created = existing is None
+                    if existing is None:
+                        a = Attempt(id=attempt_id, run_id=run_id, work_key=work_key)
+                        s.add(a)
+                    else:
+                        a = existing
+                        attempt_id = a.id
+                        await s.execute(delete(Score).where(Score.attempt_id == a.id))
+                    a.target_id = target_name
+                    a.target_name = target_name
+                    a.dataset_item_id = dataset_item_id
+                    a.prompt_text = ar.prompt.text
+                    a.converter_chain = ar.converter_chain
+                    a.response_text = stored_text
+                    a.response_blob_path = blob_path
+                    a.conversation_blob_path = conv_path
+                    a.prompt_snapshot_blob_path = prompt_snapshot_path
+                    a.latency_ms = ar.response.latency_ms if ar.response else None
+                    a.tokens_in = ar.response.tokens_in if ar.response else None
+                    a.tokens_out = ar.response.tokens_out if ar.response else None
+                    a.status = ar.status
+                    a.error = ar.error
+                    if created:
+                        await s.execute(update(Run).where(Run.id == run_id).values(progress_done=Run.progress_done + 1))
                     await s.commit()
-                    await s.refresh(a)
+                    existing_work_statuses[work_key] = ar.status
                     idx = len(attempt_id_by_index)
-                    attempt_id_by_index[idx] = a.id
-                    await s.execute(update(Run).where(Run.id == run_id).values(progress_done=Run.progress_done + 1))
-                    await s.commit()
+                    attempt_id_by_index[idx] = attempt_id
 
             async def on_score(idx, sr):
                 attempt_id = attempt_id_by_index.get(idx)
@@ -369,11 +476,15 @@ class RunService:
             except Exception:
                 total = 0
             converter_variant_count = max(1, len(converters))
+            existing_work_count = await self._existing_work_count(run_id)
             async with self._sf() as s:
                 await s.execute(
                     update(Run)
                     .where(Run.id == run_id)
-                    .values(progress_total=total * len(targets) * converter_variant_count)
+                    .values(
+                        progress_total=total * len(targets) * converter_variant_count,
+                        progress_done=existing_work_count,
+                    )
                 )
                 await s.commit()
 
@@ -387,12 +498,25 @@ class RunService:
                 scorers=scorers,
                 concurrency=min(spec.concurrency, self._max_conc),
                 orchestrator=DefaultOrchestrator(),
+                should_stop=lambda: self._should_stop_run(run_id),
+                should_skip_work=should_skip_work,
             )
             if spec.timeout_seconds is not None and spec.timeout_seconds > 0:
-                await asyncio.wait_for(run_coro, timeout=spec.timeout_seconds)
+                engine_result = await asyncio.wait_for(run_coro, timeout=spec.timeout_seconds)
             else:
-                await run_coro
+                engine_result = await run_coro
             if await self._is_cancelled(run_id):
+                return
+            current_status = await self._run_status(run_id)
+            if engine_result.stopped and current_status in {"pausing", "paused"}:
+                async with self._sf() as s:
+                    await s.execute(
+                        update(Run)
+                        .where(Run.id == run_id)
+                        .values(status="paused", finished_at=None)
+                    )
+                    await s.commit()
+                await self._bus.publish(run_id, {"event": "run.paused", "status": "paused"})
                 return
             async with self._sf() as s:
                 await s.execute(
