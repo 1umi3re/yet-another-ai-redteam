@@ -46,6 +46,13 @@ class FakeScorer:
         return ScoreResult(scorer=self.name, value={"label": True})
 
 
+class FailingScorer:
+    name = "failing_judger"
+
+    async def score(self, ar):
+        raise RuntimeError("judge HTTP 500")
+
+
 @dataclass
 class FakeConverter:
     name: str
@@ -80,6 +87,40 @@ async def test_run_engine_fan_out():
     assert len(attempts) == 6  # 3 prompts × 2 targets
     assert len(scores) == 6
     assert {idx for idx, _ in scores} == set(range(6))
+
+
+@pytest.mark.asyncio
+async def test_run_engine_records_scorer_exceptions_as_retryable_score_failures():
+    bus = ProgressBus()
+    attempts: list = []
+    scores: list = []
+
+    async def on_attempt(ar, tname, item_id, work_key):
+        attempts.append(ar)
+
+    async def on_score(idx, sr):
+        scores.append((idx, sr))
+
+    engine = RunEngine(progress_bus=bus, on_attempt=on_attempt, on_score=on_score)
+    await engine.run(
+        run_id="r",
+        dataset=FakeDataset(),
+        targets=[FakeTarget("t1")],
+        converters=[],
+        executor=FakeExec(),
+        scorers=[FailingScorer()],
+        concurrency=1,
+        orchestrator=DefaultOrchestrator(),
+    )
+
+    assert len(attempts) == 3
+    assert len(scores) == 3
+    first_score = scores[0][1]
+    assert first_score.scorer == "failing_judger"
+    assert first_score.value["status"] == "failed"
+    assert first_score.value["retryable"] is True
+    assert first_score.value["error_type"] == "RuntimeError"
+    assert "judge HTTP 500" in first_score.value["error"]
 
 
 @pytest.mark.asyncio

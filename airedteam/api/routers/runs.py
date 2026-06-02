@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sse_starlette.sse import EventSourceResponse
 
 from airedteam.api.deps import AppState, get_state, require_admin
+from airedteam.core.score_status import score_retryable, score_status
 from airedteam.storage.models import Attempt, Run, Score
 
 router = APIRouter()
@@ -36,6 +37,13 @@ class RunOut(BaseModel):
 
 class ResumeRun(BaseModel):
     retry_failed: bool = False
+
+
+class RetryScores(BaseModel):
+    failed_only: bool = True
+    score_ids: list[str] | None = None
+    attempt_ids: list[str] | None = None
+    scorers: list[str] | None = None
 
 
 async def _run_to_out(r: Run, state: AppState) -> RunOut:
@@ -123,6 +131,22 @@ async def resume_run(rid: str, req: ResumeRun, _=Depends(require_admin), state: 
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
     return {"resumed": True, "retry_failed": req.retry_failed}
+
+
+@router.post("/runs/{rid}/scores/retry", status_code=202)
+async def retry_scores(rid: str, req: RetryScores, _=Depends(require_admin), state: AppState = Depends(get_state)):
+    try:
+        return await state.runs.retry_scores(
+            rid,
+            failed_only=req.failed_only,
+            score_ids=req.score_ids,
+            attempt_ids=req.attempt_ids,
+            scorers=req.scorers,
+        )
+    except KeyError:
+        raise HTTPException(404) from None
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
 
 
 @router.get("/runs", response_model=list[RunOut])
@@ -227,7 +251,10 @@ async def list_scores(
     async with state.session_factory() as s:
         rows = (
             await s.execute(
-                select(Score, Attempt).join(Attempt, Score.attempt_id == Attempt.id).where(Attempt.run_id == rid)
+                select(Score, Attempt)
+                .join(Attempt, Score.attempt_id == Attempt.id)
+                .where(Attempt.run_id == rid)
+                .order_by(Score.created_at)
             )
         ).all()
         items = [
@@ -236,6 +263,8 @@ async def list_scores(
                 "attempt_id": a.id,
                 "scorer": sc.scorer,
                 "value": sc.value_json,
+                "status": score_status(sc.value_json),
+                "retryable": score_retryable(sc.value_json),
                 "rationale": sc.rationale,
                 "prompt_snapshot_blob_path": sc.prompt_snapshot_blob_path,
                 "reviewer_label": sc.reviewer_label,
@@ -423,6 +452,8 @@ def _score_verdict(score: Score) -> str | None:
     if score.reviewer_label is not None:
         return "refused" if score.reviewer_label else "complied"
     value = score.value_json or {}
+    if score_status(value) == "failed":
+        return None
     if isinstance(value.get("attack_success"), bool):
         return "complied" if value["attack_success"] else "refused"
     if isinstance(value.get("label"), bool):
@@ -436,7 +467,8 @@ def _attempt_verdict(scores: list[Score]) -> str:
     if not scores:
         return "unscored"
     reviewed = [s for s in scores if s.reviewer_label is not None]
-    chosen = reviewed[0] if reviewed else scores[0]
+    scored = [s for s in scores if _score_verdict(s) is not None]
+    chosen = reviewed[0] if reviewed else scored[0] if scored else scores[0]
     return _score_verdict(chosen) or "unscored"
 
 
@@ -515,12 +547,16 @@ def _run_report(run: Run, attempts: list[Attempt], scores: list[Score]) -> dict[
                 "refused": 0,
                 "complied": 0,
                 "unknown": 0,
+                "failed": 0,
                 "reviewer_overrides": 0,
             },
         )
         bucket["scores"] += 1
         if score.reviewer_label is not None:
             bucket["reviewer_overrides"] += 1
+        if score_status(score.value_json) == "failed":
+            bucket["failed"] += 1
+            continue
         verdict = _score_verdict(score)
         if verdict in ("refused", "complied"):
             bucket[verdict] += 1
@@ -586,6 +622,8 @@ def _score_export(score: Score) -> dict[str, Any]:
         "id": score.id,
         "scorer": score.scorer,
         "value": score.value_json,
+        "status": score_status(score.value_json),
+        "retryable": score_retryable(score.value_json),
         "rationale": score.rationale,
         "prompt_snapshot_blob_path": score.prompt_snapshot_blob_path,
         "reviewer_label": score.reviewer_label,
@@ -618,6 +656,7 @@ def _run_export_csv(run: Run, attempts: list[Attempt], scores: list[Score]) -> s
         "tokens_in",
         "tokens_out",
         "primary_scorer",
+        "primary_score_status",
         "primary_score_value",
         "primary_score_rationale",
     ]
@@ -647,6 +686,7 @@ def _run_export_csv(run: Run, attempts: list[Attempt], scores: list[Score]) -> s
                 "tokens_in": attempt.tokens_in,
                 "tokens_out": attempt.tokens_out,
                 "primary_scorer": primary.scorer if primary else "",
+                "primary_score_status": score_status(primary.value_json) if primary else "",
                 "primary_score_value": json.dumps(primary.value_json, ensure_ascii=False) if primary else "",
                 "primary_score_rationale": primary.rationale if primary else "",
             }

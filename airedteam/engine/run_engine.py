@@ -7,6 +7,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
+from airedteam.core.score_status import exception_detail, failed_score_value
 from airedteam.core.types import AttemptResult, Prompt, ScoreResult
 
 
@@ -107,7 +108,16 @@ class RunEngine:
                 await run_attempt(item)
 
         async def run_attempt(item: WorkItem):
-            ar = await executor.run(item.prompt, item.target, item.converter_variant)
+            try:
+                ar = await executor.run(item.prompt, item.target, item.converter_variant)
+            except Exception as e:
+                ar = AttemptResult(
+                    prompt=item.prompt,
+                    response=None,
+                    status="failed",
+                    error=exception_detail(e),
+                    converter_chain=[getattr(c, "name", type(c).__name__) for c in item.converter_variant],
+                )
             async with self._lock:
                 await self._on_attempt(ar, item.target_name, item.dataset_item_id, item.work_key)
                 idx = self._counter
@@ -120,7 +130,7 @@ class RunEngine:
                 try:
                     sr = await sc.score(ar)
                 except Exception as e:
-                    sr = ScoreResult(scorer=getattr(sc, "name", "?"), value={"error": str(e)}, rationale=None)
+                    sr = ScoreResult(scorer=getattr(sc, "name", "?"), value=failed_score_value(e), rationale=None)
                 await self._on_score(idx, sr)
 
         async def wait_for_slot(active: set[asyncio.Task]) -> set[asyncio.Task]:

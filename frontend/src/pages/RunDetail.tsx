@@ -15,24 +15,30 @@ import { toast } from "sonner";
 import { useI18n } from "../lib/i18n";
 
 type Tab = "overview" | "attempts" | "events";
+type Verdict = "refused" | "complied";
 
 const TERMINAL_STATUSES = new Set(["completed", "failed", "cancelled"]);
 const isTerminalStatus = (s: string | undefined) => !!s && TERMINAL_STATUSES.has(s);
 
-function scorerVerdictOf(score: any): "refused" | "complied" {
+function isScoreFailed(score: any): boolean {
+  return score?.status === "failed" || score?.value?.status === "failed" || !!score?.value?.error;
+}
+
+function scorerVerdictOf(score: any): Verdict | null {
+  if (isScoreFailed(score)) return null;
   const v = score?.value ?? {};
   if (typeof v.attack_success === "boolean") {
     return v.attack_success ? "complied" : "refused";
   }
   const label = v.label;
-  if (typeof label !== "boolean") return "complied";
+  if (typeof label !== "boolean") return null;
   if (score?.scorer === "refusal") return label ? "refused" : "complied";
   return label ? "complied" : "refused";
 }
 
 // Reviewer labels use target-side polarity: true = refused, false = complied.
 // Without a reviewer override, scorer output remains the source of truth.
-function verdictOf(score: any): "refused" | "complied" {
+function verdictOf(score: any): Verdict | null {
   if (typeof score?.reviewer_label === "boolean") {
     return score.reviewer_label ? "refused" : "complied";
   }
@@ -99,10 +105,16 @@ export default function RunDetail() {
   const scoreByAttempt = useMemo(() => {
     const m = new Map<string, any>();
     for (const s of scores as any[]) {
-      if (!m.has(s.attempt_id)) m.set(s.attempt_id, s);
+      const current = m.get(s.attempt_id);
+      if (!current || (isScoreFailed(current) && !isScoreFailed(s))) m.set(s.attempt_id, s);
     }
     return m;
   }, [scores]);
+
+  const failedScores = useMemo(
+    () => (scores as any[]).filter(score => isScoreFailed(score) && score.retryable !== false),
+    [scores],
+  );
 
   const chartData = useMemo(() => {
     if (report?.by_target?.length) {
@@ -117,8 +129,9 @@ export default function RunDetail() {
       byTarget[a.target_name] ||= { target: a.target_name, refused: 0, complied: 0 };
       const sc = scoreByAttempt.get(a.id);
       if (!sc) continue;
-      if (verdictOf(sc) === "refused") byTarget[a.target_name].refused++;
-      else byTarget[a.target_name].complied++;
+      const verdict = verdictOf(sc);
+      if (verdict === "refused") byTarget[a.target_name].refused++;
+      else if (verdict === "complied") byTarget[a.target_name].complied++;
     }
     return Object.values(byTarget);
   }, [attempts, scoreByAttempt, report]);
@@ -133,7 +146,9 @@ export default function RunDetail() {
     }
     let refused = 0, complied = 0;
     for (const s of scores as any[]) {
-      if (verdictOf(s) === "refused") refused++; else complied++;
+      const verdict = verdictOf(s);
+      if (verdict === "refused") refused++;
+      else if (verdict === "complied") complied++;
     }
     return { refused, complied, total: refused + complied };
   }, [scores, report]);
@@ -174,6 +189,16 @@ export default function RunDetail() {
       toast.success(t("Run resumed"));
     },
     onError: (e: any) => toast.error(e?.response?.data?.detail ?? t("Failed to resume run")),
+  });
+  const retryScoresMut = useMutation({
+    mutationFn: async () => (await api.post(`/api/runs/${id}/scores/retry`, { failed_only: true })).data,
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["run-scores", id] });
+      queryClient.invalidateQueries({ queryKey: ["run-attempts", id] });
+      queryClient.invalidateQueries({ queryKey: ["run-report", id] });
+      toast.success(t("Retried {{count}} judge scores", { count: data?.retried ?? 0 }));
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.detail ?? t("Failed to retry judge scores")),
   });
 
   const downloadExport = async (format: "json" | "csv") => {
@@ -237,6 +262,13 @@ export default function RunDetail() {
                 {t("Resume retrying failed")}
               </Button>
             </>
+          )}
+          {failedScores.length > 0 && (
+            <Button variant="secondary" size="sm" icon={<RotateCcw className="h-4 w-4" />}
+              loading={retryScoresMut.isPending}
+              onClick={() => retryScoresMut.mutate()}>
+              {t("Retry failed judges ({{count}})", { count: failedScores.length })}
+            </Button>
           )}
           {run?.kind === "automated" && ["running", "pausing", "paused"].includes(run?.status) && (
             <Button variant="danger" size="sm" icon={<Ban className="h-4 w-4" />}
@@ -341,13 +373,15 @@ export default function RunDetail() {
                 {attempts.map((a: any) => {
                   const sc = scoreByAttempt.get(a.id);
                   const verdict = sc ? verdictOf(sc) : null;
+                  const scoreFailed = sc ? isScoreFailed(sc) : false;
                   return (
                     <tr key={a.id} className="align-top hover:bg-gray-50/60">
                       <td className="px-5 py-3 font-medium whitespace-nowrap">{a.target_name}</td>
                       <td className="px-5 py-3 max-w-xs"><div className="truncate text-gray-700" title={a.prompt}>{a.prompt}</div></td>
                       <td className="px-5 py-3 max-w-md"><div className="truncate text-gray-600" title={a.response ?? ""}>{a.response ?? <span className="text-gray-400">({t("blob")})</span>}</div></td>
                       <td className="px-5 py-3">
-                        {verdict === "refused" ? <Badge tone="green">{t("refused")}</Badge>
+                        {scoreFailed ? <Badge tone="amber">{t("Judge failed")}</Badge>
+                          : verdict === "refused" ? <Badge tone="green">{t("refused")}</Badge>
                           : verdict === "complied" ? <Badge tone="red">{t("complied")}</Badge>
                           : <Badge>-</Badge>}
                       </td>
@@ -653,18 +687,34 @@ function ScoreCard({ score }: { score: any }) {
     },
     onError: () => toast.error(t("Failed to save annotation")),
   });
+  const retryMut = useMutation({
+    mutationFn: async () => (await api.post(`/api/runs/${runId}/scores/retry`, {
+      failed_only: false,
+      score_ids: [score.id],
+      attempt_ids: [score.attempt_id],
+      scorers: [score.scorer],
+    })).data,
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["run-scores", runId] });
+      queryClient.invalidateQueries({ queryKey: ["run-attempts", runId] });
+      queryClient.invalidateQueries({ queryKey: ["run-report", runId] });
+      toast.success(t("Retried {{count}} judge scores", { count: data?.retried ?? 0 }));
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.detail ?? t("Failed to retry judge score")),
+  });
 
   const v = score?.value ?? {};
+  const scoreFailed = isScoreFailed(score);
   
   const scorerVerdict = scorerVerdictOf(score);
   
   // Display verdict: use reviewer's if set, otherwise scorer's
-  const displayVerdict = typeof reviewerLabel === "boolean"
+  const displayVerdict: Verdict | null = typeof reviewerLabel === "boolean"
     ? (reviewerLabel ? "refused" : "complied")
     : scorerVerdict;
   
   const isOverridden = typeof reviewerLabel === "boolean";
-  const tone = displayVerdict === "refused" ? "green" : "red";
+  const tone = displayVerdict === "refused" ? "green" : displayVerdict === "complied" ? "red" : "amber";
   
   // Check for judge format error
   const isLLMJudge = score.scorer === "llm_judge";
@@ -678,9 +728,9 @@ function ScoreCard({ score }: { score: any }) {
     <div className="rounded-lg border border-gray-200 bg-white p-3 space-y-2">
       <div className="flex items-center gap-2 text-xs">
         <span className="font-medium text-gray-700">{score.scorer}</span>
-        <Badge tone={tone as any}>{t(displayVerdict)}</Badge>
+        <Badge tone={tone as any}>{displayVerdict ? t(displayVerdict) : t("Judge failed")}</Badge>
         {isOverridden && <span className="text-[10px] text-gray-500">{t("(overridden)")}</span>}
-        {isOverridden && (
+        {isOverridden && scorerVerdict && (
           <Badge tone={scorerVerdict === "refused" ? "green" : "red"} className="line-through opacity-50">
             {t(scorerVerdict)}
           </Badge>
@@ -692,6 +742,28 @@ function ScoreCard({ score }: { score: any }) {
           <span className="text-gray-500">{t("score {{value}}", { value: v.score })}</span>
         )}
       </div>
+
+      {scoreFailed && (
+        <div className="rounded-md bg-red-50 border border-red-200 p-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-red-700 font-semibold text-xs">{t("Judge error")}</span>
+            {score.retryable !== false && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => retryMut.mutate()}
+                loading={retryMut.isPending}
+                icon={<RotateCcw className="h-3.5 w-3.5" />}
+              >
+                {t("Retry judge")}
+              </Button>
+            )}
+          </div>
+          <pre className="mt-2 p-2 bg-white border border-red-200 rounded text-[10px] font-mono whitespace-pre-wrap break-words overflow-auto max-h-48">
+{v.error ?? t("Unknown scorer error")}
+          </pre>
+        </div>
+      )}
       
       {hasParseError && (
         <div className="rounded-md bg-amber-50 border border-amber-200 p-2">

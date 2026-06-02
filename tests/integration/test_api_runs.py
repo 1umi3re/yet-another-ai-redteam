@@ -101,6 +101,127 @@ async def test_create_and_run_via_api(monkeypatch, tmp_path):
 
 
 @pytest.mark.asyncio
+@respx.mock
+async def test_retry_failed_llm_judge_scores_via_api(monkeypatch, tmp_path):
+    respx.post("https://target.example.com/v1/chat/completions").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": "target complied"}}],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 2},
+            },
+        )
+    )
+    judge_route = respx.post("https://judge.example.com/v1/chat/completions").mock(
+        side_effect=[
+            httpx.Response(500, json={"error": {"message": "judge unavailable"}}),
+            httpx.Response(
+                200,
+                json={
+                    "choices": [
+                        {
+                            "message": {
+                                "content": '{"label": true, "confidence": 0.9, "rationale": "complied"}'
+                            }
+                        }
+                    ],
+                    "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+                },
+            ),
+        ]
+    )
+    monkeypatch.setenv("AIREDTEAM_MASTER_KEY", Fernet.generate_key().decode())
+    monkeypatch.setenv("AIREDTEAM_ADMIN_PASSWORD", "letmein")
+    monkeypatch.setenv("AIREDTEAM_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/x.db")
+    monkeypatch.setenv("AIREDTEAM_BLOB_DIR", str(tmp_path / "blobs"))
+    import airedteam.api.deps as deps
+
+    deps._STATE = None
+    from airedteam.api.app import create_app
+
+    app = create_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
+        state = deps.get_state()
+        from airedteam.storage import models
+        from airedteam.storage.db import make_engine
+
+        eng = make_engine(state.settings.database_url)
+        async with eng.begin() as conn:
+            await conn.run_sync(models.Base.metadata.create_all)
+
+        h = await _login(c)
+        target = await c.post(
+            "/api/targets",
+            headers=h,
+            json={
+                "name": "target",
+                "plugin": "openai_compat",
+                "params": {"name": "target", "base_url": "https://target.example.com/v1", "model": "m"},
+                "secret": {"api_key": "sk"},
+            },
+        )
+        judge = await c.post(
+            "/api/targets",
+            headers=h,
+            json={
+                "name": "judge",
+                "plugin": "openai_compat",
+                "params": {"name": "judge", "base_url": "https://judge.example.com/v1", "model": "m"},
+                "secret": {"api_key": "sk"},
+            },
+        )
+        ds = await c.post(
+            "/api/datasets/upload",
+            headers=h,
+            files={"file": ("a.json", json.dumps({"items": [{"prompt": "hi"}]}).encode(), "application/json")},
+            data={"name": "d1"},
+        )
+        cr = await c.post(
+            "/api/runs",
+            headers=h,
+            json={
+                "name": "r1",
+                "runspec": {
+                    "name": "r1",
+                    "targets": [{"config_id": target.json()["id"]}],
+                    "dataset": {"config_id": ds.json()["id"]},
+                    "executor": {"plugin": "single_turn"},
+                    "scorers": [{"plugin": "llm_judge", "params": {"judge_config_id": judge.json()["id"]}}],
+                },
+            },
+        )
+        rid = cr.json()["id"]
+
+        assert (await c.post(f"/api/runs/{rid}/start", headers=h)).status_code == 202
+        for _ in range(50):
+            status = (await c.get(f"/api/runs/{rid}", headers=h)).json()
+            if status["status"] in ("completed", "failed"):
+                break
+            await asyncio.sleep(0.05)
+
+        assert status["status"] == "completed"
+        scores = (await c.get(f"/api/runs/{rid}/scores", headers=h)).json()
+        assert len(scores) == 1
+        assert scores[0]["status"] == "failed"
+        assert scores[0]["retryable"] is True
+        assert scores[0]["value"]["status"] == "failed"
+        assert "judge unavailable" in scores[0]["value"]["error"]
+
+        retry = await c.post(f"/api/runs/{rid}/scores/retry", headers=h, json={"failed_only": True})
+        assert retry.status_code == 202
+        assert retry.json()["retried"] == 1
+        assert retry.json()["failed"] == 0
+        assert judge_route.call_count == 2
+
+        scores = (await c.get(f"/api/runs/{rid}/scores", headers=h)).json()
+        assert len(scores) == 1
+        assert scores[0]["status"] == "completed"
+        assert scores[0]["retryable"] is False
+        assert scores[0]["value"]["label"] is True
+        assert scores[0]["final_verdict"] == "complied"
+
+
+@pytest.mark.asyncio
 async def test_pause_and_resume_run_via_api(monkeypatch, tmp_path):
     started = asyncio.Event()
     release = asyncio.Event()

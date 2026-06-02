@@ -11,6 +11,8 @@ from sqlalchemy import delete, func, select, update
 
 from airedteam.builtins.executors.general_multi_turn import GeneralMultiTurnExecutor
 from airedteam.core.registry import default_registry
+from airedteam.core.score_status import failed_score_value, is_failed_score_value
+from airedteam.core.types import AttemptResult, Message, Prompt, Response, ScoreResult
 from airedteam.engine.factory import (
     build_converter,
     build_dataset,
@@ -39,6 +41,14 @@ def _message_payload(message) -> dict:
     if getattr(message, "artifacts", None):
         payload["artifacts"] = [asdict(artifact) for artifact in message.artifacts]
     return payload
+
+
+def _message_from_payload(payload: dict) -> Message:
+    return Message(
+        role=payload.get("role", "user"),
+        text=payload.get("text", ""),
+        metadata=dict(payload.get("metadata") or {}),
+    )
 
 
 _LLM_CONVERTERS = {
@@ -214,6 +224,167 @@ class RunService:
         apply_target_input_limit(target, runtime_cfg)
         return target
 
+    async def _build_scorers(self, spec: RunSpec) -> tuple[list, list]:
+        closeables = []
+        scorers = []
+        for sc in spec.scorers:
+            scorer, scorer_closeables = await self._build_scorer_from_ref(sc.model_dump())
+            closeables.extend(scorer_closeables)
+            scorers.append(scorer)
+        return scorers, closeables
+
+    async def _build_scorer_from_ref(self, ref: dict) -> tuple[object, list]:
+        closeables = []
+        params = dict(ref.get("params") or {})
+        if ref.get("plugin") == "llm_judge":
+            judge_cfg_id = params.pop("judge_config_id", None)
+            if not judge_cfg_id:
+                raise ValueError(
+                    "llm_judge scorer requires params.judge_config_id "
+                    "(id of a configured target to use as the judge)"
+                )
+            judge_ref = await self._targets.resolve_for_runtime(judge_cfg_id)
+            params["judge"] = self._build_target_from_cfg(judge_ref)
+            closeables.append(params["judge"])
+            params["prompt_assets"] = self._prompt_assets
+        scorer = build_scorer({"plugin": ref["plugin"], "params": params})
+        return scorer, closeables
+
+    async def _attempt_result_from_row(self, attempt: Attempt) -> AttemptResult:
+        response_text = attempt.response_text
+        if response_text is None and attempt.response_blob_path:
+            response_text = (await self._blob.get(attempt.response_blob_path)).decode("utf-8")
+        response = None
+        if response_text is not None:
+            response = Response(
+                text=response_text,
+                raw={},
+                latency_ms=attempt.latency_ms or 0,
+                tokens_in=attempt.tokens_in,
+                tokens_out=attempt.tokens_out,
+            )
+
+        conversation = None
+        if attempt.conversation_blob_path:
+            raw = await self._blob.get(attempt.conversation_blob_path)
+            payload = json.loads(raw.decode("utf-8"))
+            conversation = [_message_from_payload(item) for item in payload.get("messages", [])]
+
+        metadata = {}
+        if attempt.dataset_item_id:
+            metadata["id"] = attempt.dataset_item_id
+        return AttemptResult(
+            prompt=Prompt(text=attempt.prompt_text, metadata=metadata),
+            response=response,
+            status=attempt.status,
+            error=attempt.error,
+            converter_chain=list(attempt.converter_chain or []),
+            conversation=conversation,
+        )
+
+    async def _write_score(self, run_id: str, attempt_id: str, sr: ScoreResult) -> None:
+        value = sr.value if isinstance(sr.value, dict) else {"value": sr.value}
+        score_id = str(uuid.uuid4())
+        prompt_snapshot_path = None
+        if sr.prompt_snapshot:
+            prompt_snapshot_path = await self._prompt_assets.write_snapshot(
+                run_id, f"score-{score_id}", sr.prompt_snapshot
+            )
+        async with self._sf() as s:
+            s.add(
+                Score(
+                    id=score_id,
+                    attempt_id=attempt_id,
+                    scorer=sr.scorer,
+                    value_json=value,
+                    rationale=sr.rationale,
+                    prompt_snapshot_blob_path=prompt_snapshot_path,
+                )
+            )
+            await s.commit()
+
+    async def retry_scores(
+        self,
+        run_id: str,
+        *,
+        failed_only: bool = True,
+        score_ids: list[str] | None = None,
+        attempt_ids: list[str] | None = None,
+        scorers: list[str] | None = None,
+    ) -> dict[str, int]:
+        async with self._sf() as s:
+            run = await s.get(Run, run_id)
+            if run is None:
+                raise KeyError(run_id)
+            if run.kind != "automated":
+                raise ValueError("score retry is only available for automated runs")
+            spec = RunSpec.model_validate(yaml.safe_load(run.runspec_yaml))
+
+        scorer_instances, closeables = await self._build_scorers(spec)
+        scorer_by_name = {getattr(sc, "name", "?"): sc for sc in scorer_instances}
+        score_filter = set(score_ids or [])
+        attempt_filter = set(attempt_ids or [])
+        scorer_filter = set(scorers or [])
+        try:
+            async with self._sf() as s:
+                rows = (
+                    await s.execute(
+                        select(Attempt, Score)
+                        .join(Score, Score.attempt_id == Attempt.id)
+                        .where(Attempt.run_id == run_id)
+                        .order_by(Score.created_at)
+                    )
+                ).all()
+                candidates = []
+                for attempt, score in rows:
+                    if score_filter and score.id not in score_filter:
+                        continue
+                    if attempt_filter and attempt.id not in attempt_filter:
+                        continue
+                    if scorer_filter and score.scorer not in scorer_filter:
+                        continue
+                    if failed_only and not is_failed_score_value(score.value_json):
+                        continue
+                    candidates.append((attempt, score))
+
+            retried = 0
+            completed = 0
+            failed = 0
+            skipped = 0
+            for attempt, score in candidates:
+                scorer = scorer_by_name.get(score.scorer)
+                if scorer is None:
+                    skipped += 1
+                    continue
+                attempt_result = await self._attempt_result_from_row(attempt)
+                try:
+                    score_result = await scorer.score(attempt_result)
+                except Exception as exc:
+                    score_result = ScoreResult(scorer=score.scorer, value=failed_score_value(exc), rationale=None)
+                async with self._sf() as s:
+                    await s.execute(delete(Score).where(Score.id == score.id))
+                    await s.commit()
+                await self._write_score(run_id, attempt.id, score_result)
+                retried += 1
+                if is_failed_score_value(score_result.value):
+                    failed += 1
+                else:
+                    completed += 1
+
+            return {
+                "matched": len(candidates),
+                "retried": retried,
+                "completed": completed,
+                "failed": failed,
+                "skipped": skipped,
+            }
+        finally:
+            for obj in closeables:
+                try:
+                    await obj.aclose()
+                except Exception:
+                    pass
+
     async def _is_cancelled(self, run_id: str) -> bool:
         async with self._sf() as s:
             run = await s.get(Run, run_id)
@@ -356,22 +527,8 @@ class RunService:
                 executor_params["prompt_assets"] = self._prompt_assets
             executor = build_executor({"plugin": plugin_name, "params": executor_params})
 
-            scorers = []
-            for sc in spec.scorers:
-                ref = sc.model_dump()
-                params = dict(ref.get("params") or {})
-                if ref.get("plugin") == "llm_judge":
-                    judge_cfg_id = params.pop("judge_config_id", None)
-                    if not judge_cfg_id:
-                        raise ValueError(
-                            "llm_judge scorer requires params.judge_config_id "
-                            "(id of a configured target to use as the judge)"
-                        )
-                    judge_ref = await self._targets.resolve_for_runtime(judge_cfg_id)
-                    params["judge"] = self._build_target_from_cfg(judge_ref)
-                    closeables.append(params["judge"])
-                    params["prompt_assets"] = self._prompt_assets
-                scorers.append(build_scorer({"plugin": ref["plugin"], "params": params}))
+            scorers, scorer_closeables = await self._build_scorers(spec)
+            closeables.extend(scorer_closeables)
 
             existing_work_statuses = await self._existing_work_statuses(run_id)
 
@@ -451,25 +608,7 @@ class RunService:
                 attempt_id = attempt_id_by_index.get(idx)
                 if attempt_id is None:
                     return
-                value = sr.value if isinstance(sr.value, dict) else {"value": sr.value}
-                async with self._sf() as s:
-                    score_id = str(uuid.uuid4())
-                    prompt_snapshot_path = None
-                    if sr.prompt_snapshot:
-                        prompt_snapshot_path = await self._prompt_assets.write_snapshot(
-                            run_id, f"score-{score_id}", sr.prompt_snapshot
-                        )
-                    s.add(
-                        Score(
-                            id=score_id,
-                            attempt_id=attempt_id,
-                            scorer=sr.scorer,
-                            value_json=value,
-                            rationale=sr.rationale,
-                            prompt_snapshot_blob_path=prompt_snapshot_path,
-                        )
-                    )
-                    await s.commit()
+                await self._write_score(run_id, attempt_id, sr)
 
             try:
                 total = (await dataset.size()) or 0
