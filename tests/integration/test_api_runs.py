@@ -301,6 +301,139 @@ async def test_retry_failed_llm_judge_scores_via_api(monkeypatch, tmp_path):
 
 
 @pytest.mark.asyncio
+@respx.mock
+async def test_completed_run_can_be_rejudged_with_another_judge_via_api(monkeypatch, tmp_path):
+    respx.post("https://target.example.com/v1/chat/completions").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": "target answer"}}],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 2},
+            },
+        )
+    )
+    respx.post("https://judge-a.example.com/v1/chat/completions").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {"message": {"content": '{"label": false, "confidence": 0.7, "rationale": "judge a"}'}}
+                ],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+            },
+        )
+    )
+    judge_b_route = respx.post("https://judge-b.example.com/v1/chat/completions").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {"message": {"content": '{"label": true, "confidence": 0.9, "rationale": "judge b"}'}}
+                ],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+            },
+        )
+    )
+    monkeypatch.setenv("AIREDTEAM_MASTER_KEY", Fernet.generate_key().decode())
+    monkeypatch.setenv("AIREDTEAM_ADMIN_PASSWORD", "letmein")
+    monkeypatch.setenv("AIREDTEAM_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/x.db")
+    monkeypatch.setenv("AIREDTEAM_BLOB_DIR", str(tmp_path / "blobs"))
+    import airedteam.api.deps as deps
+
+    deps._STATE = None
+    from airedteam.api.app import create_app
+
+    app = create_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
+        state = deps.get_state()
+        from airedteam.storage import models
+        from airedteam.storage.db import make_engine
+
+        eng = make_engine(state.settings.database_url)
+        async with eng.begin() as conn:
+            await conn.run_sync(models.Base.metadata.create_all)
+
+        h = await _login(c)
+        target = await c.post(
+            "/api/targets",
+            headers=h,
+            json={
+                "name": "target",
+                "plugin": "openai_compat",
+                "params": {"name": "target", "base_url": "https://target.example.com/v1", "model": "m"},
+                "secret": {"api_key": "sk"},
+            },
+        )
+        judge_a = await c.post(
+            "/api/targets",
+            headers=h,
+            json={
+                "name": "judge-a",
+                "plugin": "openai_compat",
+                "params": {"name": "judge-a", "base_url": "https://judge-a.example.com/v1", "model": "m"},
+                "secret": {"api_key": "sk"},
+            },
+        )
+        judge_b = await c.post(
+            "/api/targets",
+            headers=h,
+            json={
+                "name": "judge-b",
+                "plugin": "openai_compat",
+                "params": {"name": "judge-b", "base_url": "https://judge-b.example.com/v1", "model": "m"},
+                "secret": {"api_key": "sk"},
+            },
+        )
+        dataset = await c.post(
+            "/api/datasets/upload",
+            headers=h,
+            files={"file": ("a.json", json.dumps({"items": [{"prompt": "hi"}]}).encode(), "application/json")},
+            data={"name": "d1"},
+        )
+        run = await c.post(
+            "/api/runs",
+            headers=h,
+            json={
+                "name": "r1",
+                "runspec": {
+                    "name": "r1",
+                    "targets": [{"config_id": target.json()["id"]}],
+                    "dataset": {"config_id": dataset.json()["id"]},
+                    "executor": {"plugin": "single_turn"},
+                    "scorers": [{"plugin": "llm_judge", "params": {"judge_config_id": judge_a.json()["id"]}}],
+                },
+            },
+        )
+        rid = run.json()["id"]
+        assert (await c.post(f"/api/runs/{rid}/start", headers=h)).status_code == 202
+        for _ in range(50):
+            status = (await c.get(f"/api/runs/{rid}", headers=h)).json()
+            if status["status"] in ("completed", "failed"):
+                break
+            await asyncio.sleep(0.05)
+
+        assert status["status"] == "completed"
+        retry = await c.post(
+            f"/api/runs/{rid}/scores/retry",
+            headers=h,
+            json={
+                "failed_only": False,
+                "scorer_ref": {"plugin": "llm_judge", "params": {"judge_config_id": judge_b.json()["id"]}},
+            },
+        )
+        assert retry.status_code == 202
+        assert retry.json()["retried"] == 1
+        assert retry.json()["completed"] == 1
+        assert judge_b_route.call_count == 1
+
+        scores = (await c.get(f"/api/runs/{rid}/scores", headers=h)).json()
+        assert len(scores) == 2
+        assert [score["value"]["label"] for score in scores] == [False, True]
+        assert scores[1]["value"]["judge_config_id"] == judge_b.json()["id"]
+        assert scores[1]["value"]["judge_name"] == "judge-b"
+
+
+@pytest.mark.asyncio
 async def test_pause_and_resume_run_via_api(monkeypatch, tmp_path):
     started = asyncio.Event()
     release = asyncio.Event()

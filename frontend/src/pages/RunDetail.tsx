@@ -57,6 +57,7 @@ export default function RunDetail() {
   const [attemptStatus, setAttemptStatus] = useState("");
   const [attemptTarget, setAttemptTarget] = useState("");
   const [attemptPage, setAttemptPage] = useState(0);
+  const [judgeTargetId, setJudgeTargetId] = useState("");
 
   const { data: run } = useQuery({
     queryKey: ["run", id],
@@ -90,6 +91,10 @@ export default function RunDetail() {
     queryKey: ["run-report", id],
     queryFn: async () => (await api.get(`/api/runs/${id}/report`)).data,
     refetchInterval: pollInterval,
+  });
+  const { data: targets = [] } = useQuery({
+    queryKey: ["targets"],
+    queryFn: async () => (await api.get("/api/targets")).data,
   });
 
   useEffect(() => {
@@ -200,6 +205,19 @@ export default function RunDetail() {
     },
     onError: (e: any) => toast.error(e?.response?.data?.detail ?? t("Failed to retry judge scores")),
   });
+  const rejudgeMut = useMutation({
+    mutationFn: async (judgeConfigId: string) => (await api.post(`/api/runs/${id}/scores/retry`, {
+      failed_only: false,
+      scorer_ref: { plugin: "llm_judge", params: { judge_config_id: judgeConfigId } },
+    })).data,
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["run-scores", id] });
+      queryClient.invalidateQueries({ queryKey: ["run-attempts", id] });
+      queryClient.invalidateQueries({ queryKey: ["run-report", id] });
+      toast.success(t("Rejudged {{count}} attempts", { count: data?.retried ?? 0 }));
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.detail ?? t("Failed to rejudge run")),
+  });
 
   const downloadExport = async (format: "json" | "csv") => {
     const response = await api.get(`/api/runs/${id}/export`, {
@@ -269,6 +287,30 @@ export default function RunDetail() {
               onClick={() => retryScoresMut.mutate()}>
               {t("Retry failed judges ({{count}})", { count: failedScores.length })}
             </Button>
+          )}
+          {run?.kind === "automated" && run?.status === "completed" && (
+            <div className="flex items-center gap-2">
+              <select
+                className="input h-8 min-w-40 text-xs"
+                value={judgeTargetId}
+                onChange={e => setJudgeTargetId(e.target.value)}
+              >
+                <option value="">{t("-- pick judger --")}</option>
+                {targets.map((target: any) => (
+                  <option key={target.id} value={target.id}>{target.name}</option>
+                ))}
+              </select>
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<RotateCcw className="h-4 w-4" />}
+                loading={rejudgeMut.isPending}
+                disabled={!judgeTargetId}
+                onClick={() => rejudgeMut.mutate(judgeTargetId)}
+              >
+                {t("Rejudge run")}
+              </Button>
+            </div>
           )}
           {run?.kind === "automated" && ["running", "pausing", "paused"].includes(run?.status) && (
             <Button variant="danger" size="sm" icon={<Ban className="h-4 w-4" />}
@@ -742,7 +784,7 @@ function ScoreCard({ score }: { score: any }) {
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-3 space-y-2">
       <div className="flex items-center gap-2 text-xs">
-        <span className="font-medium text-gray-700">{score.scorer}</span>
+        <span className="font-medium text-gray-700">{score.scorer}{v.judge_name ? ` · ${v.judge_name}` : ""}</span>
         <Badge tone={tone as any}>{displayVerdict ? t(displayVerdict) : t("Judge failed")}</Badge>
         {isOverridden && <span className="text-[10px] text-gray-500">{t("(overridden)")}</span>}
         {isOverridden && scorerVerdict && (

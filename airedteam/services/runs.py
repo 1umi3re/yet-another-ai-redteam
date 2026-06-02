@@ -228,13 +228,14 @@ class RunService:
         closeables = []
         scorers = []
         for sc in spec.scorers:
-            scorer, scorer_closeables = await self._build_scorer_from_ref(sc.model_dump())
+            scorer, scorer_closeables, _metadata = await self._build_scorer_from_ref(sc.model_dump())
             closeables.extend(scorer_closeables)
             scorers.append(scorer)
         return scorers, closeables
 
-    async def _build_scorer_from_ref(self, ref: dict) -> tuple[object, list]:
+    async def _build_scorer_from_ref(self, ref: dict) -> tuple[object, list, dict]:
         closeables = []
+        metadata = {}
         params = dict(ref.get("params") or {})
         if ref.get("plugin") == "llm_judge":
             judge_cfg_id = params.pop("judge_config_id", None)
@@ -243,12 +244,15 @@ class RunService:
                     "llm_judge scorer requires params.judge_config_id "
                     "(id of a configured target to use as the judge)"
                 )
+            judge_cfg = await self._targets.get(judge_cfg_id)
             judge_ref = await self._targets.resolve_for_runtime(judge_cfg_id)
             params["judge"] = self._build_target_from_cfg(judge_ref)
             closeables.append(params["judge"])
             params["prompt_assets"] = self._prompt_assets
+            metadata["judge_config_id"] = judge_cfg_id
+            metadata["judge_name"] = judge_cfg.name if judge_cfg is not None else judge_cfg_id
         scorer = build_scorer({"plugin": ref["plugin"], "params": params})
-        return scorer, closeables
+        return scorer, closeables, metadata
 
     async def _attempt_result_from_row(self, attempt: Attempt) -> AttemptResult:
         response_text = attempt.response_text
@@ -311,6 +315,7 @@ class RunService:
         score_ids: list[str] | None = None,
         attempt_ids: list[str] | None = None,
         scorers: list[str] | None = None,
+        scorer_ref: dict | None = None,
     ) -> dict[str, int]:
         async with self._sf() as s:
             run = await s.get(Run, run_id)
@@ -319,6 +324,13 @@ class RunService:
             if run.kind != "automated":
                 raise ValueError("score retry is only available for automated runs")
             spec = RunSpec.model_validate(yaml.safe_load(run.runspec_yaml))
+
+        if scorer_ref is not None:
+            return await self._score_attempts_with_new_scorer(
+                run_id,
+                scorer_ref=scorer_ref,
+                attempt_ids=attempt_ids,
+            )
 
         scorer_instances, closeables = await self._build_scorers(spec)
         scorer_by_name = {getattr(sc, "name", "?"): sc for sc in scorer_instances}
@@ -377,6 +389,65 @@ class RunService:
                 "completed": completed,
                 "failed": failed,
                 "skipped": skipped,
+            }
+        finally:
+            for obj in closeables:
+                try:
+                    await obj.aclose()
+                except Exception:
+                    pass
+
+    async def _score_attempts_with_new_scorer(
+        self,
+        run_id: str,
+        *,
+        scorer_ref: dict,
+        attempt_ids: list[str] | None = None,
+    ) -> dict[str, int]:
+        scorer, closeables, metadata = await self._build_scorer_from_ref(scorer_ref)
+        attempt_filter = set(attempt_ids or [])
+        try:
+            async with self._sf() as s:
+                query = select(Attempt).where(Attempt.run_id == run_id).order_by(Attempt.created_at)
+                if attempt_filter:
+                    query = query.where(Attempt.id.in_(attempt_filter))
+                attempts = list((await s.execute(query)).scalars().all())
+
+            retried = 0
+            completed = 0
+            failed = 0
+            for attempt in attempts:
+                attempt_result = await self._attempt_result_from_row(attempt)
+                try:
+                    score_result = await scorer.score(attempt_result)
+                except Exception as exc:
+                    score_result = ScoreResult(
+                        scorer=getattr(scorer, "name", scorer_ref.get("plugin", "?")),
+                        value=failed_score_value(exc),
+                        rationale=None,
+                    )
+
+                if isinstance(score_result.value, dict) and metadata:
+                    score_result = ScoreResult(
+                        scorer=score_result.scorer,
+                        value={**score_result.value, **metadata},
+                        rationale=score_result.rationale,
+                        prompt_snapshot=score_result.prompt_snapshot,
+                    )
+
+                await self._write_score(run_id, attempt.id, score_result)
+                retried += 1
+                if is_failed_score_value(score_result.value):
+                    failed += 1
+                else:
+                    completed += 1
+
+            return {
+                "matched": len(attempts),
+                "retried": retried,
+                "completed": completed,
+                "failed": failed,
+                "skipped": 0,
             }
         finally:
             for obj in closeables:

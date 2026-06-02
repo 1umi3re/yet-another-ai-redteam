@@ -44,6 +44,7 @@ class RetryScores(BaseModel):
     score_ids: list[str] | None = None
     attempt_ids: list[str] | None = None
     scorers: list[str] | None = None
+    scorer_ref: dict[str, Any] | None = None
 
 
 async def _run_to_out(r: Run, state: AppState) -> RunOut:
@@ -142,6 +143,7 @@ async def retry_scores(rid: str, req: RetryScores, _=Depends(require_admin), sta
             score_ids=req.score_ids,
             attempt_ids=req.attempt_ids,
             scorers=req.scorers,
+            scorer_ref=req.scorer_ref,
         )
     except KeyError:
         raise HTTPException(404) from None
