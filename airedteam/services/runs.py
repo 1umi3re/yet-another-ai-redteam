@@ -540,7 +540,7 @@ class RunService:
 
             attempt_id_by_index: dict[int, str] = {}
 
-            async def on_attempt(ar, target_name, dataset_item_id, work_key):
+            async def on_attempt(ar, target_name, dataset_item_id, work_key, original_prompt):
                 text = ar.response.text if ar.response else None
                 blob_path = None
                 if text and len(text.encode("utf-8", errors="ignore")) > self._inline_max:
@@ -586,6 +586,7 @@ class RunService:
                     a.target_id = target_name
                     a.target_name = target_name
                     a.dataset_item_id = dataset_item_id
+                    a.original_prompt_text = original_prompt.text
                     a.prompt_text = ar.prompt.text
                     a.converter_chain = ar.converter_chain
                     a.response_text = stored_text

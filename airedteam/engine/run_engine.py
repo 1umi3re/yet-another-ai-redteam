@@ -64,7 +64,7 @@ class RunEngine:
         self,
         *,
         progress_bus,
-        on_attempt: Callable[[AttemptResult, str, str | None, str], Awaitable[None]],
+        on_attempt: Callable[[AttemptResult, str, str | None, str, Prompt], Awaitable[None]],
         on_score: Callable[[int, ScoreResult], Awaitable[None]],
     ) -> None:
         self._bus = progress_bus
@@ -119,7 +119,7 @@ class RunEngine:
                     converter_chain=[getattr(c, "name", type(c).__name__) for c in item.converter_variant],
                 )
             async with self._lock:
-                await self._on_attempt(ar, item.target_name, item.dataset_item_id, item.work_key)
+                await self._on_attempt(ar, item.target_name, item.dataset_item_id, item.work_key, item.prompt)
                 idx = self._counter
                 self._counter += 1
             await self._bus.publish(

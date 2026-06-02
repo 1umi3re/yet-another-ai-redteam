@@ -363,8 +363,9 @@ export default function RunDetail() {
               <thead className="bg-gray-50 text-gray-600 text-xs uppercase tracking-wider">
                 <tr>
                   <th className="text-left px-5 py-2.5">{t("Target")}</th>
-                  <th className="text-left px-5 py-2.5">{t("Prompt")}</th>
-                  <th className="text-left px-5 py-2.5">{t("Response")}</th>
+                  <th className="text-left px-5 py-2.5">{t("Original prompt")}</th>
+                  <th className="text-left px-5 py-2.5">{t("Transformed prompt")}</th>
+                  <th className="text-left px-5 py-2.5">{t("LLM response")}</th>
                   <th className="text-left px-5 py-2.5">{t("Score")}</th>
                   <th className="px-5 py-2.5"></th>
                 </tr>
@@ -377,7 +378,16 @@ export default function RunDetail() {
                   return (
                     <tr key={a.id} className="align-top hover:bg-gray-50/60">
                       <td className="px-5 py-3 font-medium whitespace-nowrap">{a.target_name}</td>
-                      <td className="px-5 py-3 max-w-xs"><div className="truncate text-gray-700" title={a.prompt}>{a.prompt}</div></td>
+                      <td className="px-5 py-3 max-w-xs">
+                        <div className="truncate text-gray-700" title={a.original_prompt ?? a.prompt}>
+                          {a.original_prompt ?? a.prompt}
+                        </div>
+                      </td>
+                      <td className="px-5 py-3 max-w-xs">
+                        <div className="truncate text-gray-700" title={a.transformed_prompt ?? a.prompt}>
+                          {a.transformed_prompt ?? a.prompt}
+                        </div>
+                      </td>
                       <td className="px-5 py-3 max-w-md"><div className="truncate text-gray-600" title={a.response ?? ""}>{a.response ?? <span className="text-gray-400">({t("blob")})</span>}</div></td>
                       <td className="px-5 py-3">
                         {scoreFailed ? <Badge tone="amber">{t("Judge failed")}</Badge>
@@ -393,7 +403,7 @@ export default function RunDetail() {
                   );
                 })}
                 {!attempts.length && (
-                  <tr><td colSpan={5} className="px-5 py-10 text-center text-sm text-gray-500">{t("No attempts yet.")}</td></tr>
+                  <tr><td colSpan={6} className="px-5 py-10 text-center text-sm text-gray-500">{t("No attempts yet.")}</td></tr>
                 )}
               </tbody>
             </table>
@@ -549,6 +559,19 @@ function AttemptDetailDrawer({ runId, attempt, scores, onClose }: { runId: strin
             </div>
           )}
 
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Section title={t("Original prompt")}>
+              <pre className="text-xs whitespace-pre-wrap break-words font-mono bg-gray-50 border border-gray-200 rounded-lg p-3 text-gray-800 max-h-64 overflow-auto">
+{attempt.original_prompt ?? attempt.prompt ?? ""}
+              </pre>
+            </Section>
+            <Section title={t("Transformed prompt")}>
+              <pre className="text-xs whitespace-pre-wrap break-words font-mono bg-gray-50 border border-gray-200 rounded-lg p-3 text-gray-800 max-h-64 overflow-auto">
+{attempt.transformed_prompt ?? attempt.prompt ?? ""}
+              </pre>
+            </Section>
+          </div>
+
           {messages.length > 0 ? (
             <Section title={t("Conversation")}>
               <div className="space-y-3">
@@ -572,25 +595,17 @@ function AttemptDetailDrawer({ runId, attempt, scores, onClose }: { runId: strin
               </div>
             </Section>
           ) : (
-            <>
-              <Section title={t("Prompt")}>
-                <pre className="text-xs whitespace-pre-wrap break-words font-mono bg-gray-50 border border-gray-200 rounded-lg p-3 text-gray-800 max-h-64 overflow-auto">
-{attempt.prompt ?? ""}
-                </pre>
-              </Section>
-
-              <Section title={t("Response")}>
-                {attempt.response ? (
-                  <pre className="text-xs whitespace-pre-wrap break-words font-mono bg-gray-50 border border-gray-200 rounded-lg p-3 text-gray-800 max-h-96 overflow-auto">
+            <Section title={t("LLM response")}>
+              {attempt.response ? (
+                <pre className="text-xs whitespace-pre-wrap break-words font-mono bg-gray-50 border border-gray-200 rounded-lg p-3 text-gray-800 max-h-96 overflow-auto">
 {attempt.response}
-                  </pre>
-                ) : attempt.response_blob_path ? (
-                  <div className="text-xs text-gray-500 italic">{t("Response stored as blob")}: <span className="font-mono">{attempt.response_blob_path}</span></div>
-                ) : (
-                  <div className="text-xs text-gray-400 italic">{t("No response")}</div>
-                )}
-              </Section>
-            </>
+                </pre>
+              ) : attempt.response_blob_path ? (
+                <div className="text-xs text-gray-500 italic">{t("Response stored as blob")}: <span className="font-mono">{attempt.response_blob_path}</span></div>
+              ) : (
+                <div className="text-xs text-gray-400 italic">{t("No response")}</div>
+              )}
+            </Section>
           )}
 
           <Section title={scores.length > 1 ? t("Scores ({{count}})", { count: scores.length }) : t("Score")}>

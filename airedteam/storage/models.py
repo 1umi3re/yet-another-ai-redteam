@@ -113,6 +113,7 @@ class Attempt(Base):
     target_name: Mapped[str] = mapped_column(String(200))
     dataset_item_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
     work_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    original_prompt_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     prompt_text: Mapped[str] = mapped_column(Text)
     converter_chain: Mapped[list] = mapped_column(JSON, default=list)
     response_text: Mapped[str | None] = mapped_column(Text, nullable=True)
