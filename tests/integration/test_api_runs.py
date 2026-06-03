@@ -538,6 +538,103 @@ async def test_pause_and_resume_run_via_api(monkeypatch, tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_resume_failed_run_continues_remaining_work_via_api(monkeypatch, tmp_path):
+    calls: list[str] = []
+
+    class TimeoutOnceApiTarget:
+        def __init__(self, *, name: str) -> None:
+            self.name = name
+
+        async def generate(self, prompt):
+            calls.append(prompt.text)
+            if prompt.text == "b" and calls.count("b") == 1:
+                await asyncio.sleep(0.2)
+            return Response(text=f"ok:{prompt.text}", raw={}, latency_ms=1)
+
+        async def aclose(self):
+            pass
+
+    default_registry().register("targets", "timeout_once_api_target", TimeoutOnceApiTarget)
+
+    monkeypatch.setenv("AIREDTEAM_MASTER_KEY", Fernet.generate_key().decode())
+    monkeypatch.setenv("AIREDTEAM_ADMIN_PASSWORD", "letmein")
+    monkeypatch.setenv("AIREDTEAM_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/x.db")
+    monkeypatch.setenv("AIREDTEAM_BLOB_DIR", str(tmp_path / "blobs"))
+    import airedteam.api.deps as deps
+
+    deps._STATE = None
+    from airedteam.api.app import create_app
+
+    app = create_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
+        state = deps.get_state()
+        from airedteam.storage import models
+        from airedteam.storage.db import make_engine
+
+        eng = make_engine(state.settings.database_url)
+        async with eng.begin() as conn:
+            await conn.run_sync(models.Base.metadata.create_all)
+
+        h = await _login(c)
+        target = await c.post(
+            "/api/targets",
+            headers=h,
+            json={"name": "t1", "plugin": "timeout_once_api_target", "params": {"name": "t1"}},
+        )
+        dataset = await c.post(
+            "/api/datasets/upload",
+            headers=h,
+            files={
+                "file": (
+                    "a.json",
+                    json.dumps({"items": [{"prompt": "a"}, {"prompt": "b"}, {"prompt": "c"}]}).encode(),
+                    "application/json",
+                )
+            },
+            data={"name": "d1"},
+        )
+        run = await c.post(
+            "/api/runs",
+            headers=h,
+            json={
+                "name": "r1",
+                "runspec": {
+                    "name": "r1",
+                    "targets": [{"config_id": target.json()["id"]}],
+                    "dataset": {"config_id": dataset.json()["id"]},
+                    "executor": {"plugin": "single_turn"},
+                    "concurrency": 1,
+                    "timeout_seconds": 0.05,
+                },
+            },
+        )
+        rid = run.json()["id"]
+        assert (await c.post(f"/api/runs/{rid}/start", headers=h)).status_code == 202
+        for _ in range(50):
+            status = (await c.get(f"/api/runs/{rid}", headers=h)).json()
+            if status["status"] == "failed":
+                break
+            await asyncio.sleep(0.02)
+
+        assert status["status"] == "failed"
+        assert status["progress_done"] == 1
+
+        resume = await c.post(f"/api/runs/{rid}/resume", headers=h, json={"retry_failed": False})
+        assert resume.status_code == 202
+        for _ in range(50):
+            status = (await c.get(f"/api/runs/{rid}", headers=h)).json()
+            if status["status"] == "completed":
+                break
+            await asyncio.sleep(0.02)
+
+        assert status["status"] == "completed"
+        assert status["progress_done"] == 3
+        attempts = (await c.get(f"/api/runs/{rid}/attempts", headers=h)).json()
+        assert [a["prompt"] for a in attempts] == ["a", "b", "c"]
+        assert calls == ["a", "b", "b", "c"]
+
+
+@pytest.mark.asyncio
 @respx.mock
 async def test_get_conversation_multi_turn_api(monkeypatch, tmp_path):
     from airedteam.builtins.executors.multi_turn_base import MultiTurnExecutor

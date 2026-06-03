@@ -192,10 +192,13 @@ class RunService:
             run = await s.get(Run, run_id)
             if run is None:
                 raise KeyError(run_id)
-            if run.status in TERMINAL_RUN_STATUSES:
+            can_resume_failed_run = run.kind == "automated" and run.status == "failed"
+            if run.status in TERMINAL_RUN_STATUSES and not can_resume_failed_run:
                 raise ValueError(f"run is already {run.status}")
             if run.status == "pending":
                 raise ValueError("run has not started")
+            if can_resume_failed_run and has_active_task:
+                raise ValueError("run is still failing")
             if run.status == "pausing" and has_active_task:
                 raise ValueError("run is pausing")
             if run.status == "running" and has_active_task:

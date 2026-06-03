@@ -267,7 +267,7 @@ export default function RunDetail() {
               {t("Pause run")}
             </Button>
           )}
-          {run?.kind === "automated" && run?.status === "paused" && (
+          {run?.kind === "automated" && ["paused", "failed"].includes(run?.status) && (
             <>
               <Button variant="secondary" size="sm" icon={<Play className="h-4 w-4" />}
                 loading={resumeMut.isPending && resumeMut.variables === false}

@@ -398,6 +398,96 @@ async def test_run_service_resume_failed_work_retry_option(
 
 
 @pytest.mark.asyncio
+async def test_run_service_resumes_remaining_work_after_failed_run(tmp_path):
+    calls: list[str] = []
+
+    class TimeoutOnceTarget:
+        def __init__(self, *, name: str) -> None:
+            self.name = name
+
+        async def generate(self, prompt):
+            calls.append(prompt.text)
+            if prompt.text == "b" and calls.count("b") == 1:
+                await asyncio.sleep(0.2)
+            return Response(text=f"ok:{prompt.text}", raw={}, latency_ms=1)
+
+        async def aclose(self):
+            pass
+
+    default_registry().register("targets", "resume_failed_timeout_target", TimeoutOnceTarget)
+
+    engine_db = make_engine(f"sqlite+aiosqlite:///{tmp_path}/x.db")
+    SessionLocal = make_sessionmaker(engine_db)
+    async with engine_db.begin() as c:
+        await c.run_sync(models.Base.metadata.create_all)
+    blob = LocalBlobStore(tmp_path / "blobs")
+    box = SecretBox(Fernet.generate_key().decode())
+    targets = TargetConfigService(SessionLocal, box)
+    datasets = DatasetService(SessionLocal, blob)
+    bus = ProgressBus()
+    svc = RunService(SessionLocal, blob, box, targets, datasets, bus, max_concurrency=1)
+
+    tcfg = await targets.create(name="t1", plugin="resume_failed_timeout_target", params={"name": "t1"})
+    ds = await datasets.create_json_upload(
+        name="ds",
+        file_bytes=json.dumps({"items": [{"prompt": "a"}, {"prompt": "b"}, {"prompt": "c"}]}).encode(),
+    )
+    run = await svc.create_run(
+        name="r1",
+        runspec_dict={
+            "name": "r1",
+            "targets": [{"config_id": tcfg.id}],
+            "dataset": {"config_id": ds.id},
+            "executor": {"plugin": "single_turn"},
+            "concurrency": 1,
+            "timeout_seconds": 0.05,
+        },
+    )
+
+    with pytest.raises(TimeoutError):
+        await svc.execute_run(run.id)
+
+    async with SessionLocal() as s:
+        run_row = await s.get(models.Run, run.id)
+        attempts = (
+            (
+                await s.execute(
+                    select(models.Attempt).where(models.Attempt.run_id == run.id).order_by(models.Attempt.prompt_text)
+                )
+            )
+            .scalars()
+            .all()
+        )
+    assert run_row.status == "failed"
+    assert [a.prompt_text for a in attempts] == ["a"]
+
+    await svc.resume_run(run.id, retry_failed=False)
+    for _ in range(50):
+        async with SessionLocal() as s:
+            run_row = await s.get(models.Run, run.id)
+            attempts = (
+                (
+                    await s.execute(
+                        select(models.Attempt)
+                        .where(models.Attempt.run_id == run.id)
+                        .order_by(models.Attempt.prompt_text)
+                    )
+                )
+                .scalars()
+                .all()
+            )
+        if run_row.status in {"completed", "failed"} and len(attempts) == 3:
+            break
+        await asyncio.sleep(0.02)
+
+    assert run_row.status == "completed"
+    assert run_row.error is None
+    assert run_row.progress_done == 3
+    assert [a.prompt_text for a in attempts] == ["a", "b", "c"]
+    assert calls == ["a", "b", "b", "c"]
+
+
+@pytest.mark.asyncio
 @respx.mock
 async def test_run_service_executes_best_of_n(tmp_path):
     route = respx.post("https://api.example.com/v1/chat/completions").mock(
