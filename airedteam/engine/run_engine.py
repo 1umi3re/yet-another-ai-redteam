@@ -150,49 +150,55 @@ class RunEngine:
 
         active: set[asyncio.Task] = set()
         stopped = False
-        prompt_index = -1
-        async for prompt in orchestrator.attempts(dataset, converters):
-            prompt_index += 1
-            for target_index, target in enumerate(targets):
-                target_name = getattr(target, "name", "?")
-                dataset_item_id = None
-                try:
-                    dataset_item_id = prompt.metadata.get("id")
-                except Exception:
-                    pass
-                for converter_index, converter_variant in enumerate(converter_variants):
-                    active = await wait_for_slot(active)
-                    if await stop_requested():
-                        stopped = True
+        try:
+            prompt_index = -1
+            async for prompt in orchestrator.attempts(dataset, converters):
+                prompt_index += 1
+                for target_index, target in enumerate(targets):
+                    target_name = getattr(target, "name", "?")
+                    dataset_item_id = None
+                    try:
+                        dataset_item_id = prompt.metadata.get("id")
+                    except Exception:
+                        pass
+                    for converter_index, converter_variant in enumerate(converter_variants):
+                        active = await wait_for_slot(active)
+                        if await stop_requested():
+                            stopped = True
+                            break
+                        work_key = work_key_for(
+                            prompt=prompt,
+                            prompt_index=prompt_index,
+                            target_index=target_index,
+                            target_name=target_name,
+                            converter_variant=converter_variant,
+                            converter_index=converter_index,
+                        )
+                        if should_skip_work is not None and await should_skip_work(work_key):
+                            continue
+                        item = WorkItem(
+                            prompt=prompt,
+                            prompt_index=prompt_index,
+                            target=target,
+                            target_index=target_index,
+                            target_name=target_name,
+                            converter_variant=converter_variant,
+                            converter_index=converter_index,
+                            dataset_item_id=dataset_item_id,
+                            work_key=work_key,
+                        )
+                        active.add(asyncio.create_task(process(item)))
+                    if stopped:
                         break
-                    work_key = work_key_for(
-                        prompt=prompt,
-                        prompt_index=prompt_index,
-                        target_index=target_index,
-                        target_name=target_name,
-                        converter_variant=converter_variant,
-                        converter_index=converter_index,
-                    )
-                    if should_skip_work is not None and await should_skip_work(work_key):
-                        continue
-                    item = WorkItem(
-                        prompt=prompt,
-                        prompt_index=prompt_index,
-                        target=target,
-                        target_index=target_index,
-                        target_name=target_name,
-                        converter_variant=converter_variant,
-                        converter_index=converter_index,
-                        dataset_item_id=dataset_item_id,
-                        work_key=work_key,
-                    )
-                    active.add(asyncio.create_task(process(item)))
                 if stopped:
                     break
-            if stopped:
-                break
 
-        await drain(active)
+            await drain(active)
+        except BaseException:
+            for task in active:
+                task.cancel()
+            await asyncio.gather(*active, return_exceptions=True)
+            raise
         if not stopped and await stop_requested():
             stopped = True
         return RunEngineResult(stopped=stopped)
