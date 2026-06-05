@@ -70,7 +70,34 @@ async def test_run_report_export_and_filters(monkeypatch, tmp_path):
                 tokens_in=4,
                 tokens_out=5,
             )
-            s.add_all([a1, a2])
+            a3 = models.Attempt(
+                id="a3",
+                run_id=run.id,
+                target_id="target-2",
+                target_name="Target 2",
+                dataset_item_id="item-3",
+                prompt_text="p3",
+                response_text="answer",
+                converter_chain=["base64"],
+                latency_ms=30,
+                tokens_in=6,
+                tokens_out=7,
+            )
+            a4 = models.Attempt(
+                id="a4",
+                run_id=run.id,
+                target_id="target-2",
+                target_name="Target 2",
+                dataset_item_id="item-4",
+                prompt_text="p4",
+                response_text=None,
+                converter_chain=[],
+                status="failed",
+                latency_ms=40,
+                tokens_in=8,
+                tokens_out=9,
+            )
+            s.add_all([a1, a2, a3, a4])
             await s.flush()
             s.add_all(
                 [
@@ -90,17 +117,34 @@ async def test_run_report_export_and_filters(monkeypatch, tmp_path):
                         reviewer_label=False,
                         reviewer_notes="actually complied",
                     ),
+                    models.Score(
+                        id="s3",
+                        attempt_id="a3",
+                        scorer="llm_judge",
+                        value_json={"label": True},
+                        rationale="judge said complied",
+                    ),
                 ]
             )
             await s.commit()
             run_id = run.id
 
         report = (await c.get(f"/api/runs/{run_id}/report", headers=h)).json()
-        assert report["totals"]["attempts"] == 2
+        assert report["totals"]["attempts"] == 4
         assert report["totals"]["refused"] == 1
-        assert report["totals"]["complied"] == 1
+        assert report["totals"]["complied"] == 2
+        assert report["totals"]["failed"] == 1
         by_scorer = {row["scorer"]: row for row in report["by_scorer"]}
         assert by_scorer["llm_judge"]["reviewer_overrides"] == 1
+        by_target_chain = {
+            (row["target_id"], tuple(row["converter_chain"])): row for row in report["by_target_chain"]
+        }
+        assert by_target_chain[("target-1", ("base64",))]["success_rate"] == 0
+        assert by_target_chain[("target-1", ())]["success_rate"] == 1
+        assert by_target_chain[("target-2", ("base64",))]["success_rate"] == 1
+        assert by_target_chain[("target-2", ())]["failed"] == 1
+        assert by_target_chain[("target-2", ())]["unscored"] == 1
+        assert by_target_chain[("target-2", ())]["success_rate"] is None
 
         attempts_default = (await c.get(f"/api/runs/{run_id}/attempts", headers=h)).json()
         assert isinstance(attempts_default, list)
@@ -110,8 +154,8 @@ async def test_run_report_export_and_filters(monkeypatch, tmp_path):
                 headers=h,
             )
         ).json()
-        assert attempts_page["total"] == 1
-        assert attempts_page["items"][0]["id"] == "a2"
+        assert attempts_page["total"] == 2
+        assert {item["id"] for item in attempts_page["items"]} == {"a2", "a3"}
 
         reviewed_scores = (
             await c.get(

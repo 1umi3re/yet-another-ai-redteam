@@ -522,6 +522,7 @@ def _run_report(run: Run, attempts: list[Attempt], scores: list[Score]) -> dict[
     totals = _empty_bucket()
     by_target: dict[str, dict[str, Any]] = {}
     by_chain: dict[str, dict[str, Any]] = {}
+    by_target_chain: dict[tuple[str, str], dict[str, Any]] = {}
     by_dataset_item: dict[str, dict[str, Any]] = {}
     for attempt in attempts:
         verdict = _attempt_verdict(scores_by_attempt.get(attempt.id, []))
@@ -536,6 +537,14 @@ def _run_report(run: Run, attempts: list[Attempt], scores: list[Score]) -> dict[
         chain_bucket = by_chain.setdefault(chain_key, _empty_bucket(chain_key))
         chain_bucket["converter_chain"] = chain
         _add_attempt(chain_bucket, attempt, verdict)
+        target_chain_bucket = by_target_chain.setdefault(
+            (target_key, chain_key),
+            _empty_bucket(f"{target_key}|{chain_key}"),
+        )
+        target_chain_bucket["target_id"] = attempt.target_id
+        target_chain_bucket["target_name"] = attempt.target_name
+        target_chain_bucket["converter_chain"] = chain
+        _add_attempt(target_chain_bucket, attempt, verdict)
         dataset_key = attempt.dataset_item_id or "(none)"
         dataset_bucket = by_dataset_item.setdefault(dataset_key, _empty_bucket(dataset_key))
         dataset_bucket["dataset_item_id"] = attempt.dataset_item_id
@@ -578,6 +587,7 @@ def _run_report(run: Run, attempts: list[Attempt], scores: list[Score]) -> dict[
         "totals": _finish_bucket(totals),
         "by_target": [_finish_bucket(v) for v in by_target.values()],
         "by_converter_chain": [_finish_bucket(v) for v in by_chain.values()],
+        "by_target_chain": [_finish_bucket(v) for v in by_target_chain.values()],
         "by_dataset_item": [_finish_bucket(v) for v in by_dataset_item.values()],
         "by_scorer": list(by_scorer.values()),
     }

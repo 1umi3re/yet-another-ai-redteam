@@ -3,7 +3,6 @@ import { Link, useParams, useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 import { Card, CardBody, CardHeader, CardTitle, CardDescription } from "../components/ui/Card";
 import { Badge, StatusBadge } from "../components/ui/Badge";
 import { ProgressBar } from "../components/ui/ProgressBar";
@@ -43,6 +42,30 @@ function verdictOf(score: any): Verdict | null {
     return score.reviewer_label ? "refused" : "complied";
   }
   return scorerVerdictOf(score);
+}
+
+function formatPercent(value: unknown): string {
+  return typeof value === "number" ? `${Math.round(value * 100)}%` : "—";
+}
+
+function successRate(row: any): number {
+  return typeof row?.success_rate === "number" ? row.success_rate : -1;
+}
+
+function chainText(chain: any[] | undefined, emptyLabel: string): string {
+  return chain?.length ? chain.join(" -> ") : emptyLabel;
+}
+
+function chainKey(chain: any[] | undefined): string {
+  return chain?.length ? chain.join(" -> ") : "(none)";
+}
+
+function heatTone(rate: number): string {
+  if (rate >= 0.75) return "bg-red-100 text-red-900 border-red-200";
+  if (rate >= 0.5) return "bg-orange-100 text-orange-900 border-orange-200";
+  if (rate >= 0.25) return "bg-amber-100 text-amber-900 border-amber-200";
+  if (rate >= 0) return "bg-emerald-50 text-emerald-900 border-emerald-200";
+  return "bg-gray-50 text-gray-400 border-gray-200";
 }
 
 export default function RunDetail() {
@@ -121,32 +144,16 @@ export default function RunDetail() {
     [scores],
   );
 
-  const chartData = useMemo(() => {
-    if (report?.by_target?.length) {
-      return report.by_target.map((row: any) => ({
-        target: row.target_name ?? row.key,
-        refused: row.refused,
-        complied: row.complied,
-      }));
-    }
-    const byTarget: Record<string, { target: string; refused: number; complied: number }> = {};
-    for (const a of attempts as any[]) {
-      byTarget[a.target_name] ||= { target: a.target_name, refused: 0, complied: 0 };
-      const sc = scoreByAttempt.get(a.id);
-      if (!sc) continue;
-      const verdict = verdictOf(sc);
-      if (verdict === "refused") byTarget[a.target_name].refused++;
-      else if (verdict === "complied") byTarget[a.target_name].complied++;
-    }
-    return Object.values(byTarget);
-  }, [attempts, scoreByAttempt, report]);
-
-  const totals = useMemo(() => {
+  const attackMetrics = useMemo(() => {
     if (report?.totals) {
       return {
         refused: report.totals.refused ?? 0,
         complied: report.totals.complied ?? 0,
-        total: report.totals.scored ?? 0,
+        scored: report.totals.scored ?? 0,
+        attempts: report.totals.attempts ?? 0,
+        failed: report.totals.failed ?? 0,
+        unscored: report.totals.unscored ?? 0,
+        successRate: report.totals.success_rate ?? null,
       };
     }
     let refused = 0, complied = 0;
@@ -155,8 +162,52 @@ export default function RunDetail() {
       if (verdict === "refused") refused++;
       else if (verdict === "complied") complied++;
     }
-    return { refused, complied, total: refused + complied };
-  }, [scores, report]);
+    const scored = refused + complied;
+    return {
+      refused,
+      complied,
+      scored,
+      attempts: attempts.length,
+      failed: 0,
+      unscored: Math.max(0, attempts.length - scored),
+      successRate: scored ? complied / scored : null,
+    };
+  }, [attempts.length, scores, report]);
+
+  const targetRiskRows = useMemo(
+    () => [...(report?.by_target ?? [])].sort((a: any, b: any) => successRate(b) - successRate(a)),
+    [report],
+  );
+  const chainRiskRows = useMemo(
+    () => [...(report?.by_converter_chain ?? [])].sort((a: any, b: any) => successRate(b) - successRate(a)),
+    [report],
+  );
+  const targetChainRows = useMemo(
+    () => [...(report?.by_target_chain ?? [])].sort((a: any, b: any) => successRate(b) - successRate(a)),
+    [report],
+  );
+  const heatTargets = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const row of targetChainRows) {
+      const key = row.target_id ?? row.target_name ?? row.key;
+      seen.set(key, row.target_name ?? key);
+    }
+    return [...seen.entries()];
+  }, [targetChainRows]);
+  const heatChains = useMemo(() => {
+    const seen = new Map<string, any[]>();
+    for (const row of targetChainRows) {
+      seen.set(chainKey(row.converter_chain), row.converter_chain ?? []);
+    }
+    return [...seen.entries()];
+  }, [targetChainRows]);
+  const targetChainByKey = useMemo(() => {
+    const out = new Map<string, any>();
+    for (const row of targetChainRows) {
+      out.set(`${row.target_id ?? row.target_name ?? row.key}|${chainKey(row.converter_chain)}`, row);
+    }
+    return out;
+  }, [targetChainRows]);
 
   const targetOptions = useMemo(() => {
     const seen = new Map<string, string>();
@@ -233,6 +284,18 @@ export default function RunDetail() {
     a.remove();
     URL.revokeObjectURL(url);
   };
+
+  const focusTargetComplied = (targetId: string | undefined) => {
+    if (!targetId) return;
+    setAttemptTarget(targetId);
+    setAttemptVerdict("complied");
+    setAttemptPage(0);
+    setTab("attempts");
+  };
+
+  const highestRiskTarget = targetRiskRows.find((row: any) => (row.scored ?? 0) > 0);
+  const highestRiskChain = chainRiskRows.find((row: any) => (row.scored ?? 0) > 0);
+  const highestRiskTargetChain = targetChainRows.find((row: any) => (row.scored ?? 0) > 0);
 
   return (
     <div className="space-y-6">
@@ -327,10 +390,11 @@ export default function RunDetail() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <StatCard label={t("Refusal rate")} value={totals.total ? `${Math.round((totals.refused/totals.total)*100)}%` : "—"} tone="green" />
-        <StatCard label={t("Refused")} value={totals.refused} tone="green" />
-        <StatCard label={t("Complied")} value={totals.complied} tone="red" />
+      <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-4">
+        <StatCard label={t("Attack success rate")} value={formatPercent(attackMetrics.successRate)} tone="red" />
+        <StatCard label={t("Attack successes")} value={attackMetrics.complied} tone="red" />
+        <StatCard label={t("Refused")} value={attackMetrics.refused} tone="green" />
+        <StatCard label={t("Effective scores")} value={`${attackMetrics.scored}/${attackMetrics.attempts}`} tone="brand" />
         <Card><CardBody>
           <div className="text-xs text-gray-500 mb-1">{t("Progress")}</div>
           <ProgressBar done={run?.progress_done ?? 0} total={run?.progress_total ?? 0} />
@@ -350,29 +414,128 @@ export default function RunDetail() {
       </div>
 
       {tab === "overview" && (
-        <Card>
-          <CardHeader>
-            <CardTitle>{t("Refused vs Complied by target")}</CardTitle>
-            <CardDescription>{t("Green = model refused. Red = model complied with the attack prompt.")}</CardDescription>
-          </CardHeader>
-          <CardBody>
-            {chartData.length ? (
-              <div style={{ height: 280 }}>
-                <ResponsiveContainer>
-                  <BarChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
-                    <XAxis dataKey="target" tick={{ fontSize: 12 }} />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
-                    <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-                    <Legend wrapperStyle={{ fontSize: 12 }} />
-                    <Bar dataKey="refused" stackId="a" fill="#10b981" name={t("Refused")} radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="complied" stackId="a" fill="#ef4444" name={t("Complied")} radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            ) : <div className="text-sm text-gray-500 py-8 text-center">{t("No scored attempts yet.")}</div>}
-          </CardBody>
-        </Card>
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <RiskSummaryCard
+              label={t("Highest-risk target")}
+              title={highestRiskTarget?.target_name ?? highestRiskTarget?.key ?? "—"}
+              rate={highestRiskTarget?.success_rate}
+              detail={highestRiskTarget ? t("{{count}} scored", { count: highestRiskTarget.scored ?? 0 }) : t("No scored attempts yet.")}
+            />
+            <RiskSummaryCard
+              label={t("Highest-risk attack method")}
+              title={highestRiskChain ? chainText(highestRiskChain.converter_chain, t("No converters")) : "—"}
+              rate={highestRiskChain?.success_rate}
+              detail={highestRiskChain ? t("{{count}} scored", { count: highestRiskChain.scored ?? 0 }) : t("No scored attempts yet.")}
+            />
+            <RiskSummaryCard
+              label={t("Highest-risk combination")}
+              title={highestRiskTargetChain
+                ? `${highestRiskTargetChain.target_name ?? highestRiskTargetChain.key} · ${chainText(highestRiskTargetChain.converter_chain, t("No converters"))}`
+                : "—"}
+              rate={highestRiskTargetChain?.success_rate}
+              detail={highestRiskTargetChain ? t("{{count}} scored", { count: highestRiskTargetChain.scored ?? 0 }) : t("No scored attempts yet.")}
+            />
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("Target × attack method risk matrix")}</CardTitle>
+              <CardDescription>{t("Darker cells indicate higher attack success rate.")}</CardDescription>
+            </CardHeader>
+            <CardBody>
+              {targetChainRows.length ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[720px] text-sm">
+                    <thead className="text-xs uppercase tracking-wider text-gray-500">
+                      <tr>
+                        <th className="text-left px-3 py-2">{t("Target")}</th>
+                        {heatChains.map(([key, chain]) => (
+                          <th key={key} className="text-left px-3 py-2">{chainText(chain, t("No converters"))}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {heatTargets.map(([targetId, targetName]) => (
+                        <tr key={targetId}>
+                          <td className="px-3 py-2 font-medium text-gray-800 whitespace-nowrap">{targetName}</td>
+                          {heatChains.map(([key]) => {
+                            const row = targetChainByKey.get(`${targetId}|${key}`);
+                            const rate = successRate(row);
+                            return (
+                              <td key={key} className="px-3 py-2 align-top">
+                                {row ? (
+                                  <button
+                                    className={clsx("w-full rounded-md border px-2 py-2 text-left transition hover:ring-2 hover:ring-brand-200", heatTone(rate))}
+                                    onClick={() => focusTargetComplied(row.target_id ?? row.target_name ?? row.key)}
+                                  >
+                                    <div className="font-semibold tabular-nums">{formatPercent(row.success_rate)}</div>
+                                    <div className="text-[11px] opacity-80">
+                                      {row.complied}/{row.scored} · {t("{{count}} attempts", { count: row.attempts ?? 0 })}
+                                    </div>
+                                  </button>
+                                ) : (
+                                  <div className="rounded-md border border-gray-200 bg-gray-50 px-2 py-2 text-gray-400">—</div>
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-sm text-gray-500 py-8 text-center">{t("No scored attempts yet.")}</div>
+              )}
+            </CardBody>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("Risk ranking")}</CardTitle>
+              <CardDescription>{t("Click a row to inspect successful attacks for that target.")}</CardDescription>
+            </CardHeader>
+            <CardBody>
+              {targetChainRows.length ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 text-gray-600 text-xs uppercase tracking-wider">
+                      <tr>
+                        <th className="text-left px-4 py-2">{t("Target")}</th>
+                        <th className="text-left px-4 py-2">{t("Attack method")}</th>
+                        <th className="text-left px-4 py-2">{t("Attack success rate")}</th>
+                        <th className="text-left px-4 py-2">{t("Attack successes")}</th>
+                        <th className="text-left px-4 py-2">{t("Refused")}</th>
+                        <th className="text-left px-4 py-2">{t("Failed")}</th>
+                        <th className="text-left px-4 py-2">{t("Unscored")}</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {targetChainRows.map((row: any) => (
+                        <tr
+                          key={`${row.target_id ?? row.target_name ?? row.key}|${chainKey(row.converter_chain)}`}
+                          className="hover:bg-gray-50 cursor-pointer"
+                          onClick={() => focusTargetComplied(row.target_id ?? row.target_name ?? row.key)}
+                        >
+                          <td className="px-4 py-2 font-medium text-gray-800">{row.target_name ?? row.key}</td>
+                          <td className="px-4 py-2 text-gray-600">{chainText(row.converter_chain, t("No converters"))}</td>
+                          <td className="px-4 py-2 font-semibold tabular-nums text-red-600">{formatPercent(row.success_rate)}</td>
+                          <td className="px-4 py-2 tabular-nums">{row.complied ?? 0}</td>
+                          <td className="px-4 py-2 tabular-nums">{row.refused ?? 0}</td>
+                          <td className="px-4 py-2 tabular-nums">{row.failed ?? 0}</td>
+                          <td className="px-4 py-2 tabular-nums">{row.unscored ?? 0}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-sm text-gray-500 py-8 text-center">{t("No scored attempts yet.")}</div>
+              )}
+            </CardBody>
+          </Card>
+        </div>
       )}
 
       {tab === "attempts" && (
@@ -946,6 +1109,21 @@ function StatCard({ label, value, tone }: { label: string; value: string | numbe
       <CardBody>
         <div className="text-xs text-gray-500">{label}</div>
         <div className={clsx("mt-1 text-2xl font-bold tabular-nums", color)}>{value}</div>
+      </CardBody>
+    </Card>
+  );
+}
+
+function RiskSummaryCard({ label, title, rate, detail }: { label: string; title: string; rate: unknown; detail: string }) {
+  return (
+    <Card>
+      <CardBody>
+        <div className="text-xs text-gray-500">{label}</div>
+        <div className="mt-1 text-base font-semibold text-gray-900 truncate" title={title}>{title}</div>
+        <div className="mt-2 flex items-center justify-between gap-3">
+          <span className="text-2xl font-bold tabular-nums text-red-600">{formatPercent(rate)}</span>
+          <span className="text-xs text-gray-500">{detail}</span>
+        </div>
       </CardBody>
     </Card>
   );
