@@ -11,6 +11,10 @@ import clsx from "clsx";
 import { toast } from "sonner";
 import { ConfiguredPlugin, defaultsFor, ParamField, PluginSchemas } from "../components/PluginParamsForm";
 import { useI18n } from "../lib/i18n";
+import {
+  applyConverterLlmConfig,
+  countConvertersWithLlmConfig,
+} from "../lib/converterLlmParams";
 
 const CONVERTER_CATEGORY_ORDER = [
   "encoding",
@@ -61,6 +65,7 @@ export default function NewRun() {
   const [converters, setConverters] = useState<ConfiguredPlugin[]>([]);
   const [converterCategory, setConverterCategory] = useState("all");
   const [converterSearch, setConverterSearch] = useState("");
+  const [sharedConverterLlmConfigId, setSharedConverterLlmConfigId] = useState("");
   const [samplingEnabled, setSamplingEnabled] = useState(false);
   const [samplingLimit, setSamplingLimit] = useState<string>("");
   const [samplingShuffle, setSamplingShuffle] = useState(false);
@@ -160,6 +165,10 @@ export default function NewRun() {
     ].filter(category => groups.has(category));
     return orderedCategories.map(category => ({ category, plugins: groups.get(category) ?? [] }));
   }, [converterCategories, filteredConverters]);
+  const converterLlmConfigCount = useMemo(
+    () => countConvertersWithLlmConfig(converters, convSchemas),
+    [converters, convSchemas],
+  );
 
   const converterCategoryLabel = (category: string) => {
     if (category === "all") return t("All");
@@ -171,7 +180,11 @@ export default function NewRun() {
     setConverters(prev => {
       const existing = prev.findIndex(p => p.plugin === c);
       if (existing >= 0) return prev.filter((_, i) => i !== existing);
-      return [...prev, { plugin: c, params: defaultsFor(convSchemas[c]) }];
+      const next = { plugin: c, params: defaultsFor(convSchemas[c]) };
+      const configured = sharedConverterLlmConfigId
+        ? applyConverterLlmConfig([next], convSchemas, sharedConverterLlmConfigId)[0]
+        : next;
+      return [...prev, configured];
     });
   };
 
@@ -184,7 +197,10 @@ export default function NewRun() {
       const additions = pluginsInCategory
         .filter(plugin => !existing.has(plugin))
         .map(plugin => ({ plugin, params: defaultsFor(convSchemas[plugin]) }));
-      return [...prev, ...additions];
+      const configuredAdditions = sharedConverterLlmConfigId
+        ? applyConverterLlmConfig(additions, convSchemas, sharedConverterLlmConfigId)
+        : additions;
+      return [...prev, ...configuredAdditions];
     });
   };
 
@@ -196,6 +212,11 @@ export default function NewRun() {
 
   const updateConverterParam = (idx: number, key: string, v: any) => {
     setConverters(prev => prev.map((p, i) => i === idx ? { ...p, params: { ...p.params, [key]: v } } : p));
+  };
+  const updateSharedConverterLlmConfig = (configId: string) => {
+    setSharedConverterLlmConfigId(configId);
+    if (!configId) return;
+    setConverters(prev => applyConverterLlmConfig(prev, convSchemas, configId));
   };
 
   const setExecutorPlugin = (p: string) => {
@@ -774,6 +795,34 @@ export default function NewRun() {
                   )}
                 </div>
               </Field>
+              {converterLlmConfigCount > 0 && (
+                <div className="mt-3 rounded-lg border border-brand-100 bg-brand-50/50 p-4 space-y-3">
+                  <div>
+                    <div className="text-xs font-medium text-brand-700 uppercase tracking-wide">
+                      {t("Shared converter LLM")}
+                    </div>
+                    <div className="mt-1 text-xs text-brand-700">
+                      {t("Apply one helper LLM target to {{count}} selected converters that require it.", {
+                        count: converterLlmConfigCount,
+                      })}
+                    </div>
+                  </div>
+                  <Field
+                    label={t("Converter LLM")}
+                    hint={t("Selecting a target fills every selected converter LLM field. Individual converter params remain editable.")}
+                  >
+                    <Select
+                      value={sharedConverterLlmConfigId}
+                      onChange={e => updateSharedConverterLlmConfig(e.target.value)}
+                    >
+                      <option value="">{t("-- keep per-converter settings --")}</option>
+                      {targets?.map((target: any) => (
+                        <option key={target.id} value={target.id}>{target.name}</option>
+                      ))}
+                    </Select>
+                  </Field>
+                </div>
+              )}
               {converters.length > 0 && (
                 <div className="mt-3 space-y-3">
                   {converters.map((c, i) => {
