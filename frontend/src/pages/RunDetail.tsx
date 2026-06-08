@@ -17,6 +17,7 @@ type Tab = "overview" | "attempts" | "events";
 type Verdict = "refused" | "complied";
 
 const TERMINAL_STATUSES = new Set(["completed", "failed", "cancelled"]);
+const ACTION_MIN_SCORED = 3;
 const isTerminalStatus = (s: string | undefined) => !!s && TERMINAL_STATUSES.has(s);
 
 function isScoreFailed(score: any): boolean {
@@ -79,6 +80,7 @@ export default function RunDetail() {
   const [attemptVerdict, setAttemptVerdict] = useState("");
   const [attemptStatus, setAttemptStatus] = useState("");
   const [attemptTarget, setAttemptTarget] = useState("");
+  const [attemptConverter, setAttemptConverter] = useState("");
   const [attemptPage, setAttemptPage] = useState(0);
   const [judgeTargetId, setJudgeTargetId] = useState("");
 
@@ -90,7 +92,7 @@ export default function RunDetail() {
   const pollInterval: number | false = isTerminalStatus(run?.status) ? false : 2000;
   const attemptLimit = 50;
   const { data: attemptsPage = { items: [], total: 0, offset: 0, limit: attemptLimit } } = useQuery({
-    queryKey: ["run-attempts", id, attemptVerdict, attemptStatus, attemptTarget, attemptPage],
+    queryKey: ["run-attempts", id, attemptVerdict, attemptStatus, attemptTarget, attemptConverter, attemptPage],
     queryFn: async () => (await api.get(`/api/runs/${id}/attempts`, {
       params: {
         paged: true,
@@ -99,6 +101,7 @@ export default function RunDetail() {
         verdict: attemptVerdict || undefined,
         status: attemptStatus || undefined,
         target_id: attemptTarget || undefined,
+        converter: attemptConverter || undefined,
       },
     })).data,
     refetchInterval: pollInterval,
@@ -208,6 +211,10 @@ export default function RunDetail() {
     }
     return out;
   }, [targetChainRows]);
+  const highRiskActions = useMemo(
+    () => targetChainRows.filter((row: any) => (row.scored ?? 0) >= ACTION_MIN_SCORED).slice(0, 3),
+    [targetChainRows],
+  );
 
   const targetOptions = useMemo(() => {
     const seen = new Map<string, string>();
@@ -216,6 +223,10 @@ export default function RunDetail() {
     }
     return [...seen.entries()];
   }, [report]);
+  const converterOptions = useMemo<[string, string][]>(() => {
+    const rows = report?.by_converter_chain ?? [];
+    return rows.map((row: any) => [chainKey(row.converter_chain), chainText(row.converter_chain, t("No converters"))]);
+  }, [report, t]);
 
   const cancelMut = useMutation({
     mutationFn: async () => (await api.post(`/api/runs/${id}/cancel`)).data,
@@ -285,9 +296,10 @@ export default function RunDetail() {
     URL.revokeObjectURL(url);
   };
 
-  const focusTargetComplied = (targetId: string | undefined) => {
+  const focusTargetComplied = (targetId: string | undefined, converterValue?: string) => {
     if (!targetId) return;
     setAttemptTarget(targetId);
+    setAttemptConverter(converterValue ?? "");
     setAttemptVerdict("complied");
     setAttemptPage(0);
     setTab("attempts");
@@ -415,6 +427,39 @@ export default function RunDetail() {
 
       {tab === "overview" && (
         <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("Next actions")}</CardTitle>
+              <CardDescription>{t("Start with high-risk combinations that have enough scored attempts.")}</CardDescription>
+            </CardHeader>
+            <CardBody>
+              {highRiskActions.length ? (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+                  {highRiskActions.map((row: any) => (
+                    <ActionSuggestion
+                      key={`${row.target_id ?? row.target_name ?? row.key}|${chainKey(row.converter_chain)}`}
+                      target={row.target_name ?? row.key}
+                      method={chainText(row.converter_chain, t("No converters"))}
+                      rate={row.success_rate}
+                      complied={row.complied ?? 0}
+                      scored={row.scored ?? 0}
+                      failed={row.failed ?? 0}
+                      unscored={row.unscored ?? 0}
+                      onClick={() => focusTargetComplied(
+                        row.target_id ?? row.target_name ?? row.key,
+                        chainKey(row.converter_chain),
+                      )}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-4 text-sm text-gray-500">
+                  {t("No high-risk combinations with at least {{count}} scored attempts.", { count: ACTION_MIN_SCORED })}
+                </div>
+              )}
+            </CardBody>
+          </Card>
+
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <RiskSummaryCard
               label={t("Highest-risk target")}
@@ -467,7 +512,10 @@ export default function RunDetail() {
                                 {row ? (
                                   <button
                                     className={clsx("w-full rounded-md border px-2 py-2 text-left transition hover:ring-2 hover:ring-brand-200", heatTone(rate))}
-                                    onClick={() => focusTargetComplied(row.target_id ?? row.target_name ?? row.key)}
+                                    onClick={() => focusTargetComplied(
+                                      row.target_id ?? row.target_name ?? row.key,
+                                      chainKey(row.converter_chain),
+                                    )}
                                   >
                                     <div className="font-semibold tabular-nums">{formatPercent(row.success_rate)}</div>
                                     <div className="text-[11px] opacity-80">
@@ -516,7 +564,10 @@ export default function RunDetail() {
                         <tr
                           key={`${row.target_id ?? row.target_name ?? row.key}|${chainKey(row.converter_chain)}`}
                           className="hover:bg-gray-50 cursor-pointer"
-                          onClick={() => focusTargetComplied(row.target_id ?? row.target_name ?? row.key)}
+                          onClick={() => focusTargetComplied(
+                            row.target_id ?? row.target_name ?? row.key,
+                            chainKey(row.converter_chain),
+                          )}
                         >
                           <td className="px-4 py-2 font-medium text-gray-800">{row.target_name ?? row.key}</td>
                           <td className="px-4 py-2 text-gray-600">{chainText(row.converter_chain, t("No converters"))}</td>
@@ -541,7 +592,7 @@ export default function RunDetail() {
       {tab === "attempts" && (
         <Card>
           <CardBody className="border-b border-gray-100">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
               <select className="input" value={attemptVerdict} onChange={e => { setAttemptVerdict(e.target.value); setAttemptPage(0); }}>
                 <option value="">{t("All verdicts")}</option>
                 <option value="refused">{t("refused")}</option>
@@ -557,6 +608,10 @@ export default function RunDetail() {
               <select className="input" value={attemptTarget} onChange={e => { setAttemptTarget(e.target.value); setAttemptPage(0); }}>
                 <option value="">{t("All targets")}</option>
                 {targetOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+              <select className="input" value={attemptConverter} onChange={e => { setAttemptConverter(e.target.value); setAttemptPage(0); }}>
+                <option value="">{t("All attack methods")}</option>
+                {converterOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
               </select>
               <div className="flex items-center justify-end gap-2 text-xs text-gray-500">
                 {t("Showing {{count}} of {{total}}", { count: attempts.length, total: attemptsPage.total ?? attempts.length })}
@@ -1126,5 +1181,47 @@ function RiskSummaryCard({ label, title, rate, detail }: { label: string; title:
         </div>
       </CardBody>
     </Card>
+  );
+}
+
+function ActionSuggestion({
+  target,
+  method,
+  rate,
+  complied,
+  scored,
+  failed,
+  unscored,
+  onClick,
+}: {
+  target: string;
+  method: string;
+  rate: unknown;
+  complied: number;
+  scored: number;
+  failed: number;
+  unscored: number;
+  onClick: () => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <button
+      className="rounded-md border border-red-200 bg-red-50/70 p-3 text-left transition hover:border-red-300 hover:bg-red-50 hover:ring-2 hover:ring-red-100"
+      onClick={onClick}
+    >
+      <div className="text-xs font-medium uppercase tracking-wider text-red-700">{t("Inspect successful attacks")}</div>
+      <div className="mt-2 text-sm font-semibold text-gray-900 truncate" title={target}>{target}</div>
+      <div className="mt-1 text-xs text-gray-600 truncate" title={method}>{method}</div>
+      <div className="mt-3 flex items-end justify-between gap-3">
+        <div>
+          <div className="text-2xl font-bold tabular-nums text-red-600">{formatPercent(rate)}</div>
+          <div className="text-[11px] text-gray-500">{complied}/{scored} {t("Attack successes")}</div>
+        </div>
+        <div className="text-[11px] text-gray-500 text-right">
+          <div>{t("Failed")}: {failed}</div>
+          <div>{t("Unscored")}: {unscored}</div>
+        </div>
+      </div>
+    </button>
   );
 }

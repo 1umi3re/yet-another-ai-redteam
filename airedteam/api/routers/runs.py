@@ -225,7 +225,16 @@ async def list_attempts(
         if dataset_item_id:
             items = [a for a in items if a["dataset_item_id"] == dataset_item_id]
         if converter:
-            items = [a for a in items if converter in (a["converter_chain"] or [])]
+            items = [
+                a
+                for a in items
+                if (
+                    converter == "(none)"
+                    and not (a["converter_chain"] or [])
+                    or converter in (a["converter_chain"] or [])
+                    or converter == " -> ".join(a["converter_chain"] or [])
+                )
+            ]
         if reviewed is not None:
             items = [a for a in items if a["reviewed"] is reviewed]
         if not paged:

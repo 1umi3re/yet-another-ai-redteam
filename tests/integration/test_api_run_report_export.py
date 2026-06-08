@@ -156,6 +156,22 @@ async def test_run_report_export_and_filters(monkeypatch, tmp_path):
         ).json()
         assert attempts_page["total"] == 2
         assert {item["id"] for item in attempts_page["items"]} == {"a2", "a3"}
+        converter_attempts = (
+            await c.get(
+                f"/api/runs/{run_id}/attempts?paged=true&converter=base64",
+                headers=h,
+            )
+        ).json()
+        assert converter_attempts["total"] == 2
+        assert {item["id"] for item in converter_attempts["items"]} == {"a1", "a3"}
+        no_converter_attempts = (
+            await c.get(
+                f"/api/runs/{run_id}/attempts?paged=true&converter=(none)",
+                headers=h,
+            )
+        ).json()
+        assert no_converter_attempts["total"] == 2
+        assert {item["id"] for item in no_converter_attempts["items"]} == {"a2", "a4"}
 
         reviewed_scores = (
             await c.get(
