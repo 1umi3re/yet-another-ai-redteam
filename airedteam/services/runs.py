@@ -415,6 +415,10 @@ class RunService:
                 if attempt_filter:
                     query = query.where(Attempt.id.in_(attempt_filter))
                 attempts = list((await s.execute(query)).scalars().all())
+                attempt_ids_to_replace = [attempt.id for attempt in attempts]
+                if attempt_ids_to_replace:
+                    await s.execute(delete(Score).where(Score.attempt_id.in_(attempt_ids_to_replace)))
+                    await s.commit()
 
             retried = 0
             completed = 0

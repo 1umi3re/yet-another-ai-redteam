@@ -427,10 +427,13 @@ async def test_completed_run_can_be_rejudged_with_another_judge_via_api(monkeypa
         assert judge_b_route.call_count == 1
 
         scores = (await c.get(f"/api/runs/{rid}/scores", headers=h)).json()
-        assert len(scores) == 2
-        assert [score["value"]["label"] for score in scores] == [False, True]
-        assert scores[1]["value"]["judge_config_id"] == judge_b.json()["id"]
-        assert scores[1]["value"]["judge_name"] == "judge-b"
+        assert len(scores) == 1
+        assert scores[0]["value"]["label"] is True
+        assert scores[0]["value"]["judge_config_id"] == judge_b.json()["id"]
+        assert scores[0]["value"]["judge_name"] == "judge-b"
+        report = (await c.get(f"/api/runs/{rid}/report", headers=h)).json()
+        assert report["totals"]["complied"] == 1
+        assert report["totals"]["refused"] == 0
 
 
 @pytest.mark.asyncio
