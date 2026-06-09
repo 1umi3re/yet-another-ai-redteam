@@ -134,6 +134,82 @@ async def test_run_service_runs_selected_converters_as_independent_attempts(tmp_
 
 
 @pytest.mark.asyncio
+async def test_run_service_runs_executor_methods_and_filters_by_item_language(tmp_path):
+    calls: list[str] = []
+
+    class EchoTarget:
+        def __init__(self, *, name: str) -> None:
+            self.name = name
+
+        async def generate(self, prompt):
+            calls.append(prompt.text)
+            return Response(text=f"ok:{prompt.text}", raw={}, latency_ms=1)
+
+        async def aclose(self):
+            pass
+
+    default_registry().register("targets", "executor_method_echo_target", EchoTarget)
+
+    engine_db = make_engine(f"sqlite+aiosqlite:///{tmp_path}/x.db")
+    SessionLocal = make_sessionmaker(engine_db)
+    async with engine_db.begin() as c:
+        await c.run_sync(models.Base.metadata.create_all)
+    blob = LocalBlobStore(tmp_path / "blobs")
+    box = SecretBox(Fernet.generate_key().decode())
+    targets = TargetConfigService(SessionLocal, box)
+    datasets = DatasetService(SessionLocal, blob)
+    bus = ProgressBus()
+    svc = RunService(SessionLocal, blob, box, targets, datasets, bus)
+
+    tcfg = await targets.create(name="t1", plugin="executor_method_echo_target", params={"name": "t1"})
+    ds = await datasets.create_json_upload(
+        name="mixed",
+        file_bytes=json.dumps({"items": [{"id": "en", "prompt": "hello"}, {"id": "zh", "prompt": "你好"}]}).encode(),
+    )
+    run = await svc.create_run(
+        name="r1",
+        runspec_dict={
+            "version": 2,
+            "name": "r1",
+            "targets": [{"config_id": tcfg.id}],
+            "dataset": {"config_id": ds.id},
+            "executors": [
+                {"kind": "executor", "plugin": "single_turn"},
+                {"kind": "converter_method", "plugin": "base64", "params": {"wrap": False}},
+            ],
+        },
+    )
+
+    await svc.execute_run(run.id)
+
+    async with SessionLocal() as s:
+        attempts = (
+            (
+                await s.execute(
+                    select(models.Attempt).where(models.Attempt.run_id == run.id).order_by(models.Attempt.created_at)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        run_row = await s.get(models.Run, run.id)
+
+    assert run_row.status == "completed"
+    assert run_row.progress_done == 3
+    assert run_row.progress_total == 3
+    assert [(a.executor_name, a.dataset_item_id, a.dataset_item_language) for a in attempts] == [
+        ("single_turn", "en", "en"),
+        ("base64", "en", "en"),
+        ("single_turn", "zh", "zh"),
+    ]
+    assert [a.prompt_text for a in attempts] == ["hello", "aGVsbG8=", "你好"]
+    assert calls == ["hello", "aGVsbG8=", "你好"]
+
+    content = await datasets.content(ds.id)
+    assert [item["language"] for item in content["items"]] == ["en", "zh"]
+
+
+@pytest.mark.asyncio
 async def test_run_service_applies_target_max_concurrency(tmp_path):
     class SlowTarget:
         active = 0

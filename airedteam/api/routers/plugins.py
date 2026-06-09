@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends
 
 from airedteam.api.deps import require_admin
 from airedteam.builtins.executors.general_multi_turn import GeneralMultiTurnExecutor
+from airedteam.core.executor_methods import all_executor_language_support, converter_method_names
 from airedteam.core.registry import default_registry
 
 router = APIRouter()
@@ -812,6 +813,7 @@ def general_multi_turn_executor_names(registry=None) -> list[str]:
 def plugin_param_schemas(registry=None) -> dict[str, dict[str, dict]]:
     schemas = deepcopy(PARAM_SCHEMAS)
     schemas["executors"] = _executor_param_schemas(registry)
+    schemas["executor_methods"] = deepcopy(PARAM_SCHEMAS["converters"])
     return schemas
 
 
@@ -820,7 +822,12 @@ async def plugins(_=Depends(require_admin)):
     r = default_registry()
     groups = ("targets", "datasets", "converters", "executors", "scorers")
     out: dict[str, object] = {g: r.list(g) for g in groups}
+    methods = converter_method_names()
+    native_executors = r.list("executors")
+    out["executor_methods"] = methods
     out["params"] = plugin_param_schemas(r)
     out["converter_categories"] = converter_categories()
+    out["executor_method_categories"] = converter_categories()
+    out["executor_language_support"] = all_executor_language_support(native_executors, methods)
     out["general_multi_turn_executors"] = general_multi_turn_executor_names(r)
     return out

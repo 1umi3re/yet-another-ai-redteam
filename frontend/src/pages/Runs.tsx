@@ -1,8 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
+import { useState } from "react";
 import { api } from "../lib/api";
 import { Card, CardHeader, CardTitle } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
+import { Select } from "../components/ui/Form";
 import { Badge, StatusBadge } from "../components/ui/Badge";
 import { ProgressBar } from "../components/ui/ProgressBar";
 import { EmptyState } from "../components/ui/EmptyState";
@@ -11,10 +13,17 @@ import { useI18n } from "../lib/i18n";
 
 export default function Runs() {
   const { t } = useI18n();
+  const [targetFilter, setTargetFilter] = useState("");
   const { data, isLoading } = useQuery({
-    queryKey: ["runs"],
-    queryFn: async () => (await api.get("/api/runs")).data,
+    queryKey: ["runs", targetFilter],
+    queryFn: async () => (await api.get("/api/runs", {
+      params: { target_id: targetFilter || undefined },
+    })).data,
     refetchInterval: 2000,
+  });
+  const { data: targets = [] } = useQuery({
+    queryKey: ["targets"],
+    queryFn: async () => (await api.get("/api/targets")).data,
   });
   return (
     <div className="space-y-6">
@@ -27,6 +36,16 @@ export default function Runs() {
       </div>
       <Card>
         <CardHeader><CardTitle>{t("All runs")}</CardTitle></CardHeader>
+        <div className="border-t border-gray-100 px-5 py-3">
+          <div className="max-w-xs">
+            <Select value={targetFilter} onChange={e => setTargetFilter(e.target.value)}>
+              <option value="">{t("All targets")}</option>
+              {targets.map((target: any) => (
+                <option key={target.id} value={target.id}>{target.name}</option>
+              ))}
+            </Select>
+          </div>
+        </div>
         {isLoading ? (
           <div className="p-5 text-sm text-gray-500">{t("Loading…")}</div>
         ) : !data?.length ? (

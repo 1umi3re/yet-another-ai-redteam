@@ -53,6 +53,9 @@ async def test_run_report_export_and_filters(monkeypatch, tmp_path):
                 prompt_text="p1",
                 response_text="I cannot help",
                 converter_chain=["base64"],
+                executor_name="base64",
+                executor_kind="converter_method",
+                dataset_item_language="en",
                 latency_ms=10,
                 tokens_in=2,
                 tokens_out=3,
@@ -66,6 +69,9 @@ async def test_run_report_export_and_filters(monkeypatch, tmp_path):
                 prompt_text="p2",
                 response_text="answer",
                 converter_chain=[],
+                executor_name="single_turn",
+                executor_kind="executor",
+                dataset_item_language="zh",
                 latency_ms=20,
                 tokens_in=4,
                 tokens_out=5,
@@ -79,6 +85,9 @@ async def test_run_report_export_and_filters(monkeypatch, tmp_path):
                 prompt_text="p3",
                 response_text="answer",
                 converter_chain=["base64"],
+                executor_name="base64",
+                executor_kind="converter_method",
+                dataset_item_language="en",
                 latency_ms=30,
                 tokens_in=6,
                 tokens_out=7,
@@ -92,6 +101,9 @@ async def test_run_report_export_and_filters(monkeypatch, tmp_path):
                 prompt_text="p4",
                 response_text=None,
                 converter_chain=[],
+                executor_name="single_turn",
+                executor_kind="executor",
+                dataset_item_language="zh",
                 status="failed",
                 latency_ms=40,
                 tokens_in=8,
@@ -145,6 +157,15 @@ async def test_run_report_export_and_filters(monkeypatch, tmp_path):
         assert by_target_chain[("target-2", ())]["failed"] == 1
         assert by_target_chain[("target-2", ())]["unscored"] == 1
         assert by_target_chain[("target-2", ())]["success_rate"] is None
+        by_executor = {row["executor_name"]: row for row in report["by_executor"]}
+        assert by_executor["base64"]["attempts"] == 2
+        assert by_executor["base64"]["complied"] == 1
+        assert by_executor["single_turn"]["attempts"] == 2
+        by_target_executor = {
+            (row["target_id"], row["executor_name"]): row for row in report["by_target_executor"]
+        }
+        assert by_target_executor[("target-1", "base64")]["success_rate"] == 0
+        assert by_target_executor[("target-2", "single_turn")]["failed"] == 1
 
         attempts_default = (await c.get(f"/api/runs/{run_id}/attempts", headers=h)).json()
         assert isinstance(attempts_default, list)
@@ -172,6 +193,15 @@ async def test_run_report_export_and_filters(monkeypatch, tmp_path):
         ).json()
         assert no_converter_attempts["total"] == 2
         assert {item["id"] for item in no_converter_attempts["items"]} == {"a2", "a4"}
+        executor_attempts = (
+            await c.get(
+                f"/api/runs/{run_id}/attempts?paged=true&executor=base64",
+                headers=h,
+            )
+        ).json()
+        assert executor_attempts["total"] == 2
+        assert {item["id"] for item in executor_attempts["items"]} == {"a1", "a3"}
+        assert executor_attempts["items"][0]["executor_name"] == "base64"
 
         reviewed_scores = (
             await c.get(
@@ -184,9 +214,12 @@ async def test_run_report_export_and_filters(monkeypatch, tmp_path):
 
         exported = (await c.get(f"/api/runs/{run_id}/export?format=json", headers=h)).json()
         assert exported["attempts"][1]["final_verdict"] == "complied"
+        assert exported["attempts"][0]["executor_name"] == "base64"
+        assert exported["attempts"][0]["dataset_item_language"] == "en"
         csv_resp = await c.get(f"/api/runs/{run_id}/export?format=csv", headers=h)
         assert csv_resp.status_code == 200
         assert "attempt_id" in csv_resp.text
+        assert "executor_name" in csv_resp.text
         assert "a1" in csv_resp.text
 
 

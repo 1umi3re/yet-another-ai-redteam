@@ -98,6 +98,12 @@ async def test_list_plugins_and_scenarios(monkeypatch, tmp_path):
         assert template_jailbreak_asset["purpose_filter"] == "attack_template"
         assert "best_of_n" in body["executors"]
         assert body["params"]["executors"]["best_of_n"]["attempts"]["default"] == "5"
+        assert "base64" in body["executor_methods"]
+        assert body["executor_method_categories"]["base64"] == "encoding"
+        assert body["params"]["executor_methods"]["base64"]["wrap"]["default"] is True
+        assert body["executor_language_support"]["base64"] == ["en"]
+        assert body["executor_language_support"]["single_turn"] == ["en", "zh"]
+        assert body["executor_language_support"]["general_multi_turn"] == ["en", "zh"]
         assert "jailbreak_iterative" in body["executors"]
         jailbreak_params = body["params"]["executors"]["jailbreak_iterative"]
         assert jailbreak_params["judge_config_id"]["type"] == "target_ref"

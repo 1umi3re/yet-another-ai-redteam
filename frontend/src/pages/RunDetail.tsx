@@ -53,12 +53,12 @@ function successRate(row: any): number {
   return typeof row?.success_rate === "number" ? row.success_rate : -1;
 }
 
-function chainText(chain: any[] | undefined, emptyLabel: string): string {
-  return chain?.length ? chain.join(" -> ") : emptyLabel;
+function executorText(row: any, emptyLabel: string): string {
+  return row?.executor_name || row?.key || emptyLabel;
 }
 
-function chainKey(chain: any[] | undefined): string {
-  return chain?.length ? chain.join(" -> ") : "(none)";
+function executorKey(row: any): string {
+  return row?.executor_name || row?.key || "(none)";
 }
 
 function heatTone(rate: number): string {
@@ -80,7 +80,7 @@ export default function RunDetail() {
   const [attemptVerdict, setAttemptVerdict] = useState("");
   const [attemptStatus, setAttemptStatus] = useState("");
   const [attemptTarget, setAttemptTarget] = useState("");
-  const [attemptConverter, setAttemptConverter] = useState("");
+  const [attemptExecutor, setAttemptExecutor] = useState("");
   const [attemptPage, setAttemptPage] = useState(0);
   const [judgeTargetId, setJudgeTargetId] = useState("");
 
@@ -92,7 +92,7 @@ export default function RunDetail() {
   const pollInterval: number | false = isTerminalStatus(run?.status) ? false : 2000;
   const attemptLimit = 50;
   const { data: attemptsPage = { items: [], total: 0, offset: 0, limit: attemptLimit } } = useQuery({
-    queryKey: ["run-attempts", id, attemptVerdict, attemptStatus, attemptTarget, attemptConverter, attemptPage],
+    queryKey: ["run-attempts", id, attemptVerdict, attemptStatus, attemptTarget, attemptExecutor, attemptPage],
     queryFn: async () => (await api.get(`/api/runs/${id}/attempts`, {
       params: {
         paged: true,
@@ -101,7 +101,7 @@ export default function RunDetail() {
         verdict: attemptVerdict || undefined,
         status: attemptStatus || undefined,
         target_id: attemptTarget || undefined,
-        converter: attemptConverter || undefined,
+        executor: attemptExecutor || undefined,
       },
     })).data,
     refetchInterval: pollInterval,
@@ -181,39 +181,39 @@ export default function RunDetail() {
     () => [...(report?.by_target ?? [])].sort((a: any, b: any) => successRate(b) - successRate(a)),
     [report],
   );
-  const chainRiskRows = useMemo(
-    () => [...(report?.by_converter_chain ?? [])].sort((a: any, b: any) => successRate(b) - successRate(a)),
+  const executorRiskRows = useMemo(
+    () => [...(report?.by_executor ?? [])].sort((a: any, b: any) => successRate(b) - successRate(a)),
     [report],
   );
-  const targetChainRows = useMemo(
-    () => [...(report?.by_target_chain ?? [])].sort((a: any, b: any) => successRate(b) - successRate(a)),
+  const targetExecutorRows = useMemo(
+    () => [...(report?.by_target_executor ?? [])].sort((a: any, b: any) => successRate(b) - successRate(a)),
     [report],
   );
   const heatTargets = useMemo(() => {
     const seen = new Map<string, string>();
-    for (const row of targetChainRows) {
+    for (const row of targetExecutorRows) {
       const key = row.target_id ?? row.target_name ?? row.key;
       seen.set(key, row.target_name ?? key);
     }
     return [...seen.entries()];
-  }, [targetChainRows]);
-  const heatChains = useMemo(() => {
-    const seen = new Map<string, any[]>();
-    for (const row of targetChainRows) {
-      seen.set(chainKey(row.converter_chain), row.converter_chain ?? []);
+  }, [targetExecutorRows]);
+  const heatExecutors = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const row of targetExecutorRows) {
+      seen.set(executorKey(row), executorText(row, t("No executor")));
     }
     return [...seen.entries()];
-  }, [targetChainRows]);
-  const targetChainByKey = useMemo(() => {
+  }, [targetExecutorRows, t]);
+  const targetExecutorByKey = useMemo(() => {
     const out = new Map<string, any>();
-    for (const row of targetChainRows) {
-      out.set(`${row.target_id ?? row.target_name ?? row.key}|${chainKey(row.converter_chain)}`, row);
+    for (const row of targetExecutorRows) {
+      out.set(`${row.target_id ?? row.target_name ?? row.key}|${executorKey(row)}`, row);
     }
     return out;
-  }, [targetChainRows]);
+  }, [targetExecutorRows]);
   const highRiskActions = useMemo(
-    () => targetChainRows.filter((row: any) => (row.scored ?? 0) >= ACTION_MIN_SCORED).slice(0, 3),
-    [targetChainRows],
+    () => targetExecutorRows.filter((row: any) => (row.scored ?? 0) >= ACTION_MIN_SCORED).slice(0, 3),
+    [targetExecutorRows],
   );
 
   const targetOptions = useMemo(() => {
@@ -223,9 +223,9 @@ export default function RunDetail() {
     }
     return [...seen.entries()];
   }, [report]);
-  const converterOptions = useMemo<[string, string][]>(() => {
-    const rows = report?.by_converter_chain ?? [];
-    return rows.map((row: any) => [chainKey(row.converter_chain), chainText(row.converter_chain, t("No converters"))]);
+  const executorOptions = useMemo<[string, string][]>(() => {
+    const rows = report?.by_executor ?? [];
+    return rows.map((row: any) => [executorKey(row), executorText(row, t("No executor"))]);
   }, [report, t]);
 
   const cancelMut = useMutation({
@@ -296,18 +296,18 @@ export default function RunDetail() {
     URL.revokeObjectURL(url);
   };
 
-  const focusTargetComplied = (targetId: string | undefined, converterValue?: string) => {
+  const focusTargetComplied = (targetId: string | undefined, executorValue?: string) => {
     if (!targetId) return;
     setAttemptTarget(targetId);
-    setAttemptConverter(converterValue ?? "");
+    setAttemptExecutor(executorValue ?? "");
     setAttemptVerdict("complied");
     setAttemptPage(0);
     setTab("attempts");
   };
 
   const highestRiskTarget = targetRiskRows.find((row: any) => (row.scored ?? 0) > 0);
-  const highestRiskChain = chainRiskRows.find((row: any) => (row.scored ?? 0) > 0);
-  const highestRiskTargetChain = targetChainRows.find((row: any) => (row.scored ?? 0) > 0);
+  const highestRiskExecutor = executorRiskRows.find((row: any) => (row.scored ?? 0) > 0);
+  const highestRiskTargetExecutor = targetExecutorRows.find((row: any) => (row.scored ?? 0) > 0);
 
   return (
     <div className="space-y-6">
@@ -437,9 +437,9 @@ export default function RunDetail() {
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
                   {highRiskActions.map((row: any) => (
                     <ActionSuggestion
-                      key={`${row.target_id ?? row.target_name ?? row.key}|${chainKey(row.converter_chain)}`}
+                      key={`${row.target_id ?? row.target_name ?? row.key}|${executorKey(row)}`}
                       target={row.target_name ?? row.key}
-                      method={chainText(row.converter_chain, t("No converters"))}
+                      method={executorText(row, t("No executor"))}
                       rate={row.success_rate}
                       complied={row.complied ?? 0}
                       scored={row.scored ?? 0}
@@ -447,7 +447,7 @@ export default function RunDetail() {
                       unscored={row.unscored ?? 0}
                       onClick={() => focusTargetComplied(
                         row.target_id ?? row.target_name ?? row.key,
-                        chainKey(row.converter_chain),
+                        executorKey(row),
                       )}
                     />
                   ))}
@@ -469,17 +469,17 @@ export default function RunDetail() {
             />
             <RiskSummaryCard
               label={t("Highest-risk attack method")}
-              title={highestRiskChain ? chainText(highestRiskChain.converter_chain, t("No converters")) : "—"}
-              rate={highestRiskChain?.success_rate}
-              detail={highestRiskChain ? t("{{count}} scored", { count: highestRiskChain.scored ?? 0 }) : t("No scored attempts yet.")}
+              title={highestRiskExecutor ? executorText(highestRiskExecutor, t("No executor")) : "—"}
+              rate={highestRiskExecutor?.success_rate}
+              detail={highestRiskExecutor ? t("{{count}} scored", { count: highestRiskExecutor.scored ?? 0 }) : t("No scored attempts yet.")}
             />
             <RiskSummaryCard
               label={t("Highest-risk combination")}
-              title={highestRiskTargetChain
-                ? `${highestRiskTargetChain.target_name ?? highestRiskTargetChain.key} · ${chainText(highestRiskTargetChain.converter_chain, t("No converters"))}`
+              title={highestRiskTargetExecutor
+                ? `${highestRiskTargetExecutor.target_name ?? highestRiskTargetExecutor.key} · ${executorText(highestRiskTargetExecutor, t("No executor"))}`
                 : "—"}
-              rate={highestRiskTargetChain?.success_rate}
-              detail={highestRiskTargetChain ? t("{{count}} scored", { count: highestRiskTargetChain.scored ?? 0 }) : t("No scored attempts yet.")}
+              rate={highestRiskTargetExecutor?.success_rate}
+              detail={highestRiskTargetExecutor ? t("{{count}} scored", { count: highestRiskTargetExecutor.scored ?? 0 }) : t("No scored attempts yet.")}
             />
           </div>
 
@@ -489,14 +489,14 @@ export default function RunDetail() {
               <CardDescription>{t("Darker cells indicate higher attack success rate.")}</CardDescription>
             </CardHeader>
             <CardBody>
-              {targetChainRows.length ? (
+              {targetExecutorRows.length ? (
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[720px] text-sm">
                     <thead className="text-xs uppercase tracking-wider text-gray-500">
                       <tr>
                         <th className="text-left px-3 py-2">{t("Target")}</th>
-                        {heatChains.map(([key, chain]) => (
-                          <th key={key} className="text-left px-3 py-2">{chainText(chain, t("No converters"))}</th>
+                        {heatExecutors.map(([key, label]) => (
+                          <th key={key} className="text-left px-3 py-2">{label}</th>
                         ))}
                       </tr>
                     </thead>
@@ -504,8 +504,8 @@ export default function RunDetail() {
                       {heatTargets.map(([targetId, targetName]) => (
                         <tr key={targetId}>
                           <td className="px-3 py-2 font-medium text-gray-800 whitespace-nowrap">{targetName}</td>
-                          {heatChains.map(([key]) => {
-                            const row = targetChainByKey.get(`${targetId}|${key}`);
+                          {heatExecutors.map(([key]) => {
+                            const row = targetExecutorByKey.get(`${targetId}|${key}`);
                             const rate = successRate(row);
                             return (
                               <td key={key} className="px-3 py-2 align-top">
@@ -514,7 +514,7 @@ export default function RunDetail() {
                                     className={clsx("w-full rounded-md border px-2 py-2 text-left transition hover:ring-2 hover:ring-brand-200", heatTone(rate))}
                                     onClick={() => focusTargetComplied(
                                       row.target_id ?? row.target_name ?? row.key,
-                                      chainKey(row.converter_chain),
+                                      executorKey(row),
                                     )}
                                   >
                                     <div className="font-semibold tabular-nums">{formatPercent(row.success_rate)}</div>
@@ -545,7 +545,7 @@ export default function RunDetail() {
               <CardDescription>{t("Click a row to inspect successful attacks for that target.")}</CardDescription>
             </CardHeader>
             <CardBody>
-              {targetChainRows.length ? (
+              {targetExecutorRows.length ? (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead className="bg-gray-50 text-gray-600 text-xs uppercase tracking-wider">
@@ -560,17 +560,17 @@ export default function RunDetail() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {targetChainRows.map((row: any) => (
+                      {targetExecutorRows.map((row: any) => (
                         <tr
-                          key={`${row.target_id ?? row.target_name ?? row.key}|${chainKey(row.converter_chain)}`}
+                          key={`${row.target_id ?? row.target_name ?? row.key}|${executorKey(row)}`}
                           className="hover:bg-gray-50 cursor-pointer"
                           onClick={() => focusTargetComplied(
                             row.target_id ?? row.target_name ?? row.key,
-                            chainKey(row.converter_chain),
+                            executorKey(row),
                           )}
                         >
                           <td className="px-4 py-2 font-medium text-gray-800">{row.target_name ?? row.key}</td>
-                          <td className="px-4 py-2 text-gray-600">{chainText(row.converter_chain, t("No converters"))}</td>
+                          <td className="px-4 py-2 text-gray-600">{executorText(row, t("No executor"))}</td>
                           <td className="px-4 py-2 font-semibold tabular-nums text-red-600">{formatPercent(row.success_rate)}</td>
                           <td className="px-4 py-2 tabular-nums">{row.complied ?? 0}</td>
                           <td className="px-4 py-2 tabular-nums">{row.refused ?? 0}</td>
@@ -609,9 +609,9 @@ export default function RunDetail() {
                 <option value="">{t("All targets")}</option>
                 {targetOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
               </select>
-              <select className="input" value={attemptConverter} onChange={e => { setAttemptConverter(e.target.value); setAttemptPage(0); }}>
+              <select className="input" value={attemptExecutor} onChange={e => { setAttemptExecutor(e.target.value); setAttemptPage(0); }}>
                 <option value="">{t("All attack methods")}</option>
-                {converterOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                {executorOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
               </select>
               <div className="flex items-center justify-end gap-2 text-xs text-gray-500">
                 {t("Showing {{count}} of {{total}}", { count: attempts.length, total: attemptsPage.total ?? attempts.length })}
@@ -781,6 +781,18 @@ function AttemptDetailDrawer({ runId, attempt, scores, onClose }: { runId: strin
         <div className="px-6 py-5 space-y-5">
           <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
             <StatusBadge status={attempt.status} />
+            {attempt.executor_name && (
+              <span className="inline-flex items-center gap-1">
+                {t("executor")}:
+                <Badge>{attempt.executor_name}</Badge>
+              </span>
+            )}
+            {attempt.dataset_item_language && (
+              <span className="inline-flex items-center gap-1">
+                {t("Language")}:
+                <Badge>{attempt.dataset_item_language}</Badge>
+              </span>
+            )}
             {typeof attempt.latency_ms === "number" && (
               <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" />{attempt.latency_ms} ms</span>
             )}

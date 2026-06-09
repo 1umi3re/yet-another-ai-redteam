@@ -38,6 +38,8 @@ const CONVERTER_CATEGORY_LABELS: Record<string, string> = {
   other: "Other",
 };
 
+type ConfiguredExecutor = ConfiguredPlugin & { kind: "executor" | "converter_method" };
+
 export default function NewRun() {
   const { t } = useI18n();
   const nav = useNavigate();
@@ -47,11 +49,12 @@ export default function NewRun() {
   const { data: plugins } = useQuery({ queryKey: ["plugins"], queryFn: async () => (await api.get("/api/plugins")).data });
   const { data: promptAssets } = useQuery({ queryKey: ["prompt-assets"], queryFn: async () => (await api.get("/api/prompt-assets")).data });
 
-  const convSchemas: PluginSchemas = plugins?.params?.converters ?? {};
+  const convSchemas: PluginSchemas = plugins?.params?.executor_methods ?? plugins?.params?.converters ?? {};
   const scorerSchemas: PluginSchemas = plugins?.params?.scorers ?? {};
   const executorSchemas: PluginSchemas = plugins?.params?.executors ?? {};
-  const availableConverters: string[] = plugins?.converters ?? [];
-  const converterCategories: Record<string, string> = plugins?.converter_categories ?? {};
+  const availableConverters: string[] = plugins?.executor_methods ?? plugins?.converters ?? [];
+  const converterCategories: Record<string, string> = plugins?.executor_method_categories ?? plugins?.converter_categories ?? {};
+  const executorLanguageSupport: Record<string, string[]> = plugins?.executor_language_support ?? {};
   const generalMultiTurnExecutors: string[] = plugins?.general_multi_turn_executors ?? ["general_multi_turn"];
 
   const [mode, setMode] = useState<"preset" | "custom">("preset");
@@ -60,7 +63,9 @@ export default function NewRun() {
   const [scenarioHelpers, setScenarioHelpers] = useState<Record<string, string>>({});
   const [targetId, setTargetId] = useState("");
   const [datasetId, setDatasetId] = useState("");
-  const [executor, setExecutor] = useState<ConfiguredPlugin>({ plugin: "single_turn", params: {} });
+  const [executors, setExecutors] = useState<ConfiguredExecutor[]>([
+    { kind: "executor", plugin: "single_turn", params: {} },
+  ]);
   const [scorer, setScorer] = useState<ConfiguredPlugin>({ plugin: "refusal", params: {} });
   const [converters, setConverters] = useState<ConfiguredPlugin[]>([]);
   const [converterCategory, setConverterCategory] = useState("all");
@@ -76,9 +81,15 @@ export default function NewRun() {
   const [goalPage, setGoalPage] = useState(0);
   const [selectedGoalItemId, setSelectedGoalItemId] = useState("");
 
-  const executorSchema = executorSchemas[executor.plugin];
+  const nativeExecutors = useMemo(() => executors.filter(ex => ex.kind === "executor"), [executors]);
+  const executor = nativeExecutors[0] ?? { kind: "executor" as const, plugin: "single_turn", params: {} };
   const scorerSchema = scorerSchemas[scorer.plugin];
-  const isGeneralMultiTurnExecutor = generalMultiTurnExecutors.includes(executor.plugin);
+  const isGeneralMultiTurnExecutor = nativeExecutors.some(ex => generalMultiTurnExecutors.includes(ex.plugin));
+  const selectedExecutorNames = useMemo(
+    () => new Set(nativeExecutors.map(ex => ex.plugin)),
+    [nativeExecutors],
+  );
+  const generalGoalValue = nativeExecutors.find(ex => generalMultiTurnExecutors.includes(ex.plugin))?.params.goal ?? "";
   const showGeneralGoalImport = mode === "custom" && isGeneralMultiTurnExecutor;
   const selectedScenario = useMemo(
     () => scenarios?.find((scenario: any) => scenario.id === scenarioId),
@@ -101,7 +112,8 @@ export default function NewRun() {
   const targetHasInputLimit = selectedTargetMaxInputChars != null && selectedTargetMaxInputChars !== "";
   const showSplitExecutorRecommendation = mode === "custom"
     && targetHasInputLimit
-    && executor.plugin === "single_turn";
+    && nativeExecutors.some(ex => ex.plugin === "single_turn")
+    && !nativeExecutors.some(ex => ex.plugin === "split_executor");
   const { data: goalDatasetItems } = useQuery({
     queryKey: ["new-run-goal-dataset-items", datasetId, goalSearch, goalPage],
     queryFn: async () => (await api.get(`/api/datasets/${datasetId}/items`, {
@@ -175,8 +187,14 @@ export default function NewRun() {
     if (category === "selected") return t("Selected");
     return t(CONVERTER_CATEGORY_LABELS[category] ?? category);
   };
+  const executorLanguageLabel = (plugin: string) => {
+    const languages = executorLanguageSupport[plugin] ?? [];
+    return languages.length ? languages.join(", ") : t("No compatible language support");
+  };
+  const executorSupportsDatasetLanguage = (plugin: string) => (executorLanguageSupport[plugin] ?? []).length > 0;
 
   const toggleConverter = (c: string) => {
+    if (!executorSupportsDatasetLanguage(c)) return;
     setConverters(prev => {
       const existing = prev.findIndex(p => p.plugin === c);
       if (existing >= 0) return prev.filter((_, i) => i !== existing);
@@ -190,7 +208,8 @@ export default function NewRun() {
 
   const selectConverterCategory = (category: string) => {
     const pluginsInCategory = availableConverters.filter(
-      plugin => (converterCategories[plugin] ?? "other") === category,
+      plugin => (converterCategories[plugin] ?? "other") === category
+        && executorSupportsDatasetLanguage(plugin),
     );
     setConverters(prev => {
       const existing = new Set(prev.map(c => c.plugin));
@@ -219,12 +238,38 @@ export default function NewRun() {
     setConverters(prev => applyConverterLlmConfig(prev, convSchemas, configId));
   };
 
-  const setExecutorPlugin = (p: string) => {
-    setExecutor({ plugin: p, params: defaultsFor(executorSchemas[p]) });
+  const toggleNativeExecutor = (p: string) => {
+    if (!executorSupportsDatasetLanguage(p)) return;
+    setExecutors(prev => {
+      const existing = prev.findIndex(ex => ex.kind === "executor" && ex.plugin === p);
+      if (existing >= 0) return prev.filter((_, i) => i !== existing);
+      return [...prev, { kind: "executor", plugin: p, params: defaultsFor(executorSchemas[p]) }];
+    });
     if (generalMultiTurnExecutors.includes(p)) setGoalSource("dataset_items");
   };
-  const updateExecutorParam = (key: string, v: any) => {
-    setExecutor(prev => ({ ...prev, params: { ...prev.params, [key]: v } }));
+  const setExecutorPlugin = (p: string) => {
+    if (!executorSupportsDatasetLanguage(p)) return;
+    setExecutors(prev => {
+      const withoutSingleTurn = prev.filter(ex => !(ex.kind === "executor" && ex.plugin === "single_turn"));
+      if (withoutSingleTurn.some(ex => ex.kind === "executor" && ex.plugin === p)) return withoutSingleTurn;
+      return [...withoutSingleTurn, { kind: "executor", plugin: p, params: defaultsFor(executorSchemas[p]) }];
+    });
+    if (generalMultiTurnExecutors.includes(p)) setGoalSource("dataset_items");
+  };
+  const updateExecutorParam = (key: string, v: any, plugin?: string) => {
+    setExecutors(prev => prev.map(ex => {
+      if (ex.kind !== "executor") return ex;
+      if (plugin && ex.plugin !== plugin) return ex;
+      if (!plugin && ex.plugin !== executor.plugin) return ex;
+      return { ...ex, params: { ...ex.params, [key]: v } };
+    }));
+  };
+  const updateGeneralExecutorParam = (key: string, v: any) => {
+    setExecutors(prev => prev.map(ex => (
+      ex.kind === "executor" && generalMultiTurnExecutors.includes(ex.plugin)
+        ? { ...ex, params: { ...ex.params, [key]: v } }
+        : ex
+    )));
   };
 
   const setScorerPlugin = (p: string) => {
@@ -237,15 +282,19 @@ export default function NewRun() {
   const paramValidation = useMemo(() => {
     const missing: string[] = [];
     if (mode === "custom") {
-      for (const [k, s] of Object.entries(executorSchema ?? {})) {
-        if (s.required) {
-          const v = executor.params[k];
-          const empty = v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0);
-          if (empty) missing.push(`executor.${k}`);
+      if (nativeExecutors.length + converters.length === 0) missing.push("executors");
+      for (const ex of nativeExecutors) {
+        const schema = executorSchemas[ex.plugin] ?? {};
+        for (const [k, s] of Object.entries(schema)) {
+          if (k === "goal" && generalMultiTurnExecutors.includes(ex.plugin) && goalSource === "dataset_items") {
+            continue;
+          }
+          if (s.required) {
+            const v = ex.params[k];
+            const empty = v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0);
+            if (empty) missing.push(`executor.${ex.plugin}.${k}`);
+          }
         }
-      }
-      if (isGeneralMultiTurnExecutor && goalSource === "fixed" && !String(executor.params.goal ?? "").trim()) {
-        missing.push("executor.goal");
       }
       for (const [k, s] of Object.entries(scorerSchema ?? {})) {
         if (s.required) {
@@ -268,14 +317,14 @@ export default function NewRun() {
     return missing;
   }, [
     mode,
-    executor,
-    executorSchema,
+    nativeExecutors,
+    executorSchemas,
+    generalMultiTurnExecutors,
     goalSource,
     scorer,
     scorerSchema,
     converters,
     convSchemas,
-    isGeneralMultiTurnExecutor,
   ]);
 
   const submit = useMutation({
@@ -289,17 +338,23 @@ export default function NewRun() {
         });
         base = { ...rendered.data, name };
       } else {
-        const executorParams = { ...executor.params };
-        if (isGeneralMultiTurnExecutor && goalSource === "dataset_items") {
-          executorParams.goal = "";
-        }
+        const executorRefs = [
+          ...nativeExecutors.map(ex => {
+            const params = { ...ex.params };
+            if (generalMultiTurnExecutors.includes(ex.plugin) && goalSource === "dataset_items") {
+              params.goal = "";
+            }
+            return { kind: "executor", plugin: ex.plugin, params };
+          }),
+          ...converters.map(c => ({ kind: "converter_method", plugin: c.plugin, params: c.params })),
+        ];
         base = {
+          version: 2,
           name,
           targets: [{ config_id: targetId }],
           dataset: { config_id: datasetId },
-          executor: { plugin: executor.plugin, params: executorParams },
+          executors: executorRefs,
           scorers: [{ plugin: scorer.plugin, params: scorer.params }],
-          converters: converters.map(c => ({ plugin: c.plugin, params: c.params })),
         };
       }
       
@@ -348,7 +403,7 @@ export default function NewRun() {
             <div className="grid grid-cols-2 gap-3">
               {([
                 { id: "preset", title: t("Preset scenario"), desc: t("Curated pipelines (OWASP, jailbreak, …)"), icon: Sparkles },
-                { id: "custom", title: t("Custom pipeline"), desc: t("Choose your own executor, converters, scorer"), icon: Wrench },
+                { id: "custom", title: t("Custom pipeline"), desc: t("Choose your own executors, methods, scorer"), icon: Wrench },
               ] as const).map(opt => {
                 const Icon = opt.icon;
                 const active = mode === opt.id;
@@ -375,7 +430,7 @@ export default function NewRun() {
         <Card>
           <CardHeader>
             <CardTitle>{t("2. Scenario")}</CardTitle>
-            <CardDescription>{t("A pre-configured combination of executor, converters, and scorer.")}</CardDescription>
+            <CardDescription>{t("A pre-configured combination of executors, methods, and scorer.")}</CardDescription>
           </CardHeader>
           <CardBody className="space-y-5">
             {(["basic", "advanced"] as const).map(level => (
@@ -543,7 +598,7 @@ export default function NewRun() {
                           const selectedId = e.target.value;
                           setSelectedGoalItemId(selectedId);
                           const item = goalDatasetItems?.items?.find((it: any) => it.id === selectedId);
-                          if (item) updateExecutorParam("goal", item.text);
+                          if (item) updateGeneralExecutorParam("goal", item.text);
                         }}>
                           <option value="">{t("-- load prompt --")}</option>
                           {goalDatasetItems?.items?.map((item: any, idx: number) => (
@@ -578,8 +633,8 @@ export default function NewRun() {
                     </>
                   )}
                   <Field label={t("Attack goal")}>
-                    <Textarea rows={4} value={executor.params.goal ?? ""}
-                      onChange={e => updateExecutorParam("goal", e.target.value)} />
+                    <Textarea rows={4} value={generalGoalValue}
+                      onChange={e => updateGeneralExecutorParam("goal", e.target.value)} />
                   </Field>
                 </>
               )}
@@ -644,25 +699,77 @@ export default function NewRun() {
         <Card>
           <CardHeader>
             <CardTitle>{t("3. Pipeline")}</CardTitle>
-            <CardDescription>{t("Executor orchestrates multi-turn conversations. Converters mutate the prompt. Scorer classifies the response.")}</CardDescription>
+            <CardDescription>{t("Each selected executor or method creates a separate attack attempt. Scorer classifies the response.")}</CardDescription>
           </CardHeader>
           <CardBody className="space-y-6">
             <div>
-              <Field label={t("Executor")}>
-                <Select value={executor.plugin} onChange={e => setExecutorPlugin(e.target.value)}>
-                  {plugins?.executors?.map((ex: string) => <option key={ex} value={ex}>{ex}</option>)}
-                </Select>
-              </Field>
-              {executorSchema && Object.keys(executorSchema).length > 0 && (
-                <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50/50 p-4 space-y-3">
-                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">{t("Executor params")}</div>
-                  {Object.entries(executorSchema)
-                    .filter(([k]) => !(isGeneralMultiTurnExecutor && k === "goal"))
-                    .map(([k, s]) => (
-                      <ParamField key={k} name={k} schema={s} targets={targets ?? []}
-                        promptAssets={promptAssets ?? []}
-                        value={executor.params[k]} onChange={v => updateExecutorParam(k, v)} />
+              <Field label={t("Executors")} hint={t("Native executors can run single-turn or multi-turn attack flows.")}>
+                <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50/50 p-3">
+                  <div className="flex flex-wrap gap-2">
+                    {plugins?.executors?.map((ex: string) => {
+                      const on = selectedExecutorNames.has(ex);
+                      const disabled = !executorSupportsDatasetLanguage(ex);
+                      return (
+                        <button
+                          key={ex}
+                          type="button"
+                          disabled={disabled}
+                          title={executorLanguageLabel(ex)}
+                          onClick={() => toggleNativeExecutor(ex)}
+                          className={clsx(
+                            "rounded-full border px-2.5 py-1 text-xs transition",
+                            disabled
+                              ? "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400"
+                              : on
+                              ? "border-brand-600 bg-brand-600 text-white"
+                              : "border-gray-200 bg-white text-gray-700 hover:border-gray-300",
+                          )}
+                        >
+                          {ex}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 text-[11px] text-gray-500">
+                    <span>{t("Selected executors")}: {nativeExecutors.length}</span>
+                    {nativeExecutors.map(ex => (
+                      <Badge key={ex.plugin} tone="blue">
+                        {ex.plugin} · {executorLanguageLabel(ex.plugin)}
+                      </Badge>
                     ))}
+                  </div>
+                </div>
+              </Field>
+              {nativeExecutors.length > 0 && (
+                <div className="mt-3 space-y-3">
+                  {nativeExecutors.map(ex => {
+                    const schema = executorSchemas[ex.plugin] ?? {};
+                    const visibleEntries = Object.entries(schema)
+                      .filter(([k]) => !(generalMultiTurnExecutors.includes(ex.plugin) && k === "goal"));
+                    return (
+                      <div key={ex.plugin} className="rounded-lg border border-gray-200 bg-gray-50/50 p-4 space-y-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div>
+                            <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                              {ex.plugin} {t("params")}
+                            </div>
+                            <div className="mt-0.5 text-[11px] text-gray-400">
+                              {t("Languages: {{languages}}", { languages: executorLanguageLabel(ex.plugin) })}
+                            </div>
+                          </div>
+                          <button type="button" onClick={() => toggleNativeExecutor(ex.plugin)}
+                            className="text-gray-400 hover:text-gray-600"><X className="h-4 w-4" /></button>
+                        </div>
+                        {visibleEntries.length ? visibleEntries.map(([k, s]) => (
+                          <ParamField key={k} name={k} schema={s} targets={targets ?? []}
+                            promptAssets={promptAssets ?? []}
+                            value={ex.params[k]} onChange={v => updateExecutorParam(k, v, ex.plugin)} />
+                        )) : (
+                          <div className="text-xs text-gray-500">{t("No parameters")}</div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -686,7 +793,7 @@ export default function NewRun() {
             </div>
 
             <div>
-              <Field label={t("Converters")} hint={t("Each selected converter creates a separate attack attempt.")}>
+              <Field label={t("Executor methods")} hint={t("Each selected executor or method creates a separate attack attempt.")}>
                 <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50/50 p-3">
                   <Input
                     value={converterSearch}
@@ -717,22 +824,25 @@ export default function NewRun() {
                     ))}
                   </div>
                   <div className="text-[11px] text-gray-500">
-                    {t("Showing {{count}} of {{total}} converters", {
+                    {t("Showing {{count}} of {{total}} executor methods", {
                       count: filteredConverters.length,
                       total: availableConverters.length,
                     })}
                   </div>
                   {availableConverters.length === 0 ? (
-                    <Badge>{t("No converters available")}</Badge>
+                    <Badge>{t("No executor methods available")}</Badge>
                   ) : groupedConverters.length === 0 ? (
                     <div className="rounded-lg border border-gray-200 bg-white py-6 text-center text-xs text-gray-500">
-                      {t("No converters match.")}
+                      {t("No methods match.")}
                     </div>
                   ) : (
                     <div className="max-h-80 overflow-y-auto space-y-3">
                       {groupedConverters.map(group => {
                         const selectedInGroup = group.plugins.filter(plugin =>
                           selectedConverterNames.has(plugin),
+                        ).length;
+                        const compatibleInGroup = group.plugins.filter(plugin =>
+                          executorSupportsDatasetLanguage(plugin),
                         ).length;
                         return (
                           <div
@@ -745,7 +855,7 @@ export default function NewRun() {
                                   {converterCategoryLabel(group.category)}
                                 </div>
                                 <div className="mt-0.5 text-[11px] text-gray-400">
-                                  {selectedInGroup}/{group.plugins.length} {t("Selected")}
+                                  {selectedInGroup}/{compatibleInGroup} {t("Selected")}
                                 </div>
                               </div>
                               <div className="flex gap-2">
@@ -753,6 +863,7 @@ export default function NewRun() {
                                   type="button"
                                   variant="secondary"
                                   size="sm"
+                                  disabled={compatibleInGroup === 0}
                                   onClick={() => selectConverterCategory(group.category)}
                                 >
                                   {t("Select all")}
@@ -771,14 +882,19 @@ export default function NewRun() {
                             <div className="flex flex-wrap gap-2">
                               {group.plugins.map(plugin => {
                                 const on = selectedConverterNames.has(plugin);
+                                const disabled = !executorSupportsDatasetLanguage(plugin);
                                 return (
                                   <button
                                     key={plugin}
                                     type="button"
+                                    disabled={disabled}
+                                    title={executorLanguageLabel(plugin)}
                                     onClick={() => toggleConverter(plugin)}
                                     className={clsx(
                                       "px-2.5 py-1 text-xs rounded-full border transition",
-                                      on
+                                      disabled
+                                        ? "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400"
+                                      : on
                                         ? "bg-brand-600 border-brand-600 text-white"
                                         : "bg-white border-gray-200 text-gray-700 hover:border-gray-300",
                                     )}
@@ -799,17 +915,17 @@ export default function NewRun() {
                 <div className="mt-3 rounded-lg border border-brand-100 bg-brand-50/50 p-4 space-y-3">
                   <div>
                     <div className="text-xs font-medium text-brand-700 uppercase tracking-wide">
-                      {t("Shared converter LLM")}
+                      {t("Shared method LLM")}
                     </div>
                     <div className="mt-1 text-xs text-brand-700">
-                      {t("Apply one helper LLM target to {{count}} selected converters that require it.", {
+                      {t("Apply one helper LLM target to {{count}} selected methods that require it.", {
                         count: converterLlmConfigCount,
                       })}
                     </div>
                   </div>
                   <Field
-                    label={t("Converter LLM")}
-                    hint={t("Selecting a target fills every selected converter LLM field. Individual converter params remain editable.")}
+                    label={t("Method LLM")}
+                    hint={t("Selecting a target fills every selected method LLM field. Individual method params remain editable.")}
                   >
                     <Select
                       value={sharedConverterLlmConfigId}

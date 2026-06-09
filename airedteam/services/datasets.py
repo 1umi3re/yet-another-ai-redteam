@@ -6,6 +6,7 @@ from typing import Any
 
 from sqlalchemy import func, select
 
+from airedteam.core.language import detect_prompt_language, normalize_language
 from airedteam.engine.factory import build_dataset
 from airedteam.storage.blobs import BlobStore
 from airedteam.storage.models import DatasetMeta, DatasetVersion
@@ -27,6 +28,22 @@ def _extract_items(raw: Any) -> list[Any]:
 
 def _items_bytes(items: list[Any]) -> bytes:
     return json.dumps({"items": items}, ensure_ascii=False, indent=2).encode("utf-8")
+
+
+def _item_dict(item: Any, index: int) -> dict[str, Any]:
+    if isinstance(item, str):
+        return {"id": str(index), "prompt": item}
+    return dict(item)
+
+
+def _ensure_item_language(item: dict[str, Any]) -> bool:
+    language = normalize_language(item.get("language"))
+    if language is not None:
+        changed = language != item.get("language")
+        item["language"] = language
+        return changed
+    item["language"] = detect_prompt_language(str(item.get("prompt", "")))
+    return True
 
 
 def _version_public(row: DatasetVersion, current_version: int | None) -> dict:
@@ -152,6 +169,73 @@ class DatasetService:
             await s.commit()
             await s.refresh(ds)
             return ds
+
+    async def ensure_languages_for_run(self, ds_id: str) -> DatasetMeta:
+        ds = await self.get(ds_id)
+        if ds is None:
+            raise KeyError(ds_id)
+        if ds.plugin == "json_upload" and ds.blob_path:
+            return await self._ensure_json_upload_languages(ds)
+        return await self._create_language_snapshot(ds)
+
+    async def _ensure_json_upload_languages(self, ds: DatasetMeta) -> DatasetMeta:
+        raw = json.loads((await self._blob.get(ds.blob_path)).decode("utf-8"))
+        items = _extract_items(raw)
+        normalized_items: list[dict[str, Any]] = []
+        changed = False
+        for index, item in enumerate(items):
+            item_dict = _item_dict(item, index)
+            changed = _ensure_item_language(item_dict) or changed
+            changed = not isinstance(item, dict) or item_dict != item or changed
+            normalized_items.append(item_dict)
+        if not changed:
+            return ds
+        return await self.update_items(
+            ds.id,
+            items=normalized_items,
+            note="Auto-detected dataset item languages",
+        )
+
+    async def _create_language_snapshot(self, ds: DatasetMeta) -> DatasetMeta:
+        ds_ref = await self.resolve_for_runtime(ds.id)
+        dataset = build_dataset(ds_ref, blob_store=self._blob)
+        items: list[dict[str, Any]] = []
+        index = 0
+        async for prompt in dataset:
+            item = {"prompt": prompt.text, **dict(prompt.metadata)}
+            item.setdefault("id", str(index))
+            _ensure_item_language(item)
+            items.append(item)
+            index += 1
+        key = f"datasets/{uuid.uuid4()}.json"
+        await self._blob.put(key, _items_bytes(items))
+        async with self._sf() as s:
+            row = DatasetMeta(
+                name=f"{ds.name} language snapshot {uuid.uuid4().hex[:8]}",
+                plugin="json_upload",
+                params_json={
+                    "blob_path": key,
+                    "source_dataset_id": ds.id,
+                    "source_dataset_plugin": ds.plugin,
+                },
+                blob_path=key,
+                item_count=len(items),
+                current_version=1,
+            )
+            s.add(row)
+            await s.flush()
+            s.add(
+                DatasetVersion(
+                    dataset_id=row.id,
+                    version=1,
+                    blob_path=key,
+                    item_count=len(items),
+                    note=f"Language snapshot of {ds.name}",
+                )
+            )
+            await s.commit()
+            await s.refresh(row)
+            return row
 
     async def list_versions(self, ds_id: str) -> list[dict]:
         ds = await self.get(ds_id)

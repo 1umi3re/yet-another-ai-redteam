@@ -152,9 +152,15 @@ async def retry_scores(rid: str, req: RetryScores, _=Depends(require_admin), sta
 
 
 @router.get("/runs", response_model=list[RunOut])
-async def list_runs(_=Depends(require_admin), state: AppState = Depends(get_state)):
+async def list_runs(
+    _=Depends(require_admin),
+    state: AppState = Depends(get_state),
+    target_id: str | None = None,
+):
     async with state.session_factory() as s:
         rs = (await s.execute(select(Run).order_by(Run.created_at.desc()))).scalars().all()
+        if target_id:
+            rs = [r for r in rs if target_id in _target_ids_for_run(r)]
         return [await _run_to_out(r, state) for r in rs]
 
 
@@ -177,6 +183,7 @@ async def list_attempts(
     verdict: str | None = Query(default=None, pattern="^(refused|complied|unscored)$"),
     dataset_item_id: str | None = None,
     converter: str | None = None,
+    executor: str | None = None,
     reviewed: bool | None = None,
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
@@ -206,6 +213,9 @@ async def list_attempts(
                 "response_blob_path": a.response_blob_path,
                 "prompt_snapshot_blob_path": a.prompt_snapshot_blob_path,
                 "converter_chain": a.converter_chain,
+                "executor_name": _attempt_executor_name(a),
+                "executor_kind": _attempt_executor_kind(a),
+                "dataset_item_language": a.dataset_item_language,
                 "status": a.status,
                 "error": a.error,
                 "latency_ms": a.latency_ms,
@@ -235,6 +245,8 @@ async def list_attempts(
                     or converter == " -> ".join(a["converter_chain"] or [])
                 )
             ]
+        if executor:
+            items = [a for a in items if a["executor_name"] == executor]
         if reviewed is not None:
             items = [a for a in items if a["reviewed"] is reviewed]
         if not paged:
@@ -502,6 +514,21 @@ def _empty_bucket(key: str | None = None) -> dict[str, Any]:
     return out
 
 
+def _attempt_executor_name(attempt: Attempt) -> str:
+    if attempt.executor_name:
+        return attempt.executor_name
+    chain = attempt.converter_chain or []
+    if chain:
+        return " -> ".join(chain)
+    return "single_turn"
+
+
+def _attempt_executor_kind(attempt: Attempt) -> str:
+    if attempt.executor_kind:
+        return attempt.executor_kind
+    return "converter_method" if attempt.converter_chain else "executor"
+
+
 def _add_attempt(bucket: dict[str, Any], attempt: Attempt, verdict: str) -> None:
     bucket["attempts"] += 1
     bucket["latency_ms"] += attempt.latency_ms or 0
@@ -532,6 +559,8 @@ def _run_report(run: Run, attempts: list[Attempt], scores: list[Score]) -> dict[
     by_target: dict[str, dict[str, Any]] = {}
     by_chain: dict[str, dict[str, Any]] = {}
     by_target_chain: dict[tuple[str, str], dict[str, Any]] = {}
+    by_executor: dict[str, dict[str, Any]] = {}
+    by_target_executor: dict[tuple[str, str], dict[str, Any]] = {}
     by_dataset_item: dict[str, dict[str, Any]] = {}
     for attempt in attempts:
         verdict = _attempt_verdict(scores_by_attempt.get(attempt.id, []))
@@ -554,6 +583,20 @@ def _run_report(run: Run, attempts: list[Attempt], scores: list[Score]) -> dict[
         target_chain_bucket["target_name"] = attempt.target_name
         target_chain_bucket["converter_chain"] = chain
         _add_attempt(target_chain_bucket, attempt, verdict)
+        executor_name = _attempt_executor_name(attempt)
+        executor_bucket = by_executor.setdefault(executor_name, _empty_bucket(executor_name))
+        executor_bucket["executor_name"] = executor_name
+        executor_bucket["executor_kind"] = _attempt_executor_kind(attempt)
+        _add_attempt(executor_bucket, attempt, verdict)
+        target_executor_bucket = by_target_executor.setdefault(
+            (target_key, executor_name),
+            _empty_bucket(f"{target_key}|{executor_name}"),
+        )
+        target_executor_bucket["target_id"] = attempt.target_id
+        target_executor_bucket["target_name"] = attempt.target_name
+        target_executor_bucket["executor_name"] = executor_name
+        target_executor_bucket["executor_kind"] = _attempt_executor_kind(attempt)
+        _add_attempt(target_executor_bucket, attempt, verdict)
         dataset_key = attempt.dataset_item_id or "(none)"
         dataset_bucket = by_dataset_item.setdefault(dataset_key, _empty_bucket(dataset_key))
         dataset_bucket["dataset_item_id"] = attempt.dataset_item_id
@@ -585,6 +628,28 @@ def _run_report(run: Run, attempts: list[Attempt], scores: list[Score]) -> dict[
         else:
             bucket["unknown"] += 1
 
+    filtered_items = []
+    if isinstance(run.filtered_json, dict):
+        filtered_items = list(run.filtered_json.get("by_language") or [])
+    filtered_summary: dict[tuple[str, str, str], dict[str, Any]] = {}
+    for item in filtered_items:
+        key = (
+            str(item.get("target_name") or ""),
+            str(item.get("executor_name") or ""),
+            str(item.get("language") or ""),
+        )
+        bucket = filtered_summary.setdefault(
+            key,
+            {
+                "target_name": key[0],
+                "executor_name": key[1],
+                "executor_kind": item.get("executor_kind"),
+                "language": key[2],
+                "filtered": 0,
+            },
+        )
+        bucket["filtered"] += 1
+
     return {
         "run": {
             "id": run.id,
@@ -597,8 +662,11 @@ def _run_report(run: Run, attempts: list[Attempt], scores: list[Score]) -> dict[
         "by_target": [_finish_bucket(v) for v in by_target.values()],
         "by_converter_chain": [_finish_bucket(v) for v in by_chain.values()],
         "by_target_chain": [_finish_bucket(v) for v in by_target_chain.values()],
+        "by_executor": [_finish_bucket(v) for v in by_executor.values()],
+        "by_target_executor": [_finish_bucket(v) for v in by_target_executor.values()],
         "by_dataset_item": [_finish_bucket(v) for v in by_dataset_item.values()],
         "by_scorer": list(by_scorer.values()),
+        "filtered_by_language": list(filtered_summary.values()),
     }
 
 
@@ -629,6 +697,9 @@ def _run_export_json(run: Run, attempts: list[Attempt], scores: list[Score]) -> 
                 "conversation_blob_path": a.conversation_blob_path,
                 "prompt_snapshot_blob_path": a.prompt_snapshot_blob_path,
                 "converter_chain": a.converter_chain,
+                "executor_name": _attempt_executor_name(a),
+                "executor_kind": _attempt_executor_kind(a),
+                "dataset_item_language": a.dataset_item_language,
                 "status": a.status,
                 "error": a.error,
                 "latency_ms": a.latency_ms,
@@ -671,6 +742,9 @@ def _run_export_csv(run: Run, attempts: list[Attempt], scores: list[Score]) -> s
         "dataset_item_id",
         "status",
         "final_verdict",
+        "executor_name",
+        "executor_kind",
+        "dataset_item_language",
         "converter_chain",
         "original_prompt",
         "transformed_prompt",
@@ -702,6 +776,9 @@ def _run_export_csv(run: Run, attempts: list[Attempt], scores: list[Score]) -> s
                 "dataset_item_id": attempt.dataset_item_id,
                 "status": attempt.status,
                 "final_verdict": _attempt_verdict(attempt_scores),
+                "executor_name": _attempt_executor_name(attempt),
+                "executor_kind": _attempt_executor_kind(attempt),
+                "dataset_item_language": attempt.dataset_item_language,
                 "converter_chain": " -> ".join(attempt.converter_chain or []),
                 "original_prompt": attempt.original_prompt_text or attempt.prompt_text,
                 "transformed_prompt": attempt.prompt_text,

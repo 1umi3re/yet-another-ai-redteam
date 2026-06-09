@@ -9,7 +9,13 @@ from datetime import UTC, datetime
 import yaml
 from sqlalchemy import delete, func, select, update
 
+from airedteam.builtins.executors.converter_method import ConverterMethodExecutor
 from airedteam.builtins.executors.general_multi_turn import GeneralMultiTurnExecutor
+from airedteam.core.executor_methods import (
+    language_support_for_converter_method,
+    language_support_for_executor,
+)
+from airedteam.core.language import detect_prompt_language, normalize_language
 from airedteam.core.registry import default_registry
 from airedteam.core.score_status import failed_score_value, is_failed_score_value
 from airedteam.core.types import AttemptResult, Message, Prompt, Response, ScoreResult
@@ -22,7 +28,7 @@ from airedteam.engine.factory import (
 )
 from airedteam.engine.input_limits import apply_target_input_limit
 from airedteam.engine.orchestrator import DefaultOrchestrator
-from airedteam.engine.run_engine import RunEngine
+from airedteam.engine.run_engine import ExecutorVariant, RunEngine
 from airedteam.engine.sampling import SampledDataset
 from airedteam.runspec.models import RunSpec
 from airedteam.services.prompt_assets import PromptAssetService
@@ -93,6 +99,19 @@ def _target_max_concurrency(runtime_cfg: dict) -> int | None:
     return value
 
 
+class _MaterializedDataset:
+    def __init__(self, prompts: list[Prompt], *, name: str = "materialized_dataset") -> None:
+        self._prompts = prompts
+        self.name = name
+
+    async def __aiter__(self):
+        for prompt in self._prompts:
+            yield prompt
+
+    async def size(self) -> int | None:
+        return len(self._prompts)
+
+
 class RunService:
     def __init__(
         self,
@@ -119,7 +138,9 @@ class RunService:
         self._tasks: dict[str, asyncio.Task] = {}
 
     async def create_run(self, *, name: str, runspec_dict: dict) -> Run:
-        RunSpec.model_validate(runspec_dict)  # validate early
+        spec = RunSpec.model_validate(runspec_dict)  # validate early
+        if not spec.executors and spec.executor is None:
+            raise ValueError("runspec requires executor or executors")
         async with self._sf() as s:
             row = Run(name=name, runspec_yaml=yaml.safe_dump(runspec_dict), status="pending")
             s.add(row)
@@ -236,6 +257,101 @@ class RunService:
             scorers.append(scorer)
         return scorers, closeables
 
+    async def _resolve_converter_ref(self, converter_ref: dict, closeables: list) -> dict:
+        ref = dict(converter_ref)
+        converter_plugin = ref.get("plugin")
+        params = dict(ref.get("params") or {})
+        if converter_plugin in _TRANSLATION_CONVERTERS and "translator_config_id" in params:
+            tcid = params.pop("translator_config_id")
+            tgt_cfg = await self._targets.resolve_for_runtime(tcid)
+            params["translator"] = self._build_target_from_cfg(tgt_cfg)
+            closeables.append(params["translator"])
+        if converter_plugin in _LLM_CONVERTERS and "converter_config_id" in params:
+            cid = params.pop("converter_config_id")
+            tgt_cfg = await self._targets.resolve_for_runtime(cid)
+            params["converter"] = self._build_target_from_cfg(tgt_cfg)
+            closeables.append(params["converter"])
+        if converter_plugin in _LLM_CONVERTERS or converter_plugin in _TRANSLATION_CONVERTERS:
+            params["prompt_assets"] = self._prompt_assets
+        if converter_plugin == "template_jailbreak" and params.get("attack_template_asset_id"):
+            asset_id = params.pop("attack_template_asset_id")
+            asset = await self._prompt_assets.get_asset(asset_id)
+            if asset.get("purpose") != "attack_template":
+                raise ValueError(f"prompt asset is not an attack template: {asset_id}")
+            active_override = asset.get("active_override")
+            params["template"] = (
+                active_override.get("template")
+                if isinstance(active_override, dict) and active_override.get("template")
+                else asset["template"]
+            )
+        return {"plugin": ref["plugin"], "params": params}
+
+    async def _build_executor_variants(self, spec: RunSpec, closeables: list) -> list[ExecutorVariant]:
+        variants: list[ExecutorVariant] = []
+        for executor_ref in spec.executors:
+            ref = executor_ref.model_dump()
+            kind = ref.get("kind") or "executor"
+            plugin_name = ref.get("plugin")
+            if kind == "converter_method":
+                converter_ref = await self._resolve_converter_ref(ref, closeables)
+                converter = build_converter(converter_ref)
+                variants.append(
+                    ExecutorVariant(
+                        kind="converter_method",
+                        plugin=plugin_name,
+                        executor=ConverterMethodExecutor(method_name=plugin_name, converter=converter),
+                        language_support=set(language_support_for_converter_method(plugin_name)),
+                    )
+                )
+                continue
+            executor = await self._build_executor_from_ref(ref, closeables)
+            variants.append(
+                ExecutorVariant(
+                    kind="executor",
+                    plugin=plugin_name,
+                    executor=executor,
+                    language_support=set(language_support_for_executor(plugin_name)),
+                )
+            )
+        return variants
+
+    async def _build_executor_from_ref(self, ref: dict, closeables: list):
+        executor_params = dict(ref.get("params") or {})
+        plugin_name = ref.get("plugin")
+        executor_cls = default_registry().get("executors", plugin_name)
+        is_general_multi_turn = _is_general_multi_turn_executor(executor_cls)
+        needs_attacker = (
+            plugin_name
+            in {
+                "crescendo",
+                "pair",
+                "jailbreak_iterative",
+            }
+            or is_general_multi_turn
+        )
+        needs_evaluator = is_general_multi_turn
+        needs_judge = plugin_name in {"pair", "jailbreak_iterative"} or is_general_multi_turn
+        uses_prompt_assets = needs_attacker or needs_judge or needs_evaluator
+
+        if needs_attacker and "attacker_config_id" in executor_params:
+            aid = executor_params.pop("attacker_config_id")
+            tgt_cfg = await self._targets.resolve_for_runtime(aid)
+            executor_params["attacker"] = self._build_target_from_cfg(tgt_cfg)
+            closeables.append(executor_params["attacker"])
+        if needs_evaluator and "evaluator_config_id" in executor_params:
+            eid = executor_params.pop("evaluator_config_id")
+            ecfg = await self._targets.resolve_for_runtime(eid)
+            executor_params["evaluator"] = self._build_target_from_cfg(ecfg)
+            closeables.append(executor_params["evaluator"])
+        if needs_judge and "judge_config_id" in executor_params:
+            jid = executor_params.pop("judge_config_id")
+            jcfg = await self._targets.resolve_for_runtime(jid)
+            executor_params["judge"] = self._build_target_from_cfg(jcfg)
+            closeables.append(executor_params["judge"])
+        if uses_prompt_assets:
+            executor_params["prompt_assets"] = self._prompt_assets
+        return build_executor({"plugin": plugin_name, "params": executor_params})
+
     async def _build_scorer_from_ref(self, ref: dict) -> tuple[object, list, dict]:
         closeables = []
         metadata = {}
@@ -280,12 +396,17 @@ class RunService:
         metadata = {}
         if attempt.dataset_item_id:
             metadata["id"] = attempt.dataset_item_id
+        if attempt.dataset_item_language:
+            metadata["language"] = attempt.dataset_item_language
         return AttemptResult(
             prompt=Prompt(text=attempt.prompt_text, metadata=metadata),
             response=response,
             status=attempt.status,
             error=attempt.error,
             converter_chain=list(attempt.converter_chain or []),
+            executor_name=attempt.executor_name,
+            executor_kind=attempt.executor_kind,
+            dataset_item_language=attempt.dataset_item_language,
             conversation=conversation,
         )
 
@@ -522,6 +643,20 @@ class RunService:
             await s.commit()
 
         try:
+            if spec.dataset.config_id:
+                dataset_row = await self._datasets.ensure_languages_for_run(spec.dataset.config_id)
+                if dataset_row.id != spec.dataset.config_id:
+                    spec_payload = yaml.safe_load(run.runspec_yaml) or {}
+                    spec_payload["dataset"] = {"config_id": dataset_row.id}
+                    async with self._sf() as s:
+                        await s.execute(
+                            update(Run)
+                            .where(Run.id == run_id)
+                            .values(runspec_yaml=yaml.safe_dump(spec_payload))
+                        )
+                        await s.commit()
+                    spec = RunSpec.model_validate(spec_payload)
+
             target_refs = [await self._resolve_plugin_ref(t, "target") for t in spec.targets]
             ds_ref = await self._resolve_plugin_ref(spec.dataset, "dataset")
 
@@ -535,75 +670,23 @@ class RunService:
                     dataset, limit=spec.sampling.limit, shuffle=spec.sampling.shuffle, seed=spec.sampling.seed
                 )
 
-            # Resolve converter-level target references before building.
-            converter_refs = []
-            for conv in spec.converters:
-                ref = conv.model_dump()
-                converter_plugin = ref.get("plugin")
-                params = dict(ref.get("params") or {})
-                if converter_plugin in _TRANSLATION_CONVERTERS and "translator_config_id" in params:
-                    tcid = params.pop("translator_config_id")
-                    tgt_cfg = await self._targets.resolve_for_runtime(tcid)
-                    params["translator"] = self._build_target_from_cfg(tgt_cfg)
-                    closeables.append(params["translator"])
-                if converter_plugin in _LLM_CONVERTERS and "converter_config_id" in params:
-                    cid = params.pop("converter_config_id")
-                    tgt_cfg = await self._targets.resolve_for_runtime(cid)
-                    params["converter"] = self._build_target_from_cfg(tgt_cfg)
-                    closeables.append(params["converter"])
-                if converter_plugin in _LLM_CONVERTERS or converter_plugin in _TRANSLATION_CONVERTERS:
-                    params["prompt_assets"] = self._prompt_assets
-                if converter_plugin == "template_jailbreak" and params.get("attack_template_asset_id"):
-                    asset_id = params.pop("attack_template_asset_id")
-                    asset = await self._prompt_assets.get_asset(asset_id)
-                    if asset.get("purpose") != "attack_template":
-                        raise ValueError(f"prompt asset is not an attack template: {asset_id}")
-                    active_override = asset.get("active_override")
-                    params["template"] = (
-                        active_override.get("template")
-                        if isinstance(active_override, dict) and active_override.get("template")
-                        else asset["template"]
-                    )
-                converter_refs.append({"plugin": ref["plugin"], "params": params})
+            prompts: list[Prompt] = []
+            async for prompt in dataset:
+                metadata = dict(prompt.metadata)
+                language = normalize_language(metadata.get("language")) or detect_prompt_language(prompt.text)
+                metadata["language"] = language
+                prompts.append(Prompt(text=prompt.text, metadata=metadata, artifacts=prompt.artifacts))
+            dataset = _MaterializedDataset(prompts, name=getattr(dataset, "name", "materialized_dataset"))
+
+            converter_refs = [
+                await self._resolve_converter_ref(conv.model_dump(), closeables) for conv in spec.converters
+            ]
             converters = [build_converter(r) for r in converter_refs]
 
-            # Resolve executor-level target references before building.
-            executor_ref = spec.executor.model_dump()
-            executor_params = dict(executor_ref.get("params") or {})
-            plugin_name = executor_ref.get("plugin")
-            executor_cls = default_registry().get("executors", plugin_name)
-            is_general_multi_turn = _is_general_multi_turn_executor(executor_cls)
-            needs_attacker = (
-                plugin_name
-                in {
-                    "crescendo",
-                    "pair",
-                    "jailbreak_iterative",
-                }
-                or is_general_multi_turn
-            )
-            needs_evaluator = is_general_multi_turn
-            needs_judge = plugin_name in {"pair", "jailbreak_iterative"} or is_general_multi_turn
-            uses_prompt_assets = needs_attacker or needs_judge or needs_evaluator
-
-            if needs_attacker and "attacker_config_id" in executor_params:
-                aid = executor_params.pop("attacker_config_id")
-                tgt_cfg = await self._targets.resolve_for_runtime(aid)
-                executor_params["attacker"] = self._build_target_from_cfg(tgt_cfg)
-                closeables.append(executor_params["attacker"])
-            if needs_evaluator and "evaluator_config_id" in executor_params:
-                eid = executor_params.pop("evaluator_config_id")
-                ecfg = await self._targets.resolve_for_runtime(eid)
-                executor_params["evaluator"] = self._build_target_from_cfg(ecfg)
-                closeables.append(executor_params["evaluator"])
-            if needs_judge and "judge_config_id" in executor_params:
-                jid = executor_params.pop("judge_config_id")
-                jcfg = await self._targets.resolve_for_runtime(jid)
-                executor_params["judge"] = self._build_target_from_cfg(jcfg)
-                closeables.append(executor_params["judge"])
-            if uses_prompt_assets:
-                executor_params["prompt_assets"] = self._prompt_assets
-            executor = build_executor({"plugin": plugin_name, "params": executor_params})
+            executor_variants = await self._build_executor_variants(spec, closeables) if spec.executors else None
+            executor = None
+            if executor_variants is None:
+                executor = await self._build_executor_from_ref(spec.executor.model_dump(), closeables)
 
             scorers, scorer_closeables = await self._build_scorers(spec)
             closeables.extend(scorer_closeables)
@@ -667,6 +750,9 @@ class RunService:
                     a.original_prompt_text = original_prompt.text
                     a.prompt_text = ar.prompt.text
                     a.converter_chain = ar.converter_chain
+                    a.executor_name = ar.executor_name
+                    a.executor_kind = ar.executor_kind
+                    a.dataset_item_language = ar.dataset_item_language
                     a.response_text = stored_text
                     a.response_blob_path = blob_path
                     a.conversation_blob_path = conv_path
@@ -689,19 +775,40 @@ class RunService:
                     return
                 await self._write_score(run_id, attempt_id, sr)
 
-            try:
-                total = (await dataset.size()) or 0
-            except Exception:
-                total = 0
-            converter_variant_count = max(1, len(converters))
+            if executor_variants is None:
+                total = len(prompts)
+                progress_total = total * len(targets) * max(1, len(converters))
+                filtered_json = {}
+            else:
+                filtered_items = []
+                progress_total = 0
+                for prompt in prompts:
+                    language = prompt.metadata.get("language")
+                    for target in targets:
+                        target_name = getattr(target, "name", "?")
+                        for variant in executor_variants:
+                            if language in set(variant.language_support or []):
+                                progress_total += 1
+                            else:
+                                filtered_items.append(
+                                    {
+                                        "executor_name": variant.plugin,
+                                        "executor_kind": variant.kind,
+                                        "language": language,
+                                        "target_name": target_name,
+                                        "dataset_item_id": prompt.metadata.get("id"),
+                                    }
+                                )
+                filtered_json = {"by_language": filtered_items}
             existing_work_count = await self._existing_work_count(run_id)
             async with self._sf() as s:
                 await s.execute(
                     update(Run)
                     .where(Run.id == run_id)
                     .values(
-                        progress_total=total * len(targets) * converter_variant_count,
+                        progress_total=progress_total,
                         progress_done=existing_work_count,
+                        filtered_json=filtered_json,
                     )
                 )
                 await s.commit()
@@ -713,6 +820,7 @@ class RunService:
                 targets=targets,
                 converters=converters,
                 executor=executor,
+                executor_variants=executor_variants,
                 scorers=scorers,
                 concurrency=min(spec.concurrency, self._max_conc),
                 orchestrator=DefaultOrchestrator(),

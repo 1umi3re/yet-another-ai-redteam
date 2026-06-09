@@ -50,6 +50,9 @@ class AttemptResult:
     status: AttemptStatus = "completed"
     error: str | None = None
     converter_chain: list[str] = field(default_factory=list)
+    executor_name: str | None = None
+    executor_kind: str | None = None
+    dataset_item_language: str | None = None
     conversation: list[Message] | None = None
     prompt_snapshots: list[dict[str, Any]] = field(default_factory=list)
 

@@ -6,7 +6,7 @@ import pytest
 from airedteam.core.types import AttemptResult, Prompt, Response, ScoreResult
 from airedteam.engine.orchestrator import DefaultOrchestrator
 from airedteam.engine.progress import ProgressBus
-from airedteam.engine.run_engine import RunEngine
+from airedteam.engine.run_engine import ExecutorVariant, RunEngine
 
 
 class FakeDataset:
@@ -18,6 +18,17 @@ class FakeDataset:
 
     async def size(self):
         return 3
+
+
+class MixedLanguageDataset:
+    name = "mixed"
+
+    async def __aiter__(self):
+        yield Prompt(text="hello", metadata={"id": "en-1", "language": "en"})
+        yield Prompt(text="你好", metadata={"id": "zh-1", "language": "zh"})
+
+    async def size(self):
+        return 2
 
 
 class FakeTarget:
@@ -158,6 +169,67 @@ async def test_run_engine_runs_each_converter_as_separate_variant():
     assert len(attempts) == 6
     assert all(len(chain) == 1 for chain in attempts)
     assert {tuple(chain) for chain in attempts} == {("base64",), ("leetspeak",)}
+
+
+@pytest.mark.asyncio
+async def test_run_engine_runs_executor_variants_and_filters_by_item_language():
+    bus = ProgressBus()
+    attempts: list[tuple[str | None, str | None, str]] = []
+    filtered: list[dict] = []
+
+    class RecordingExec:
+        def __init__(self, name: str) -> None:
+            self.name = name
+
+        async def run(self, prompt, target, converters):
+            r = await target.generate(prompt)
+            return AttemptResult(prompt=prompt, response=r, status="completed")
+
+    async def on_attempt(ar, tname, item_id, work_key, original_prompt):
+        attempts.append((ar.executor_name, ar.dataset_item_language, original_prompt.text))
+
+    async def on_score(idx, sr):
+        pass
+
+    engine = RunEngine(progress_bus=bus, on_attempt=on_attempt, on_score=on_score)
+    await engine.run(
+        run_id="r",
+        dataset=MixedLanguageDataset(),
+        targets=[FakeTarget("t1")],
+        executor_variants=[
+            ExecutorVariant(
+                kind="executor",
+                plugin="single_turn",
+                executor=RecordingExec("single_turn"),
+                language_support={"en", "zh"},
+            ),
+            ExecutorVariant(
+                kind="converter_method",
+                plugin="base64",
+                executor=RecordingExec("base64"),
+                language_support={"en"},
+            ),
+        ],
+        scorers=[],
+        concurrency=1,
+        orchestrator=DefaultOrchestrator(),
+        on_language_filtered=lambda item: filtered.append(item),
+    )
+
+    assert attempts == [
+        ("single_turn", "en", "hello"),
+        ("base64", "en", "hello"),
+        ("single_turn", "zh", "你好"),
+    ]
+    assert filtered == [
+        {
+            "executor_name": "base64",
+            "executor_kind": "converter_method",
+            "language": "zh",
+            "target_name": "t1",
+            "dataset_item_id": "zh-1",
+        }
+    ]
 
 
 @pytest.mark.asyncio
