@@ -175,7 +175,7 @@ async def test_run_service_runs_executor_methods_and_filters_by_item_language(tm
             "dataset": {"config_id": ds.id},
             "executors": [
                 {"kind": "executor", "plugin": "single_turn"},
-                {"kind": "converter_method", "plugin": "base64", "params": {"wrap": False}},
+                {"kind": "converter_method", "plugin": "rot13", "params": {"wrap": False}},
             ],
         },
     )
@@ -199,11 +199,11 @@ async def test_run_service_runs_executor_methods_and_filters_by_item_language(tm
     assert run_row.progress_total == 3
     assert [(a.executor_name, a.dataset_item_id, a.dataset_item_language) for a in attempts] == [
         ("single_turn", "en", "en"),
-        ("base64", "en", "en"),
+        ("rot13", "en", "en"),
         ("single_turn", "zh", "zh"),
     ]
-    assert [a.prompt_text for a in attempts] == ["hello", "aGVsbG8=", "你好"]
-    assert calls == ["hello", "aGVsbG8=", "你好"]
+    assert [a.prompt_text for a in attempts] == ["hello", "uryyb", "你好"]
+    assert calls == ["hello", "uryyb", "你好"]
 
     content = await datasets.content(ds.id)
     assert [item["language"] for item in content["items"]] == ["en", "zh"]

@@ -89,6 +89,32 @@ class PromptAssetCustom(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
 
 
+class AttackMethodCategory(Base):
+    __tablename__ = "attack_method_categories"
+    id: Mapped[str] = mapped_column(String(80), primary_key=True)
+    name: Mapped[str] = mapped_column(String(200))
+    alias: Mapped[str] = mapped_column(String(200), default="")
+    category_type: Mapped[str] = mapped_column("type", String(100), default="")
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    display_order: Mapped[int] = mapped_column(Integer, default=0)
+    is_builtin: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+
+class ExecutorMethodCategory(Base):
+    __tablename__ = "executor_method_categories"
+    executor_kind: Mapped[str] = mapped_column(String(40), primary_key=True)
+    executor_name: Mapped[str] = mapped_column(String(100), primary_key=True)
+    category_id: Mapped[str] = mapped_column(
+        String(80),
+        ForeignKey("attack_method_categories.id", ondelete="RESTRICT"),
+    )
+    technical_category: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    is_builtin: Mapped[bool] = mapped_column(Boolean, default=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+
 class Run(Base):
     __tablename__ = "runs"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
@@ -154,3 +180,4 @@ Index("ix_attempts_run_id", Attempt.run_id)
 Index("uq_attempts_run_work_key", Attempt.run_id, Attempt.work_key, unique=True)
 Index("ix_scores_attempt_id", Score.attempt_id)
 Index("ix_dataset_versions_dataset_id", DatasetVersion.dataset_id)
+Index("ix_executor_method_categories_category_id", ExecutorMethodCategory.category_id)

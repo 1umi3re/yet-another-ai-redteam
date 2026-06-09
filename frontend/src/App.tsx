@@ -7,6 +7,7 @@ const Login = lazy(() => import("./pages/Login"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Targets = lazy(() => import("./pages/Targets"));
 const Assets = lazy(() => import("./pages/Assets"));
+const AttackMethods = lazy(() => import("./pages/AttackMethods"));
 const Runs = lazy(() => import("./pages/Runs"));
 const RunDetail = lazy(() => import("./pages/RunDetail"));
 const NewRun = lazy(() => import("./pages/NewRun"));
@@ -27,6 +28,7 @@ export default function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/targets" element={<Targets />} />
           <Route path="/assets" element={<Assets />} />
+          <Route path="/attack-methods" element={<AttackMethods />} />
           <Route path="/datasets" element={<Navigate to="/assets" replace />} />
           <Route path="/runs" element={<Runs />} />
           <Route path="/runs/new" element={<NewRun />} />

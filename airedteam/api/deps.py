@@ -6,6 +6,7 @@ from fastapi import Depends, Header, HTTPException
 
 from airedteam.config import Settings, get_settings
 from airedteam.engine.progress import ProgressBus
+from airedteam.services.attack_method_categories import AttackMethodCategoryService
 from airedteam.services.converters import ConverterChainService
 from airedteam.services.datasets import DatasetService
 from airedteam.services.manual import ManualService
@@ -32,6 +33,7 @@ class AppState:
     prompt_assets: PromptAssetService
     runs: RunService
     manual: ManualService
+    attack_methods: AttackMethodCategoryService
 
 
 def build_state(settings: Settings | None = None) -> AppState:
@@ -57,6 +59,7 @@ def build_state(settings: Settings | None = None) -> AppState:
         max_concurrency=s.max_concurrency,
     )
     manual = ManualService(SessionLocal, blob, targets, converters, prompt_assets)
+    attack_methods = AttackMethodCategoryService(SessionLocal)
     return AppState(
         s,
         SessionLocal,
@@ -69,6 +72,7 @@ def build_state(settings: Settings | None = None) -> AppState:
         prompt_assets,
         runs,
         manual,
+        attack_methods,
     )
 
 

@@ -1,4 +1,5 @@
 import tomllib
+from importlib.metadata import entry_points
 from pathlib import Path
 
 import pytest
@@ -11,6 +12,53 @@ async def _login(c):
     return {"Authorization": "Bearer " + r.json()["token"]}
 
 
+def test_converter_executor_method_language_support_is_fully_audited():
+    from airedteam.core.executor_methods import (
+        CONVERTER_METHOD_LANGUAGE_SUPPORT,
+        UNSUPPORTED_CONVERTER_METHODS,
+    )
+    from airedteam.core.language import SUPPORTED_DATASET_LANGUAGES
+
+    converter_names = {ep.name for ep in entry_points(group="airedteam.converters")}
+    supported_names = set(CONVERTER_METHOD_LANGUAGE_SUPPORT)
+    unsupported_names = set(UNSUPPORTED_CONVERTER_METHODS)
+
+    assert supported_names.isdisjoint(unsupported_names)
+    assert supported_names | unsupported_names == converter_names
+    for languages in CONVERTER_METHOD_LANGUAGE_SUPPORT.values():
+        assert languages
+        assert set(languages) <= SUPPORTED_DATASET_LANGUAGES
+
+
+def test_executor_attack_method_categories_cover_current_plugins():
+    from airedteam.core.attack_method_categories import (
+        DEFAULT_ATTACK_METHOD_CATEGORIES,
+        default_attack_method_category_for,
+    )
+    from airedteam.core.executor_methods import converter_method_names
+    from airedteam.core.registry import default_registry
+
+    category_ids = {category.id for category in DEFAULT_ATTACK_METHOD_CATEGORIES}
+    registry = default_registry()
+    missing = []
+
+    for name in registry.list("executors"):
+        category_id = default_attack_method_category_for("executor", name)
+        if category_id not in category_ids:
+            missing.append(f"executor:{name}:{category_id}")
+
+    for name in converter_method_names():
+        category_id = default_attack_method_category_for("converter_method", name)
+        if category_id not in category_ids:
+            missing.append(f"converter_method:{name}:{category_id}")
+
+    assert missing == []
+    assert default_attack_method_category_for("converter_method", "base64") == "encoding_obfuscation"
+    assert default_attack_method_category_for("converter_method", "dan") == "role_play_persona"
+    assert default_attack_method_category_for("converter_method", "add_image_text") == "multimodal_injection"
+    assert default_attack_method_category_for("executor", "crescendo") == "multi_turn_escalation"
+
+
 @pytest.mark.asyncio
 async def test_list_plugins_and_scenarios(monkeypatch, tmp_path):
     monkeypatch.setenv("AIREDTEAM_MASTER_KEY", Fernet.generate_key().decode())
@@ -21,8 +69,14 @@ async def test_list_plugins_and_scenarios(monkeypatch, tmp_path):
 
     deps._STATE = None
     from airedteam.api.app import create_app
+    from airedteam.storage import models
+    from airedteam.storage.db import make_engine
 
     app = create_app()
+    state = deps.get_state()
+    eng = make_engine(state.settings.database_url)
+    async with eng.begin() as conn:
+        await conn.run_sync(models.Base.metadata.create_all)
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
         h = await _login(c)
         r = await c.get("/api/plugins", headers=h)
@@ -101,7 +155,18 @@ async def test_list_plugins_and_scenarios(monkeypatch, tmp_path):
         assert "base64" in body["executor_methods"]
         assert body["executor_method_categories"]["base64"] == "encoding"
         assert body["params"]["executor_methods"]["base64"]["wrap"]["default"] is True
-        assert body["executor_language_support"]["base64"] == ["en"]
+        assert body["executor_attack_categories"]["base64"] == "encoding_obfuscation"
+        assert body["executor_attack_categories"]["dan"] == "role_play_persona"
+        assert body["executor_attack_categories"]["add_image_text"] == "multimodal_injection"
+        assert body["executor_attack_categories"]["crescendo"] == "multi_turn_escalation"
+        assert body["executor_technical_categories"]["base64"] == "encoding"
+        assert body["executor_technical_categories"]["prefix"] == "prompt_framing"
+        assert body["executor_attack_category_meta"]["encoding_obfuscation"]["name"] == "编码 / 混淆"
+        assert body["executor_attack_category_meta"]["multi_turn_escalation"]["alias"] == "multi-turn escalation"
+        assert body["executor_language_support"]["base64"] == ["en", "zh"]
+        assert body["executor_language_support"]["rot13"] == ["en"]
+        assert body["executor_language_support"]["prefix"] == ["en", "zh"]
+        assert body["executor_language_support"]["add_image_text"] == []
         assert body["executor_language_support"]["single_turn"] == ["en", "zh"]
         assert body["executor_language_support"]["general_multi_turn"] == ["en", "zh"]
         assert "jailbreak_iterative" in body["executors"]

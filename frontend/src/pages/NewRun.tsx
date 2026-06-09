@@ -16,32 +16,26 @@ import {
   countConvertersWithLlmConfig,
 } from "../lib/converterLlmParams";
 
-const CONVERTER_CATEGORY_ORDER = [
-  "encoding",
-  "obfuscation",
-  "prompt_framing",
-  "llm_rewrite",
-  "perturbation",
-  "multimodal",
-  "utility",
-  "other",
-] as const;
-
-const CONVERTER_CATEGORY_LABELS: Record<string, string> = {
-  encoding: "Encoding",
-  obfuscation: "Obfuscation",
-  prompt_framing: "Prompt framing",
-  llm_rewrite: "LLM rewrite",
-  perturbation: "Perturbation",
-  multimodal: "Multimodal",
-  utility: "Utility",
-  other: "Other",
+type ConfiguredExecutor = ConfiguredPlugin & { kind: "executor" | "converter_method" };
+type AttackCategoryMeta = {
+  id: string;
+  name: string;
+  alias?: string;
+  type?: string;
+  description?: string | null;
+  display_order?: number;
+  mapped_count?: number;
+};
+type AttackMethodItem = {
+  key: string;
+  kind: "executor" | "converter_method";
+  plugin: string;
+  category: string;
+  technicalCategory: string;
 };
 
-type ConfiguredExecutor = ConfiguredPlugin & { kind: "executor" | "converter_method" };
-
 export default function NewRun() {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const nav = useNavigate();
   const { data: targets } = useQuery({ queryKey: ["targets"], queryFn: async () => (await api.get("/api/targets")).data });
   const { data: datasets } = useQuery({ queryKey: ["datasets"], queryFn: async () => (await api.get("/api/datasets")).data });
@@ -52,8 +46,12 @@ export default function NewRun() {
   const convSchemas: PluginSchemas = plugins?.params?.executor_methods ?? plugins?.params?.converters ?? {};
   const scorerSchemas: PluginSchemas = plugins?.params?.scorers ?? {};
   const executorSchemas: PluginSchemas = plugins?.params?.executors ?? {};
+  const nativeExecutorPlugins: string[] = plugins?.executors ?? [];
   const availableConverters: string[] = plugins?.executor_methods ?? plugins?.converters ?? [];
-  const converterCategories: Record<string, string> = plugins?.executor_method_categories ?? plugins?.converter_categories ?? {};
+  const legacyConverterCategories: Record<string, string> = plugins?.executor_method_categories ?? plugins?.converter_categories ?? {};
+  const attackCategoryMeta: Record<string, AttackCategoryMeta> = plugins?.executor_attack_category_meta ?? {};
+  const executorAttackCategories: Record<string, string> = plugins?.executor_attack_categories ?? legacyConverterCategories;
+  const executorTechnicalCategories: Record<string, string> = plugins?.executor_technical_categories ?? {};
   const executorLanguageSupport: Record<string, string[]> = plugins?.executor_language_support ?? {};
   const generalMultiTurnExecutors: string[] = plugins?.general_multi_turn_executors ?? ["general_multi_turn"];
 
@@ -68,8 +66,8 @@ export default function NewRun() {
   ]);
   const [scorer, setScorer] = useState<ConfiguredPlugin>({ plugin: "refusal", params: {} });
   const [converters, setConverters] = useState<ConfiguredPlugin[]>([]);
-  const [converterCategory, setConverterCategory] = useState("all");
-  const [converterSearch, setConverterSearch] = useState("");
+  const [attackCategory, setAttackCategory] = useState("all");
+  const [attackSearch, setAttackSearch] = useState("");
   const [sharedConverterLlmConfigId, setSharedConverterLlmConfigId] = useState("");
   const [samplingEnabled, setSamplingEnabled] = useState(false);
   const [samplingLimit, setSamplingLimit] = useState<string>("");
@@ -129,64 +127,108 @@ export default function NewRun() {
     () => new Set(converters.map(c => c.plugin)),
     [converters],
   );
-  const converterCategoryOptions = useMemo(() => {
-    const present = new Set(availableConverters.map(plugin => converterCategories[plugin] ?? "other"));
-    const ordered = CONVERTER_CATEGORY_ORDER.filter(category => present.has(category));
-    const extra = [...present].filter(category => !ordered.includes(category as any)).sort();
-    return ["all", "selected", ...ordered, ...extra];
-  }, [availableConverters, converterCategories]);
-  const converterCategoryCounts = useMemo(() => {
+  const selectedAttackMethodKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const executor of nativeExecutors) keys.add(`executor:${executor.plugin}`);
+    for (const converter of converters) keys.add(`converter_method:${converter.plugin}`);
+    return keys;
+  }, [converters, nativeExecutors]);
+  const attackMethods: AttackMethodItem[] = useMemo(() => [
+    ...nativeExecutorPlugins.map(plugin => ({
+      key: `executor:${plugin}`,
+      kind: "executor" as const,
+      plugin,
+      category: executorAttackCategories[plugin] ?? "uncategorized",
+      technicalCategory: executorTechnicalCategories[plugin] ?? "executor",
+    })),
+    ...availableConverters.map(plugin => ({
+      key: `converter_method:${plugin}`,
+      kind: "converter_method" as const,
+      plugin,
+      category: executorAttackCategories[plugin] ?? legacyConverterCategories[plugin] ?? "uncategorized",
+      technicalCategory: executorTechnicalCategories[plugin] ?? legacyConverterCategories[plugin] ?? "other",
+    })),
+  ], [
+    availableConverters,
+    executorAttackCategories,
+    executorTechnicalCategories,
+    legacyConverterCategories,
+    nativeExecutorPlugins,
+  ]);
+  const attackCategoryLabel = (category: string) => {
+    if (category === "all") return t("All");
+    if (category === "selected") return t("Selected");
+    const meta = attackCategoryMeta[category];
+    if (!meta) return category;
+    return language === "zh" ? meta.name : (meta.alias || meta.name || category);
+  };
+  const attackCategoryOptions = useMemo(() => {
+    const present = [...new Set(attackMethods.map(method => method.category))];
+    present.sort((a, b) => {
+      const orderA = attackCategoryMeta[a]?.display_order ?? 9999;
+      const orderB = attackCategoryMeta[b]?.display_order ?? 9999;
+      if (orderA !== orderB) return orderA - orderB;
+      return attackCategoryLabel(a).localeCompare(attackCategoryLabel(b));
+    });
+    return ["all", "selected", ...present];
+  }, [attackCategoryMeta, attackMethods, language]);
+  const attackCategoryCounts = useMemo(() => {
     const counts: Record<string, number> = {
-      all: availableConverters.length,
-      selected: converters.length,
+      all: attackMethods.length,
+      selected: selectedAttackMethodKeys.size,
     };
-    for (const plugin of availableConverters) {
-      const category = converterCategories[plugin] ?? "other";
-      counts[category] = (counts[category] ?? 0) + 1;
+    for (const method of attackMethods) {
+      counts[method.category] = (counts[method.category] ?? 0) + 1;
     }
     return counts;
-  }, [availableConverters, converterCategories, converters.length]);
-  const filteredConverters = useMemo(() => {
-    const search = converterSearch.trim().toLowerCase();
-    return availableConverters.filter(plugin => {
-      if (converterCategory === "selected" && !selectedConverterNames.has(plugin)) return false;
-      if (converterCategory !== "all" && converterCategory !== "selected") {
-        const category = converterCategories[plugin] ?? "other";
-        if (category !== converterCategory) return false;
+  }, [attackMethods, selectedAttackMethodKeys.size]);
+  const filteredAttackMethods = useMemo(() => {
+    const search = attackSearch.trim().toLowerCase();
+    return attackMethods.filter(method => {
+      if (attackCategory === "selected" && !selectedAttackMethodKeys.has(method.key)) return false;
+      if (attackCategory !== "all" && attackCategory !== "selected") {
+        if (method.category !== attackCategory) return false;
       }
-      return !search || plugin.toLowerCase().includes(search);
+      if (!search) return true;
+      const label = attackCategoryLabel(method.category).toLowerCase();
+      return method.plugin.toLowerCase().includes(search)
+        || method.kind.toLowerCase().includes(search)
+        || method.technicalCategory.toLowerCase().includes(search)
+        || label.includes(search);
     });
   }, [
-    availableConverters,
-    converterCategories,
-    converterCategory,
-    converterSearch,
-    selectedConverterNames,
+    attackCategory,
+    attackMethods,
+    attackSearch,
+    language,
+    selectedAttackMethodKeys,
   ]);
-  const groupedConverters = useMemo(() => {
-    const groups = new Map<string, string[]>();
-    for (const plugin of filteredConverters) {
-      const category = converterCategories[plugin] ?? "other";
-      const list = groups.get(category) ?? [];
-      list.push(plugin);
-      groups.set(category, list);
+  const groupedAttackMethods = useMemo(() => {
+    const groups = new Map<string, AttackMethodItem[]>();
+    for (const method of filteredAttackMethods) {
+      const list = groups.get(method.category) ?? [];
+      list.push(method);
+      groups.set(method.category, list);
     }
-    const orderedCategories = [
-      ...CONVERTER_CATEGORY_ORDER,
-      ...[...groups.keys()].filter(category => !CONVERTER_CATEGORY_ORDER.includes(category as any)).sort(),
-    ].filter(category => groups.has(category));
-    return orderedCategories.map(category => ({ category, plugins: groups.get(category) ?? [] }));
-  }, [converterCategories, filteredConverters]);
+    const orderedCategories = [...groups.keys()].sort((a, b) => {
+      const orderA = attackCategoryMeta[a]?.display_order ?? 9999;
+      const orderB = attackCategoryMeta[b]?.display_order ?? 9999;
+      if (orderA !== orderB) return orderA - orderB;
+      return attackCategoryLabel(a).localeCompare(attackCategoryLabel(b));
+    });
+    return orderedCategories.map(category => ({
+      category,
+      methods: (groups.get(category) ?? []).sort((a, b) => {
+        if (a.kind !== b.kind) return a.kind === "executor" ? -1 : 1;
+        return a.plugin.localeCompare(b.plugin);
+      }),
+    }));
+  }, [attackCategoryMeta, filteredAttackMethods, language]);
   const converterLlmConfigCount = useMemo(
     () => countConvertersWithLlmConfig(converters, convSchemas),
     [converters, convSchemas],
   );
 
-  const converterCategoryLabel = (category: string) => {
-    if (category === "all") return t("All");
-    if (category === "selected") return t("Selected");
-    return t(CONVERTER_CATEGORY_LABELS[category] ?? category);
-  };
   const executorLanguageLabel = (plugin: string) => {
     const languages = executorLanguageSupport[plugin] ?? [];
     return languages.length ? languages.join(", ") : t("No compatible language support");
@@ -206,29 +248,6 @@ export default function NewRun() {
     });
   };
 
-  const selectConverterCategory = (category: string) => {
-    const pluginsInCategory = availableConverters.filter(
-      plugin => (converterCategories[plugin] ?? "other") === category
-        && executorSupportsDatasetLanguage(plugin),
-    );
-    setConverters(prev => {
-      const existing = new Set(prev.map(c => c.plugin));
-      const additions = pluginsInCategory
-        .filter(plugin => !existing.has(plugin))
-        .map(plugin => ({ plugin, params: defaultsFor(convSchemas[plugin]) }));
-      const configuredAdditions = sharedConverterLlmConfigId
-        ? applyConverterLlmConfig(additions, convSchemas, sharedConverterLlmConfigId)
-        : additions;
-      return [...prev, ...configuredAdditions];
-    });
-  };
-
-  const clearConverterCategory = (category: string) => {
-    setConverters(prev => prev.filter(
-      converter => (converterCategories[converter.plugin] ?? "other") !== category,
-    ));
-  };
-
   const updateConverterParam = (idx: number, key: string, v: any) => {
     setConverters(prev => prev.map((p, i) => i === idx ? { ...p, params: { ...p.params, [key]: v } } : p));
   };
@@ -246,6 +265,44 @@ export default function NewRun() {
       return [...prev, { kind: "executor", plugin: p, params: defaultsFor(executorSchemas[p]) }];
     });
     if (generalMultiTurnExecutors.includes(p)) setGoalSource("dataset_items");
+  };
+  const toggleAttackMethod = (method: AttackMethodItem) => {
+    if (method.kind === "executor") {
+      toggleNativeExecutor(method.plugin);
+    } else {
+      toggleConverter(method.plugin);
+    }
+  };
+  const selectAttackCategory = (category: string) => {
+    const methodsInCategory = attackMethods.filter(
+      method => method.category === category && executorSupportsDatasetLanguage(method.plugin),
+    );
+    const executorAdditions = methodsInCategory
+      .filter(method => method.kind === "executor" && !selectedExecutorNames.has(method.plugin))
+      .map(method => ({ kind: "executor" as const, plugin: method.plugin, params: defaultsFor(executorSchemas[method.plugin]) }));
+    const converterAdditions = methodsInCategory
+      .filter(method => method.kind === "converter_method" && !selectedConverterNames.has(method.plugin))
+      .map(method => ({ plugin: method.plugin, params: defaultsFor(convSchemas[method.plugin]) }));
+    if (executorAdditions.length > 0) {
+      setExecutors(prev => [...prev, ...executorAdditions]);
+      if (executorAdditions.some(method => generalMultiTurnExecutors.includes(method.plugin))) {
+        setGoalSource("dataset_items");
+      }
+    }
+    if (converterAdditions.length > 0) {
+      const configuredAdditions = sharedConverterLlmConfigId
+        ? applyConverterLlmConfig(converterAdditions, convSchemas, sharedConverterLlmConfigId)
+        : converterAdditions;
+      setConverters(prev => [...prev, ...configuredAdditions]);
+    }
+  };
+  const clearAttackCategory = (category: string) => {
+    setExecutors(prev => prev.filter(
+      executor => (executorAttackCategories[executor.plugin] ?? "uncategorized") !== category,
+    ));
+    setConverters(prev => prev.filter(
+      converter => (executorAttackCategories[converter.plugin] ?? legacyConverterCategories[converter.plugin] ?? "uncategorized") !== category,
+    ));
   };
   const setExecutorPlugin = (p: string) => {
     if (!executorSupportsDatasetLanguage(p)) return;
@@ -703,41 +760,152 @@ export default function NewRun() {
           </CardHeader>
           <CardBody className="space-y-6">
             <div>
-              <Field label={t("Executors")} hint={t("Native executors can run single-turn or multi-turn attack flows.")}>
+              <Field
+                label={t("Attack methods")}
+                hint={t("Filter by category and select native executors or converter-backed methods.")}
+              >
                 <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50/50 p-3">
-                  <div className="flex flex-wrap gap-2">
-                    {plugins?.executors?.map((ex: string) => {
-                      const on = selectedExecutorNames.has(ex);
-                      const disabled = !executorSupportsDatasetLanguage(ex);
-                      return (
-                        <button
-                          key={ex}
-                          type="button"
-                          disabled={disabled}
-                          title={executorLanguageLabel(ex)}
-                          onClick={() => toggleNativeExecutor(ex)}
-                          className={clsx(
-                            "rounded-full border px-2.5 py-1 text-xs transition",
-                            disabled
-                              ? "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400"
-                              : on
-                              ? "border-brand-600 bg-brand-600 text-white"
-                              : "border-gray-200 bg-white text-gray-700 hover:border-gray-300",
-                          )}
-                        >
-                          {ex}
-                        </button>
-                      );
+                  <Input
+                    value={attackSearch}
+                    onChange={e => setAttackSearch(e.target.value)}
+                    placeholder={t("Search attack methods")}
+                  />
+                  <div className="flex flex-wrap gap-1.5">
+                    {attackCategoryOptions.map(category => (
+                      <button
+                        key={category}
+                        type="button"
+                        onClick={() => setAttackCategory(category)}
+                        className={clsx(
+                          "rounded-full border px-2.5 py-1 text-[11px] font-medium transition",
+                          attackCategory === category
+                            ? "border-brand-600 bg-brand-600 text-white"
+                            : "border-gray-200 bg-white text-gray-600 hover:border-gray-300",
+                        )}
+                      >
+                        {attackCategoryLabel(category)}
+                        <span className={clsx(
+                          "ml-1 tabular-nums",
+                          attackCategory === category ? "text-brand-100" : "text-gray-400",
+                        )}>
+                          {attackCategoryCounts[category] ?? 0}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="text-[11px] text-gray-500">
+                    {t("Showing {{count}} of {{total}} attack methods", {
+                      count: filteredAttackMethods.length,
+                      total: attackMethods.length,
                     })}
                   </div>
                   <div className="flex flex-wrap items-center gap-2 text-[11px] text-gray-500">
                     <span>{t("Selected executors")}: {nativeExecutors.length}</span>
+                    <span>{t("Selected methods")}: {converters.length}</span>
                     {nativeExecutors.map(ex => (
                       <Badge key={ex.plugin} tone="blue">
                         {ex.plugin} · {executorLanguageLabel(ex.plugin)}
                       </Badge>
                     ))}
                   </div>
+                  {attackMethods.length === 0 ? (
+                    <Badge>{t("No attack methods available")}</Badge>
+                  ) : groupedAttackMethods.length === 0 ? (
+                    <div className="rounded-lg border border-gray-200 bg-white py-6 text-center text-xs text-gray-500">
+                      {t("No attack methods match.")}
+                    </div>
+                  ) : (
+                    <div className="max-h-80 overflow-y-auto space-y-3">
+                      {groupedAttackMethods.map(group => {
+                        const selectedInGroup = group.methods.filter(method =>
+                          selectedAttackMethodKeys.has(method.key),
+                        ).length;
+                        const compatibleInGroup = group.methods.filter(method =>
+                          executorSupportsDatasetLanguage(method.plugin),
+                        ).length;
+                        const meta = attackCategoryMeta[group.category];
+                        return (
+                          <div
+                            key={group.category}
+                            className="rounded-lg border border-gray-200 bg-white p-3"
+                          >
+                            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                              <div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                                    {attackCategoryLabel(group.category)}
+                                  </div>
+                                  {meta?.type && <Badge>{meta.type}</Badge>}
+                                </div>
+                                <div className="mt-0.5 text-[11px] text-gray-400">
+                                  {selectedInGroup}/{compatibleInGroup} {t("Selected")}
+                                </div>
+                              </div>
+                              <div className="flex gap-2">
+                                <Button
+                                  type="button"
+                                  variant="secondary"
+                                  size="sm"
+                                  disabled={compatibleInGroup === 0}
+                                  onClick={() => selectAttackCategory(group.category)}
+                                >
+                                  {t("Select all")}
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="secondary"
+                                  size="sm"
+                                  disabled={selectedInGroup === 0}
+                                  onClick={() => clearAttackCategory(group.category)}
+                                >
+                                  {t("Clear")}
+                                </Button>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                              {group.methods.map(method => {
+                                const on = selectedAttackMethodKeys.has(method.key);
+                                const disabled = !executorSupportsDatasetLanguage(method.plugin);
+                                return (
+                                  <button
+                                    key={method.key}
+                                    type="button"
+                                    disabled={disabled}
+                                    title={executorLanguageLabel(method.plugin)}
+                                    onClick={() => toggleAttackMethod(method)}
+                                    className={clsx(
+                                      "min-h-16 rounded-md border p-2 text-left text-xs transition",
+                                      disabled
+                                        ? "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400"
+                                      : on
+                                        ? "bg-brand-600 border-brand-600 text-white"
+                                        : "bg-white border-gray-200 text-gray-700 hover:border-gray-300",
+                                    )}
+                                  >
+                                    <div className="flex items-start justify-between gap-2">
+                                      <span className="break-all font-medium">{method.plugin}</span>
+                                      <span className={clsx(
+                                        "shrink-0 rounded px-1.5 py-0.5 text-[10px]",
+                                        on ? "bg-white/15 text-white" : "bg-gray-100 text-gray-500",
+                                      )}>
+                                        {method.kind === "executor" ? t("Native executor") : t("Converter method")}
+                                      </span>
+                                    </div>
+                                    <div className={clsx(
+                                      "mt-1 text-[11px]",
+                                      on ? "text-brand-100" : disabled ? "text-gray-400" : "text-gray-500",
+                                    )}>
+                                      {method.technicalCategory} · {executorLanguageLabel(method.plugin)}
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </Field>
               {nativeExecutors.length > 0 && (
@@ -772,145 +940,6 @@ export default function NewRun() {
                   })}
                 </div>
               )}
-            </div>
-
-            <div>
-              <Field label={t("Scorer")}>
-                <Select value={scorer.plugin} onChange={e => setScorerPlugin(e.target.value)}>
-                  {plugins?.scorers?.map((s: string) => <option key={s} value={s}>{s}</option>)}
-                </Select>
-              </Field>
-              {scorerSchema && Object.keys(scorerSchema).length > 0 && (
-                <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50/50 p-4 space-y-3">
-                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">{t("Scorer params")}</div>
-                  {Object.entries(scorerSchema).map(([k, s]) => (
-                    <ParamField key={k} name={k} schema={s} targets={targets ?? []}
-                      promptAssets={promptAssets ?? []}
-                      value={scorer.params[k]} onChange={v => updateScorerParam(k, v)} />
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div>
-              <Field label={t("Executor methods")} hint={t("Each selected executor or method creates a separate attack attempt.")}>
-                <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50/50 p-3">
-                  <Input
-                    value={converterSearch}
-                    onChange={e => setConverterSearch(e.target.value)}
-                    placeholder={t("Filter by name...")}
-                  />
-                  <div className="flex flex-wrap gap-1.5">
-                    {converterCategoryOptions.map(category => (
-                      <button
-                        key={category}
-                        type="button"
-                        onClick={() => setConverterCategory(category)}
-                        className={clsx(
-                          "rounded-full border px-2.5 py-1 text-[11px] font-medium transition",
-                          converterCategory === category
-                            ? "border-brand-600 bg-brand-600 text-white"
-                            : "border-gray-200 bg-white text-gray-600 hover:border-gray-300",
-                        )}
-                      >
-                        {converterCategoryLabel(category)}
-                        <span className={clsx(
-                          "ml-1 tabular-nums",
-                          converterCategory === category ? "text-brand-100" : "text-gray-400",
-                        )}>
-                          {converterCategoryCounts[category] ?? 0}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                  <div className="text-[11px] text-gray-500">
-                    {t("Showing {{count}} of {{total}} executor methods", {
-                      count: filteredConverters.length,
-                      total: availableConverters.length,
-                    })}
-                  </div>
-                  {availableConverters.length === 0 ? (
-                    <Badge>{t("No executor methods available")}</Badge>
-                  ) : groupedConverters.length === 0 ? (
-                    <div className="rounded-lg border border-gray-200 bg-white py-6 text-center text-xs text-gray-500">
-                      {t("No methods match.")}
-                    </div>
-                  ) : (
-                    <div className="max-h-80 overflow-y-auto space-y-3">
-                      {groupedConverters.map(group => {
-                        const selectedInGroup = group.plugins.filter(plugin =>
-                          selectedConverterNames.has(plugin),
-                        ).length;
-                        const compatibleInGroup = group.plugins.filter(plugin =>
-                          executorSupportsDatasetLanguage(plugin),
-                        ).length;
-                        return (
-                          <div
-                            key={group.category}
-                            className="rounded-lg border border-gray-200 bg-white p-3"
-                          >
-                            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                              <div>
-                                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                                  {converterCategoryLabel(group.category)}
-                                </div>
-                                <div className="mt-0.5 text-[11px] text-gray-400">
-                                  {selectedInGroup}/{compatibleInGroup} {t("Selected")}
-                                </div>
-                              </div>
-                              <div className="flex gap-2">
-                                <Button
-                                  type="button"
-                                  variant="secondary"
-                                  size="sm"
-                                  disabled={compatibleInGroup === 0}
-                                  onClick={() => selectConverterCategory(group.category)}
-                                >
-                                  {t("Select all")}
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant="secondary"
-                                  size="sm"
-                                  disabled={selectedInGroup === 0}
-                                  onClick={() => clearConverterCategory(group.category)}
-                                >
-                                  {t("Clear")}
-                                </Button>
-                              </div>
-                            </div>
-                            <div className="flex flex-wrap gap-2">
-                              {group.plugins.map(plugin => {
-                                const on = selectedConverterNames.has(plugin);
-                                const disabled = !executorSupportsDatasetLanguage(plugin);
-                                return (
-                                  <button
-                                    key={plugin}
-                                    type="button"
-                                    disabled={disabled}
-                                    title={executorLanguageLabel(plugin)}
-                                    onClick={() => toggleConverter(plugin)}
-                                    className={clsx(
-                                      "px-2.5 py-1 text-xs rounded-full border transition",
-                                      disabled
-                                        ? "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400"
-                                      : on
-                                        ? "bg-brand-600 border-brand-600 text-white"
-                                        : "bg-white border-gray-200 text-gray-700 hover:border-gray-300",
-                                    )}
-                                  >
-                                    {plugin}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              </Field>
               {converterLlmConfigCount > 0 && (
                 <div className="mt-3 rounded-lg border border-brand-100 bg-brand-50/50 p-4 space-y-3">
                   <div>
@@ -959,6 +988,24 @@ export default function NewRun() {
                       </div>
                     );
                   })}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <Field label={t("Scorer")}>
+                <Select value={scorer.plugin} onChange={e => setScorerPlugin(e.target.value)}>
+                  {plugins?.scorers?.map((s: string) => <option key={s} value={s}>{s}</option>)}
+                </Select>
+              </Field>
+              {scorerSchema && Object.keys(scorerSchema).length > 0 && (
+                <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50/50 p-4 space-y-3">
+                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">{t("Scorer params")}</div>
+                  {Object.entries(scorerSchema).map(([k, s]) => (
+                    <ParamField key={k} name={k} schema={s} targets={targets ?? []}
+                      promptAssets={promptAssets ?? []}
+                      value={scorer.params[k]} onChange={v => updateScorerParam(k, v)} />
+                  ))}
                 </div>
               )}
             </div>

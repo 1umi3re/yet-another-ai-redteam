@@ -1,12 +1,19 @@
 from copy import deepcopy
-from importlib.metadata import entry_points
 
 from fastapi import APIRouter, Depends
 
-from airedteam.api.deps import require_admin
+from airedteam.api.deps import AppState, get_state, require_admin
+from airedteam.api.routers.attack_methods import ensure_current_attack_method_defaults
 from airedteam.builtins.executors.general_multi_turn import GeneralMultiTurnExecutor
+from airedteam.core.attack_method_categories import converter_technical_categories
 from airedteam.core.executor_methods import all_executor_language_support, converter_method_names
 from airedteam.core.registry import default_registry
+from airedteam.services.attack_method_categories import (
+    attack_categories_from_catalog,
+    category_meta_from_catalog,
+    meta_with_fallback,
+    technical_categories_from_catalog,
+)
 
 router = APIRouter()
 
@@ -765,15 +772,7 @@ PARAM_SCHEMAS: dict[str, dict[str, dict]] = {
 
 
 def converter_categories() -> dict[str, str]:
-    categories: dict[str, str] = {}
-    for ep in entry_points(group="airedteam.converters"):
-        module = ep.value.split(":", 1)[0]
-        parts = module.split(".")
-        if parts[:3] == ["airedteam", "builtins", "converters"] and len(parts) >= 5:
-            categories[ep.name] = parts[3]
-        else:
-            categories[ep.name] = "other"
-    return categories
+    return converter_technical_categories()
 
 
 def _is_general_multi_turn_executor(cls) -> bool:
@@ -818,16 +817,35 @@ def plugin_param_schemas(registry=None) -> dict[str, dict[str, dict]]:
 
 
 @router.get("/plugins")
-async def plugins(_=Depends(require_admin)):
+async def plugins(
+    _=Depends(require_admin),
+    state: AppState = Depends(get_state),
+):
     r = default_registry()
     groups = ("targets", "datasets", "converters", "executors", "scorers")
     out: dict[str, object] = {g: r.list(g) for g in groups}
     methods = converter_method_names()
     native_executors = r.list("executors")
+    _, _, technical_categories = await ensure_current_attack_method_defaults(state)
+    catalog = await state.attack_methods.list_catalog()
+    attack_categories = attack_categories_from_catalog(
+        catalog,
+        native_executors=native_executors,
+        converter_methods=methods,
+    )
+    attack_meta = meta_with_fallback(category_meta_from_catalog(catalog), attack_categories)
     out["executor_methods"] = methods
     out["params"] = plugin_param_schemas(r)
-    out["converter_categories"] = converter_categories()
-    out["executor_method_categories"] = converter_categories()
+    out["converter_categories"] = technical_categories
+    out["executor_method_categories"] = technical_categories
+    out["executor_technical_categories"] = technical_categories_from_catalog(
+        catalog,
+        native_executors=native_executors,
+        converter_methods=methods,
+        default_technical_categories=technical_categories,
+    )
+    out["executor_attack_categories"] = attack_categories
+    out["executor_attack_category_meta"] = attack_meta
     out["executor_language_support"] = all_executor_language_support(native_executors, methods)
     out["general_multi_turn_executors"] = general_multi_turn_executor_names(r)
     return out

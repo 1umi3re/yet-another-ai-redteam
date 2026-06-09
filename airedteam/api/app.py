@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from airedteam.api.deps import get_state
+from airedteam.api.routers import attack_methods as attack_methods_router
 from airedteam.api.routers import converters as converters_router
 from airedteam.api.routers import datasets as datasets_router
 from airedteam.api.routers import login as login_router
@@ -43,6 +44,7 @@ def create_app() -> FastAPI:
     app.include_router(targets_router.router, prefix="/api", tags=["targets"])
     app.include_router(datasets_router.router, prefix="/api", tags=["datasets"])
     app.include_router(plugins_router.router, prefix="/api", tags=["plugins"])
+    app.include_router(attack_methods_router.router, prefix="/api", tags=["attack-methods"])
     app.include_router(scenarios_router.router, prefix="/api", tags=["scenarios"])
     app.include_router(runs_router.router, prefix="/api", tags=["runs"])
     app.include_router(manual_router.router, prefix="/api", tags=["manual"])
