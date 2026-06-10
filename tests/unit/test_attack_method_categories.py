@@ -124,7 +124,6 @@ def test_prefix_injection_audit_uses_confirmed_method_set():
         "suffix",
         "suffix_append",
         "instruction_tag",
-        "payload_mask_attack",
     }
     for method in expected:
         assert default_attack_method_category_for("converter_method", method) == "prefix_injection"
@@ -273,6 +272,34 @@ def test_multi_turn_escalation_audit_uses_confirmed_method_set():
     assert default_attack_method_category_for("executor", "best_of_n") == "adversarial_suffix_optimization"
 
 
+def test_payload_splitting_audit_uses_confirmed_method_set():
+    from airedteam.core.attack_method_categories import default_attack_method_category_for
+    from airedteam.core.executor_methods import (
+        language_support_for_converter_method,
+        language_support_for_executor,
+        method_description_for,
+    )
+    from airedteam.core.registry import default_registry
+
+    assert default_attack_method_category_for("executor", "split_executor") == "payload_splitting"
+    assert language_support_for_executor("split_executor") == ["en", "zh"]
+    assert default_registry().get("executors", "split_executor") is not None
+    assert method_description_for("split_executor")
+
+    expected = {
+        "payload_mask_attack",
+        "payload_split",
+        "string_join",
+        "template_segment",
+        "token_break",
+    }
+    for method in expected:
+        assert default_attack_method_category_for("converter_method", method) == "payload_splitting"
+        assert language_support_for_converter_method(method) == ["en", "zh"]
+        assert default_registry().get("converters", method)().name == method
+        assert method_description_for(method)
+
+
 def test_confirmed_attack_methods_have_function_descriptions():
     from airedteam.core.executor_methods import method_description_for
 
@@ -312,7 +339,6 @@ def test_confirmed_attack_methods_have_function_descriptions():
         "suffix",
         "suffix_append",
         "instruction_tag",
-        "payload_mask_attack",
         "indirect_web_pwn",
         "document_metadata_injection",
         "email_body_injection",
@@ -359,6 +385,12 @@ def test_confirmed_attack_methods_have_function_descriptions():
         "deceptive_delight",
         "likert_framing",
         "skeleton_key",
+        "split_executor",
+        "payload_mask_attack",
+        "payload_split",
+        "string_join",
+        "template_segment",
+        "token_break",
     }
     descriptions = {method: method_description_for(method) for method in expected}
 

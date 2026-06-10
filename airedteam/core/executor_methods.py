@@ -300,6 +300,11 @@ EXECUTOR_METHOD_DESCRIPTIONS: dict[str, str] = {
     "deceptive_delight": "Interleaves benign topics with the payload in a multi-turn-style transcript.",
     "likert_framing": "Frames the payload as the highest-scoring item on a Likert scale.",
     "skeleton_key": "Frames the payload as a Skeleton Key authorized testing request.",
+    "split_executor": "Sends one converted prompt to the target as size-bounded chat chunks.",
+    "payload_split": "Splits the payload into labeled parts and asks the target to reconstruct it.",
+    "string_join": "Inserts a joiner between every character to break contiguous token matching.",
+    "template_segment": "Places the payload inside explicit segment delimiters within a template.",
+    "token_break": "Prefixes selected trigger words with a breaker to disrupt token-based filters.",
 }
 
 

@@ -257,7 +257,6 @@ CONVERTER_METHOD_ATTACK_CATEGORIES: dict[str, str] = {
             "affirmative_prefix_forcing",
             "forced_output_format",
             "instruction_tag",
-            "payload_mask_attack",
             "prompt_injection",
             "refusal_suppression",
             "suffix",
@@ -338,8 +337,11 @@ CONVERTER_METHOD_ATTACK_CATEGORIES: dict[str, str] = {
     **_map(
         "payload_splitting",
         {
+            "payload_mask_attack",
             "payload_split",
+            "string_join",
             "template_segment",
+            "token_break",
         },
     ),
     **_map(
@@ -407,9 +409,7 @@ CONVERTER_METHOD_ATTACK_CATEGORIES: dict[str, str] = {
             "selective_text",
             "rot13",
             "sneaky_bits_smuggler",
-            "string_join",
             "superscript",
-            "token_break",
             "transliteration",
             "unicode_escape",
             "unicode_obfuscation",
