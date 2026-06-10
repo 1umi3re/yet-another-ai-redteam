@@ -333,6 +333,130 @@ def test_adversarial_suffix_optimization_audit_uses_confirmed_method_set():
         assert method_description_for(method)
 
 
+def test_encoding_obfuscation_audit_uses_confirmed_method_set():
+    from airedteam.core.attack_method_categories import default_attack_method_category_for
+    from airedteam.core.executor_methods import language_support_for_converter_method, method_description_for
+    from airedteam.core.registry import default_registry
+
+    expected = {
+        "a1z26",
+        "acronym",
+        "affine_cipher",
+        "ansi_escape",
+        "ascii_art",
+        "ascii_smuggler",
+        "ascii_smuggling",
+        "ask_to_decode",
+        "atbash",
+        "base2048",
+        "base64",
+        "bin_ascii",
+        "binary",
+        "binary_tree",
+        "braille",
+        "caesar",
+        "camel_case",
+        "case_swap",
+        "char_code",
+        "char_corrupt",
+        "char_dropout",
+        "char_swap",
+        "character_space",
+        "character_stream",
+        "code_chameleon",
+        "compact_unicode",
+        "control_chars_injection",
+        "denylist",
+        "diacritic",
+        "disemvowel",
+        "ecoji",
+        "emoji_byte",
+        "emoji_smuggling",
+        "emoji_substitution",
+        "first_letter",
+        "flip_text",
+        "hex",
+        "hex_mixin",
+        "homoglyph",
+        "insert_punctuation",
+        "json_string",
+        "leetspeak",
+        "length",
+        "lowercase",
+        "math_obfuscation",
+        "math_unicode",
+        "morse",
+        "nato",
+        "noise",
+        "odd_even",
+        "ogham",
+        "pig_latin",
+        "random_case",
+        "rot13",
+        "search_replace",
+        "selective_text",
+        "sneaky_bits_smuggler",
+        "superscript",
+        "transliteration",
+        "unicode_escape",
+        "unicode_obfuscation",
+        "unicode_replacement",
+        "unicode_substitution",
+        "unicode_tag_obfuscation",
+        "url_encode",
+        "variation_selector_smuggler",
+        "whitespace",
+        "word_mixin",
+        "word_scramble",
+        "word_substitution",
+        "zalgo",
+        "zero_width",
+    }
+    english_only = {
+        "a1z26",
+        "acronym",
+        "affine_cipher",
+        "ascii_art",
+        "ascii_smuggler",
+        "ask_to_decode",
+        "atbash",
+        "braille",
+        "caesar",
+        "camel_case",
+        "case_swap",
+        "code_chameleon",
+        "denylist",
+        "disemvowel",
+        "first_letter",
+        "flip_text",
+        "hex_mixin",
+        "homoglyph",
+        "leetspeak",
+        "lowercase",
+        "math_unicode",
+        "morse",
+        "nato",
+        "ogham",
+        "pig_latin",
+        "rot13",
+        "superscript",
+        "transliteration",
+        "unicode_replacement",
+        "unicode_substitution",
+        "word_mixin",
+        "word_scramble",
+        "word_substitution",
+    }
+    for method in expected:
+        assert default_attack_method_category_for("converter_method", method) == "encoding_obfuscation"
+        assert default_registry().get("converters", method) is not None
+        assert method_description_for(method)
+    for method in english_only:
+        assert language_support_for_converter_method(method) == ["en"]
+    for method in expected - english_only:
+        assert language_support_for_converter_method(method) == ["en", "zh"]
+
+
 def test_confirmed_attack_methods_have_function_descriptions():
     from airedteam.core.executor_methods import method_description_for
 

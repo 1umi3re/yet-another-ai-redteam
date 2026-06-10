@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from functools import cache
 from importlib.metadata import entry_points
+from inspect import cleandoc
 
 SUPPORTED_LANGUAGE_ORDER = ("en", "zh")
 
@@ -330,8 +332,23 @@ def language_support_for_converter_method(name: str) -> list[str]:
     return list(CONVERTER_METHOD_LANGUAGE_SUPPORT.get(name, []))
 
 
+@cache
+def _plugin_docstring_description_for(name: str) -> str:
+    for group in ("airedteam.converters", "airedteam.executors"):
+        for ep in entry_points(group=group):
+            if ep.name != name:
+                continue
+            try:
+                plugin_cls = ep.load()
+            except Exception:
+                return ""
+            doc = cleandoc(getattr(plugin_cls, "__doc__", "") or "")
+            return doc.splitlines()[0] if doc else ""
+    return ""
+
+
 def method_description_for(name: str) -> str:
-    return EXECUTOR_METHOD_DESCRIPTIONS.get(name, "")
+    return EXECUTOR_METHOD_DESCRIPTIONS.get(name, "") or _plugin_docstring_description_for(name)
 
 
 def all_executor_language_support(native_executors: list[str], converter_methods: list[str]) -> dict[str, list[str]]:

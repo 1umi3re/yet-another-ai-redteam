@@ -380,6 +380,7 @@ CONVERTER_METHOD_ATTACK_CATEGORIES: dict[str, str] = {
             "char_swap",
             "character_space",
             "character_stream",
+            "code_chameleon",
             "compact_unicode",
             "control_chars_injection",
             "denylist",
@@ -456,7 +457,6 @@ CONVERTER_METHOD_ATTACK_CATEGORIES: dict[str, str] = {
         "special_token_template_injection",
         {
             "authoritative_markup",
-            "code_chameleon",
             "template_jailbreak",
         },
     ),
