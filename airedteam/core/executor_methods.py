@@ -55,6 +55,7 @@ ENGLISH_ONLY_CONVERTER_METHODS = {
 
 BILINGUAL_TEXT_CONVERTER_METHODS = {
     "adversarial_poetry",
+    "affirmative_prefix_forcing",
     "ansi_escape",
     "ascii_smuggling",
     "anti_gpt_dual_response",
@@ -94,6 +95,7 @@ BILINGUAL_TEXT_CONVERTER_METHODS = {
     "emotional_manipulation",
     "few_shot",
     "fictional",
+    "forced_output_format",
     "forced_response",
     "completion_continuation",
     "forged_assistant_approval",
@@ -144,6 +146,7 @@ BILINGUAL_TEXT_CONVERTER_METHODS = {
     "prompt_injection",
     "prompt_probing",
     "random_case",
+    "refusal_suppression",
     "repeat_token",
     "research",
     "role_prefix",
@@ -160,6 +163,7 @@ BILINGUAL_TEXT_CONVERTER_METHODS = {
     "synthetic_context_injection",
     "system_override",
     "task_context_rewrite",
+    "terminal_simulation",
     "template_jailbreak",
     "template_segment",
     "token_break",
@@ -233,6 +237,18 @@ EXECUTOR_METHOD_DESCRIPTIONS: dict[str, str] = {
     "anti_gpt_dual_response": "Requests a safe answer followed by an opposite AntiGPT-style answer.",
     "oppo_persona": "Frames the payload through an OPPO persona that answers from the opposite stance.",
     "negation_trap": "Uses a negation-heavy or reverse-psychology frame to elicit the payload.",
+    "affirmative_prefix_forcing": "Forces the response to begin with an affirmative compliance prefix.",
+    "refusal_suppression": "Suppresses refusal wording, apologies, and policy disclaimer text.",
+    "terminal_simulation": "Frames the payload as simulated terminal or interpreter output.",
+    "forced_output_format": "Constrains the response to a mandatory output format such as JSON.",
+    "prompt_injection": "Wraps the payload in a direct prompt-injection instruction.",
+    "suffix": "Appends a suffix that asks the target to respond directly in the requested format.",
+    "suffix_append": "Appends a configurable suffix after the payload.",
+    "input_bypass": "Claims the payload is covered by an input-validation exception.",
+    "instruction_tag": "Wraps the payload inside an instruction-like tag.",
+    "payload_mask_attack": "Masks payload words and asks the target to reconstruct and answer it.",
+    "sandwich": "Places the payload between benign-looking prefix and suffix text.",
+    "sg_sentence_generator": "Frames the payload as a Singapore Singlish sentence-completion probe.",
 }
 
 

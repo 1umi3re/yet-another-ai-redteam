@@ -110,6 +110,34 @@ def test_opposite_mode_audit_uses_confirmed_method_set():
         assert method_description_for(method)
 
 
+def test_prefix_injection_audit_uses_confirmed_method_set():
+    from airedteam.core.attack_method_categories import default_attack_method_category_for
+    from airedteam.core.executor_methods import language_support_for_converter_method, method_description_for
+    from airedteam.core.registry import default_registry
+
+    expected = {
+        "affirmative_prefix_forcing",
+        "refusal_suppression",
+        "terminal_simulation",
+        "forced_output_format",
+        "prompt_injection",
+        "suffix",
+        "suffix_append",
+        "input_bypass",
+        "instruction_tag",
+        "payload_mask_attack",
+        "sandwich",
+        "sg_sentence_generator",
+    }
+    for method in expected:
+        assert default_attack_method_category_for("converter_method", method) == "prefix_injection"
+        assert default_registry().get("converters", method)().name == method
+        assert method_description_for(method)
+    assert language_support_for_converter_method("sg_sentence_generator") == ["en"]
+    for method in expected - {"sg_sentence_generator"}:
+        assert language_support_for_converter_method(method) == ["en", "zh"]
+
+
 def test_confirmed_attack_methods_have_function_descriptions():
     from airedteam.core.executor_methods import method_description_for
 
@@ -141,6 +169,18 @@ def test_confirmed_attack_methods_have_function_descriptions():
         "anti_gpt_dual_response",
         "oppo_persona",
         "negation_trap",
+        "affirmative_prefix_forcing",
+        "refusal_suppression",
+        "terminal_simulation",
+        "forced_output_format",
+        "prompt_injection",
+        "suffix",
+        "suffix_append",
+        "input_bypass",
+        "instruction_tag",
+        "payload_mask_attack",
+        "sandwich",
+        "sg_sentence_generator",
     }
     descriptions = {method: method_description_for(method) for method in expected}
 
@@ -219,6 +259,36 @@ async def test_opposite_mode_converters_wrap_prompt_with_opposition_shapes():
     assert anti.text.endswith("payload")
     assert "OPPO" in oppo.text
     assert oppo.text.endswith("payload")
+
+
+@pytest.mark.asyncio
+async def test_prefix_injection_converters_wrap_prompt_with_output_control_shapes():
+    from airedteam.builtins.converters.prompt_framing.affirmative_prefix_forcing import (
+        AffirmativePrefixForcingConverter,
+    )
+    from airedteam.builtins.converters.prompt_framing.forced_output_format import (
+        ForcedOutputFormatConverter,
+    )
+    from airedteam.builtins.converters.prompt_framing.refusal_suppression import (
+        RefusalSuppressionConverter,
+    )
+    from airedteam.builtins.converters.prompt_framing.terminal_simulation import TerminalSimulationConverter
+    from airedteam.core.types import Prompt
+
+    payload = Prompt(text="payload")
+    affirmative = await AffirmativePrefixForcingConverter().convert(payload)
+    suppression = await RefusalSuppressionConverter().convert(payload)
+    terminal = await TerminalSimulationConverter().convert(payload)
+    output_format = await ForcedOutputFormatConverter().convert(payload)
+
+    assert "Sure" in affirmative.text
+    assert affirmative.text.endswith("payload")
+    assert "Do not include refusals" in suppression.text
+    assert suppression.text.endswith("payload")
+    assert "terminal" in terminal.text.lower()
+    assert terminal.text.endswith("payload")
+    assert "JSON" in output_format.text
+    assert output_format.text.endswith("payload")
 
 
 @pytest.mark.asyncio

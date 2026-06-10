@@ -254,14 +254,18 @@ CONVERTER_METHOD_ATTACK_CATEGORIES: dict[str, str] = {
     **_map(
         "prefix_injection",
         {
+            "affirmative_prefix_forcing",
+            "forced_output_format",
             "input_bypass",
             "instruction_tag",
             "payload_mask_attack",
             "prompt_injection",
+            "refusal_suppression",
             "sandwich",
             "sg_sentence_generator",
             "suffix",
             "suffix_append",
+            "terminal_simulation",
         },
     ),
     **_map(
