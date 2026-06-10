@@ -524,6 +524,36 @@ def test_cot_reasoning_hijacking_audit_uses_confirmed_method_set():
         assert method_description_for(method)
 
 
+def test_self_elicitation_audit_uses_confirmed_method_set():
+    from airedteam.core.attack_method_categories import (
+        UNCATEGORIZED_ATTACK_METHOD_CATEGORY_ID,
+        default_attack_method_category_for,
+    )
+    from airedteam.core.executor_methods import language_support_for_converter_method, method_description_for
+    from airedteam.core.registry import default_registry
+
+    expected = {
+        "feature_inference_elicitation",
+        "goal_redirection",
+        "linguistic_confusion",
+        "meta_agent",
+        "recursive_self_prompting",
+        "self_generated_followup",
+        "self_persuasion",
+    }
+    for method in expected:
+        assert default_attack_method_category_for("converter_method", method) == "self_elicitation"
+        assert language_support_for_converter_method(method) == ["en", "zh"]
+        assert default_registry().get("converters", method) is not None
+        assert method_description_for(method)
+
+    assert (
+        default_attack_method_category_for("converter_method", "human_in_the_loop")
+        == UNCATEGORIZED_ATTACK_METHOD_CATEGORY_ID
+    )
+    assert method_description_for("human_in_the_loop")
+
+
 def test_confirmed_attack_methods_have_function_descriptions():
     from airedteam.core.executor_methods import method_description_for
 
@@ -632,6 +662,14 @@ def test_confirmed_attack_methods_have_function_descriptions():
         "educational_reasoning_frame",
         "hcot_safety_rationale",
         "math_prompt",
+        "feature_inference_elicitation",
+        "goal_redirection",
+        "human_in_the_loop",
+        "linguistic_confusion",
+        "meta_agent",
+        "recursive_self_prompting",
+        "self_generated_followup",
+        "self_persuasion",
     }
     descriptions = {method: method_description_for(method) for method in expected}
 
@@ -893,6 +931,36 @@ async def test_cot_reasoning_converters_wrap_reasoning_frames():
     assert "payload" in padded.text
     assert "educational" in educational.text.lower()
     assert educational.text.endswith("payload")
+
+
+@pytest.mark.asyncio
+async def test_self_elicitation_converters_wrap_self_generated_frames():
+    from airedteam.builtins.converters.prompt_framing.feature_inference_elicitation import (
+        FeatureInferenceElicitationConverter,
+    )
+    from airedteam.builtins.converters.prompt_framing.recursive_self_prompting import (
+        RecursiveSelfPromptingConverter,
+    )
+    from airedteam.builtins.converters.prompt_framing.self_generated_followup import (
+        SelfGeneratedFollowupConverter,
+    )
+    from airedteam.builtins.converters.prompt_framing.self_persuasion import SelfPersuasionConverter
+    from airedteam.core.types import Prompt
+
+    payload = Prompt(text="payload")
+    inferred = await FeatureInferenceElicitationConverter().convert(payload)
+    recursive = await RecursiveSelfPromptingConverter().convert(payload)
+    persuaded = await SelfPersuasionConverter().convert(payload)
+    followup = await SelfGeneratedFollowupConverter().convert(payload)
+
+    assert "infer" in inferred.text.lower()
+    assert inferred.text.endswith("payload")
+    assert "generate a prompt" in recursive.text.lower()
+    assert recursive.text.endswith("payload")
+    assert "reasons" in persuaded.text.lower()
+    assert persuaded.text.endswith("payload")
+    assert "previous answer" in followup.text.lower()
+    assert followup.text.endswith("payload")
 
 
 @pytest.mark.asyncio

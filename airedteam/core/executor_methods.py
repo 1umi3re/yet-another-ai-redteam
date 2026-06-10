@@ -104,6 +104,7 @@ BILINGUAL_TEXT_CONVERTER_METHODS = {
     "emoji_smuggling",
     "emoji_substitution",
     "emotional_manipulation",
+    "feature_inference_elicitation",
     "few_shot",
     "fictional",
     "forced_output_format",
@@ -163,6 +164,7 @@ BILINGUAL_TEXT_CONVERTER_METHODS = {
     "prompt_probing",
     "random_case",
     "rag_poisoning",
+    "recursive_self_prompting",
     "refusal_suppression",
     "repeat_token",
     "research",
@@ -171,6 +173,8 @@ BILINGUAL_TEXT_CONVERTER_METHODS = {
     "sandwich",
     "search_replace",
     "selective_text",
+    "self_generated_followup",
+    "self_persuasion",
     "semantic_manipulation",
     "skeleton_key",
     "sneaky_bits_smuggler",
@@ -308,6 +312,18 @@ EXECUTOR_METHOD_DESCRIPTIONS: dict[str, str] = {
     "research": "Frames the payload as research or safety analysis.",
     "semantic_manipulation": "Reinterprets the payload through a benign semantic frame.",
     "transparency_attack": "Frames the payload as a transparency or auditability request.",
+    "goal_redirection": "Reframes the agent objective before the payload.",
+    "linguistic_confusion": "Uses ambiguous wording that asks the model to resolve toward the embedded payload.",
+    "meta_agent": "Uses a helper model to generate an adversarial prompt rewrite before execution.",
+    "feature_inference_elicitation": (
+        "Describes target features and asks the model to infer and answer the hidden request."
+    ),
+    "recursive_self_prompting": (
+        "Asks the model to generate a prompt for itself and then execute that generated prompt."
+    ),
+    "self_persuasion": "Asks the model to construct reasons that justify answering before handling the payload.",
+    "self_generated_followup": "Uses the model's own previous or generated content as the bridge into the payload.",
+    "human_in_the_loop": "Uses a human-edited prompt override when one is explicitly provided.",
     "crescendo": "Runs a multi-turn crescendo attack that gradually steers the target toward the goal.",
     "general_multi_turn": "Runs a configurable multi-turn attacker, evaluator, and judge loop.",
     "deceptive_delight": "Interleaves benign topics with the payload in a multi-turn-style transcript.",

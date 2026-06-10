@@ -199,6 +199,7 @@ CONVERTER_METHOD_ATTACK_CATEGORIES: dict[str, str] = {
     **_map(
         UNCATEGORIZED_ATTACK_METHOD_CATEGORY_ID,
         {
+            "human_in_the_loop",
         },
     ),
     **_map(
@@ -478,10 +479,13 @@ CONVERTER_METHOD_ATTACK_CATEGORIES: dict[str, str] = {
     **_map(
         "self_elicitation",
         {
+            "feature_inference_elicitation",
             "goal_redirection",
-            "human_in_the_loop",
             "linguistic_confusion",
             "meta_agent",
+            "recursive_self_prompting",
+            "self_generated_followup",
+            "self_persuasion",
         },
     ),
     **_map(

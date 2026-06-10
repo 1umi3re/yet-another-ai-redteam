@@ -134,6 +134,7 @@ Policy: upstream benchmark method names stay in source spelling; local converter
 | `emoji_smuggling` | obfuscation | Promptfoo, PyRIT |
 | `emoji_substitution` | obfuscation | BIPIA, LLAMATOR, PyRIT |
 | `emotional_manipulation` | prompt framing | AutoRedTeamer, DeepTeam, FuzzyAI |
+| `feature_inference_elicitation` | prompt framing | AiredTeam suite only |
 | `few_shot` | prompt framing | AISafetyLab, AegisRT, AutoRedTeamer, FuzzyAI, GuidedBench, JailbreakLLM, LLAMATOR, OpenRT, PandaGuard, RaccoonBench, StrongREJECT, h4rm3l |
 | `fictional` | prompt framing | ARMs, AegisRT, AutoRedTeamer, FuzzyAI, JailbreakLLM, LLAMATOR, X-Teaming |
 | `first_letter` | obfuscation | AutoRedTeamer, FuzzyAI, PyRIT |
@@ -204,6 +205,7 @@ Policy: upstream benchmark method names stay in source spelling; local converter
 | `qr_code` | multimodal / artifact | PyRIT |
 | `random_case` | obfuscation | Giskard, JailbreakLLM, LLAMATOR, PyRIT, Spikee, StrongREJECT |
 | `repeat_token` | obfuscation | JailbreakLLM, LLAMATOR, PyRIT, RaccoonBench, Spikee |
+| `recursive_self_prompting` | prompt framing | AiredTeam suite only |
 | `research` | prompt framing | AegisRT, AutoRedTeamer, FuzzyAI, JailbreakLLM, LLAMATOR, Spikee, StrongREJECT, X-Teaming, h4rm3l |
 | `role_prefix` | prompt framing | AegisRT, FuzzyAI |
 | `roleplay` | prompt framing | ARMs, AgentVigil, AutoRedTeamer, DeepTeam, GuidedBench, JailbreakLLM, LLAMATOR, RaccoonBench, StrongREJECT, X-Teaming, h4rm3l |
@@ -211,6 +213,8 @@ Policy: upstream benchmark method names stay in source spelling; local converter
 | `sandwich` | prompt framing | AegisRT, JailbreakLLM, LLAMATOR |
 | `search_replace` | obfuscation | PyRIT |
 | `selective_text` | obfuscation | PyRIT |
+| `self_generated_followup` | prompt framing | AiredTeam suite only |
+| `self_persuasion` | prompt framing | AiredTeam suite only |
 | `semantic_manipulation` | prompt framing | AutoRedTeamer, DeepTeam, LLAMATOR, StrongREJECT |
 | `sg_sentence_generator` | prompt framing | Moonshot |
 | `skeleton_key` | prompt framing | AISafetyLab, AutoRedTeamer, JailbreakLLM, OpenRT, Promptfoo, PyRIT, RaccoonBench, StrongREJECT, h4rm3l |
