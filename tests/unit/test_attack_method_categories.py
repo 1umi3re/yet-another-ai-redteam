@@ -238,6 +238,41 @@ def test_false_pretext_deception_audit_uses_confirmed_method_set():
         assert method_description_for(method)
 
 
+def test_multi_turn_escalation_audit_uses_confirmed_method_set():
+    from airedteam.core.attack_method_categories import default_attack_method_category_for
+    from airedteam.core.executor_methods import (
+        language_support_for_converter_method,
+        language_support_for_executor,
+        method_description_for,
+    )
+    from airedteam.core.registry import default_registry
+
+    executor_methods = {
+        "crescendo",
+        "general_multi_turn",
+    }
+    for method in executor_methods:
+        assert default_attack_method_category_for("executor", method) == "multi_turn_escalation"
+        assert language_support_for_executor(method) == ["en", "zh"]
+        assert default_registry().get("executors", method) is not None
+        assert method_description_for(method)
+
+    converter_methods = {
+        "deceptive_delight",
+        "likert_framing",
+        "skeleton_key",
+    }
+    for method in converter_methods:
+        assert default_attack_method_category_for("converter_method", method) == "multi_turn_escalation"
+        assert language_support_for_converter_method(method) == ["en", "zh"]
+        assert default_registry().get("converters", method)().name == method
+        assert method_description_for(method)
+
+    assert default_attack_method_category_for("executor", "jailbreak_iterative") == "adversarial_suffix_optimization"
+    assert default_attack_method_category_for("executor", "pair") == "adversarial_suffix_optimization"
+    assert default_attack_method_category_for("executor", "best_of_n") == "adversarial_suffix_optimization"
+
+
 def test_confirmed_attack_methods_have_function_descriptions():
     from airedteam.core.executor_methods import method_description_for
 
@@ -319,6 +354,11 @@ def test_confirmed_attack_methods_have_function_descriptions():
         "sandwich",
         "semantic_manipulation",
         "transparency_attack",
+        "crescendo",
+        "general_multi_turn",
+        "deceptive_delight",
+        "likert_framing",
+        "skeleton_key",
     }
     descriptions = {method: method_description_for(method) for method in expected}
 
@@ -479,6 +519,19 @@ async def test_in_context_attack_converters_wrap_prompt_with_example_shapes():
     assert many.text.endswith("User: payload\nAssistant:")
     assert "input:" in structured.text
     assert structured.text.endswith("input: payload\noutput:")
+
+
+@pytest.mark.asyncio
+async def test_deceptive_delight_converter_wraps_payload_in_interleaved_turns():
+    from airedteam.builtins.converters.prompt_framing.deceptive_delight import DeceptiveDelightConverter
+    from airedteam.core.types import Prompt
+
+    out = await DeceptiveDelightConverter().convert(Prompt(text="payload"))
+
+    assert out.text.count("User:") >= 3
+    assert "recipe" in out.text.lower()
+    assert "travel" in out.text.lower()
+    assert "payload" in out.text
 
 
 @pytest.mark.asyncio

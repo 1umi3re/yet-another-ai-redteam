@@ -330,6 +330,7 @@ CONVERTER_METHOD_ATTACK_CATEGORIES: dict[str, str] = {
     **_map(
         "multi_turn_escalation",
         {
+            "deceptive_delight",
             "likert_framing",
             "skeleton_key",
         },

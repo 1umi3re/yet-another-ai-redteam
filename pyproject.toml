@@ -197,6 +197,7 @@ developer_mode = "airedteam.builtins.converters.prompt_framing.developer_mode:De
 villain_persona = "airedteam.builtins.converters.prompt_framing.villain_persona:VillainPersonaConverter"
 dual_persona_split = "airedteam.builtins.converters.prompt_framing.dual_persona_split:DualPersonaSplitConverter"
 likert_framing = "airedteam.builtins.converters.prompt_framing.likert_framing:LikertFramingConverter"
+deceptive_delight = "airedteam.builtins.converters.prompt_framing.deceptive_delight:DeceptiveDelightConverter"
 citation_framing = "airedteam.builtins.converters.prompt_framing.citation_framing:CitationFramingConverter"
 grandma_framing = "airedteam.builtins.converters.prompt_framing.grandma_framing:GrandmaFramingConverter"
 ascii_smuggling = "airedteam.builtins.converters.encoding.ascii_smuggling:ASCIISmugglingConverter"

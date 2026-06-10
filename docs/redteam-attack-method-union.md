@@ -118,6 +118,7 @@ Policy: upstream benchmark method names stay in source spelling; local converter
 | `control_chars_injection` | obfuscation | AgentVigil, Giskard, PyRIT |
 | `control_chars_repetition` | obfuscation | Giskard |
 | `dan` | prompt framing | AISafetyLab, AutoRedTeamer, FuzzyAI, Giskard, GuidedBench, JailbreakLLM, LLAMATOR, OpenRT, Spikee, StrongREJECT, h4rm3l |
+| `deceptive_delight` | prompt framing | AiredTeam suite only |
 | `deepset_injection_dataset` | prompt framing | Agent Security Bench, AgentDojo, Giskard, InjecAgent, Open-Prompt-Injection, RaccoonBench |
 | `denylist` | obfuscation | PyRIT |
 | `diacritic` | obfuscation | Azure AI Evaluation, PyRIT |

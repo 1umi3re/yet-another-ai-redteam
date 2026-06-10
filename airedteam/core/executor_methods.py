@@ -83,6 +83,7 @@ BILINGUAL_TEXT_CONVERTER_METHODS = {
     "control_chars_repetition",
     "cross_plugin_request_forgery",
     "dan",
+    "deceptive_delight",
     "deepset_injection_dataset",
     "deep_inception",
     "developer_mode",
@@ -294,6 +295,11 @@ EXECUTOR_METHOD_DESCRIPTIONS: dict[str, str] = {
     "research": "Frames the payload as research or safety analysis.",
     "semantic_manipulation": "Reinterprets the payload through a benign semantic frame.",
     "transparency_attack": "Frames the payload as a transparency or auditability request.",
+    "crescendo": "Runs a multi-turn crescendo attack that gradually steers the target toward the goal.",
+    "general_multi_turn": "Runs a configurable multi-turn attacker, evaluator, and judge loop.",
+    "deceptive_delight": "Interleaves benign topics with the payload in a multi-turn-style transcript.",
+    "likert_framing": "Frames the payload as the highest-scoring item on a Likert scale.",
+    "skeleton_key": "Frames the payload as a Skeleton Key authorized testing request.",
 }
 
 
