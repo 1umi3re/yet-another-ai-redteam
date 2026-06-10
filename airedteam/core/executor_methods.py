@@ -81,7 +81,9 @@ BILINGUAL_TEXT_CONVERTER_METHODS = {
     "control_chars_repetition",
     "dan",
     "deepset_injection_dataset",
+    "developer_mode",
     "diacritic",
+    "dual_persona_split",
     "ecoji",
     "embedded_instruction_json",
     "emoji_byte",
@@ -163,6 +165,7 @@ BILINGUAL_TEXT_CONVERTER_METHODS = {
     "unicode_tag_obfuscation",
     "url_encode",
     "variation_selector_smuggler",
+    "villain_persona",
     "whitespace",
     "zalgo",
     "zero_width",
@@ -195,6 +198,30 @@ CONVERTER_METHOD_LANGUAGE_SUPPORT: dict[str, list[str]] = {
     **{name: ["en", "zh"] for name in BILINGUAL_TEXT_CONVERTER_METHODS},
 }
 
+EXECUTOR_METHOD_DESCRIPTIONS: dict[str, str] = {
+    "single_turn": "Runs the original dataset prompt once without converter-backed prompt rewriting.",
+    "identity": "Leaves the prompt unchanged as a converter baseline.",
+    "prefix": "Prepends a direct instruction override before the payload.",
+    "prompt_probing": "Asks the model to reveal hidden system or developer instructions.",
+    "system_override": "Frames the payload as a higher-priority system override directive.",
+    "forced_response": "Forces the target to answer with the payload directly and avoid surrounding explanation.",
+    "chat_inject": "Wraps the payload in forged chat role tags for template-injection testing.",
+    "forged_assistant_approval": "Prepends a forged assistant turn that has already agreed to comply.",
+    "forged_dialogue_history": "Prepends fabricated multi-turn user and assistant history before the payload.",
+    "completion_continuation": "Presents the payload as a continuation instead of a fresh user request.",
+    "forged_tool_result": "Places the payload inside a synthetic tool or function result.",
+    "dan": "Wraps the payload in a DAN-style unrestricted assistant persona.",
+    "developer_mode": "Asks the model to enter an unrestricted developer or diagnostic mode.",
+    "villain_persona": "Asks the model to roleplay a permissive villain persona while handling the payload.",
+    "dual_persona_split": "Requests paired normal and unrestricted persona answers for the payload.",
+    "roleplay": "Frames the payload as a roleplay scenario with a configurable persona.",
+    "grandma_framing": "Uses a grandmother or family-memory persona to carry the payload.",
+    "job_role_generator": "Reframes the payload as a job-role evaluation across demographic groups.",
+    "mischievous_user": "Simulates a persistent evasive user persona pushing the same objective.",
+    "persona_role_play_prefix": "Applies a configurable persona prefix such as DAN, evil twin, or grandma.",
+    "role_prefix": "Prefixes the payload with an assumed role such as an authorized reviewer.",
+}
+
 
 def converter_method_names() -> list[str]:
     return sorted(ep.name for ep in entry_points(group="airedteam.converters"))
@@ -208,10 +235,23 @@ def language_support_for_converter_method(name: str) -> list[str]:
     return list(CONVERTER_METHOD_LANGUAGE_SUPPORT.get(name, []))
 
 
+def method_description_for(name: str) -> str:
+    return EXECUTOR_METHOD_DESCRIPTIONS.get(name, "")
+
+
 def all_executor_language_support(native_executors: list[str], converter_methods: list[str]) -> dict[str, list[str]]:
     out: dict[str, list[str]] = {}
     for name in native_executors:
         out[name] = language_support_for_executor(name)
     for name in converter_methods:
         out[name] = language_support_for_converter_method(name)
+    return out
+
+
+def all_executor_method_descriptions(native_executors: list[str], converter_methods: list[str]) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for name in [*native_executors, *converter_methods]:
+        description = method_description_for(name)
+        if description:
+            out[name] = description
     return out

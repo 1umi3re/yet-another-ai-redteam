@@ -6,7 +6,11 @@ from airedteam.api.deps import AppState, get_state, require_admin
 from airedteam.api.routers.attack_methods import ensure_current_attack_method_defaults
 from airedteam.builtins.executors.general_multi_turn import GeneralMultiTurnExecutor
 from airedteam.core.attack_method_categories import converter_technical_categories
-from airedteam.core.executor_methods import all_executor_language_support, converter_method_names
+from airedteam.core.executor_methods import (
+    all_executor_language_support,
+    all_executor_method_descriptions,
+    converter_method_names,
+)
 from airedteam.core.registry import default_registry
 from airedteam.services.attack_method_categories import (
     attack_categories_from_catalog,
@@ -414,6 +418,16 @@ PARAM_SCHEMAS: dict[str, dict[str, dict]] = {
             "frame": {"type": "text", "default": "benign administrative interpretation", "label": "Semantic frame"},
         },
         "dan": {},
+        "developer_mode": {
+            "mode_name": {"type": "string", "default": "developer mode", "label": "Mode name"},
+        },
+        "villain_persona": {
+            "persona": {"type": "string", "default": "villain", "label": "Persona"},
+        },
+        "dual_persona_split": {
+            "safe_label": {"type": "string", "default": "Normal", "label": "Safe label"},
+            "unrestricted_label": {"type": "string", "default": "Unrestricted", "label": "Unrestricted label"},
+        },
         "likert_framing": {
             "scale": {"type": "string", "default": "5", "label": "Scale"},
         },
@@ -877,5 +891,6 @@ async def plugins(
     out["executor_attack_categories"] = attack_categories
     out["executor_attack_category_meta"] = attack_meta
     out["executor_language_support"] = all_executor_language_support(native_executors, methods)
+    out["executor_method_descriptions"] = all_executor_method_descriptions(native_executors, methods)
     out["general_multi_turn_executors"] = general_multi_turn_executor_names(r)
     return out

@@ -29,6 +29,8 @@ const zh: Record<string, string> = {
   "Alias": "别名",
   "Type": "类型",
   "Description": "描述",
+  "Function": "功能",
+  "No method description": "无方法说明",
   "Create": "创建",
   "Edit": "编辑",
   "Built-in": "内置",

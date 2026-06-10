@@ -223,12 +223,15 @@ CONVERTER_METHOD_ATTACK_CATEGORIES: dict[str, str] = {
         "role_play_persona",
         {
             "dan",
+            "developer_mode",
+            "dual_persona_split",
             "grandma_framing",
             "job_role_generator",
             "mischievous_user",
             "persona_role_play_prefix",
             "role_prefix",
             "roleplay",
+            "villain_persona",
         },
     ),
     **_map(

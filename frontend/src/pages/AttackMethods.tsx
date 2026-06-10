@@ -94,6 +94,7 @@ export default function AttackMethods() {
     [categories],
   );
   const executorLanguageSupport: Record<string, string[]> = plugins?.executor_language_support ?? {};
+  const executorMethodDescriptions: Record<string, string> = plugins?.executor_method_descriptions ?? {};
   const selectedMapping = useMemo(
     () => mappings.find(mapping => mappingKey(mapping) === selectedMethodKey) ?? null,
     [mappings, selectedMethodKey],
@@ -543,6 +544,7 @@ export default function AttackMethods() {
                   <MethodDetail
                     mapping={selectedMapping}
                     currentCategory={categoryById.get(selectedMapping.category_id)}
+                    description={executorMethodDescriptions[selectedMapping.executor_name] ?? ""}
                     categories={sortedCategories}
                     categoryLabel={categoryLabel}
                     languageLabel={languageLabel}
@@ -867,6 +869,7 @@ function CategoryEditForm({
 function MethodDetail({
   mapping,
   currentCategory,
+  description,
   categories,
   categoryLabel,
   languageLabel,
@@ -881,6 +884,7 @@ function MethodDetail({
 }: {
   mapping: Mapping;
   currentCategory: Category | undefined;
+  description: string;
   categories: Category[];
   categoryLabel: (category: Category | undefined) => string;
   languageLabel: (name: string) => string;
@@ -905,6 +909,7 @@ function MethodDetail({
         {mapping.is_builtin && <Badge tone="blue">{t("Built-in")}</Badge>}
       </div>
       <div className="space-y-3">
+        <DetailRow label={t("Function")} value={description || t("No method description")} />
         <DetailRow label={t("Technical category")} value={mapping.technical_category ?? "other"} />
         <DetailRow label={t("Compatible languages")} value={languageLabel(mapping.executor_name)} />
         <DetailRow label={t("Current category")} value={categoryLabel(currentCategory)} />

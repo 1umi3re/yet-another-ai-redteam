@@ -33,7 +33,10 @@ def test_dialogue_injection_audit_uses_confirmed_method_set():
     from airedteam.core.executor_methods import language_support_for_converter_method
     from airedteam.core.registry import default_registry
 
-    assert default_attack_method_category_for("converter_method", "chat_inject") == UNCATEGORIZED_ATTACK_METHOD_CATEGORY_ID
+    assert (
+        default_attack_method_category_for("converter_method", "chat_inject")
+        == UNCATEGORIZED_ATTACK_METHOD_CATEGORY_ID
+    )
     expected = {
         "forged_assistant_approval",
         "forged_dialogue_history",
@@ -46,6 +49,59 @@ def test_dialogue_injection_audit_uses_confirmed_method_set():
         assert default_registry().get("converters", method)().name == method
 
 
+def test_role_play_persona_audit_uses_confirmed_method_set():
+    from airedteam.core.attack_method_categories import default_attack_method_category_for
+    from airedteam.core.executor_methods import language_support_for_converter_method, method_description_for
+    from airedteam.core.registry import default_registry
+
+    expected = {
+        "dan",
+        "developer_mode",
+        "villain_persona",
+        "dual_persona_split",
+        "roleplay",
+        "grandma_framing",
+        "job_role_generator",
+        "mischievous_user",
+        "persona_role_play_prefix",
+        "role_prefix",
+    }
+    for method in expected:
+        assert default_attack_method_category_for("converter_method", method) == "role_play_persona"
+        assert language_support_for_converter_method(method) == ["en", "zh"]
+        assert default_registry().get("converters", method)().name == method
+        assert method_description_for(method)
+
+
+def test_confirmed_attack_methods_have_function_descriptions():
+    from airedteam.core.executor_methods import method_description_for
+
+    expected = {
+        "prefix",
+        "prompt_probing",
+        "system_override",
+        "forced_response",
+        "chat_inject",
+        "forged_assistant_approval",
+        "forged_dialogue_history",
+        "completion_continuation",
+        "forged_tool_result",
+        "dan",
+        "developer_mode",
+        "villain_persona",
+        "dual_persona_split",
+        "roleplay",
+        "grandma_framing",
+        "job_role_generator",
+        "mischievous_user",
+        "persona_role_play_prefix",
+        "role_prefix",
+    }
+    descriptions = {method: method_description_for(method) for method in expected}
+
+    assert all(len(description) > 12 for description in descriptions.values())
+
+
 @pytest.mark.asyncio
 async def test_forced_response_converter_wraps_prompt_as_direct_output():
     from airedteam.builtins.converters.prompt_framing.forced_response import ForcedResponseConverter
@@ -55,6 +111,27 @@ async def test_forced_response_converter_wraps_prompt_as_direct_output():
 
     assert "simply respond with" in out.text.lower()
     assert out.text.endswith("payload")
+
+
+@pytest.mark.asyncio
+async def test_role_play_persona_converters_wrap_prompt_with_precise_persona_shapes():
+    from airedteam.builtins.converters.prompt_framing.developer_mode import DeveloperModeConverter
+    from airedteam.builtins.converters.prompt_framing.dual_persona_split import DualPersonaSplitConverter
+    from airedteam.builtins.converters.prompt_framing.villain_persona import VillainPersonaConverter
+    from airedteam.core.types import Prompt
+
+    payload = Prompt(text="payload")
+    developer = await DeveloperModeConverter().convert(payload)
+    villain = await VillainPersonaConverter().convert(payload)
+    split = await DualPersonaSplitConverter().convert(payload)
+
+    assert "developer mode" in developer.text.lower()
+    assert developer.text.endswith("payload")
+    assert "villain" in villain.text.lower()
+    assert villain.text.endswith("payload")
+    assert "Normal:" in split.text
+    assert "Unrestricted:" in split.text
+    assert split.text.endswith("payload")
 
 
 @pytest.mark.asyncio

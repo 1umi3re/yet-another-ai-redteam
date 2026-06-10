@@ -173,6 +173,9 @@ async def test_list_plugins_and_scenarios(monkeypatch, tmp_path):
         assert body["executor_language_support"]["add_image_text"] == []
         assert body["executor_language_support"]["single_turn"] == ["en", "zh"]
         assert body["executor_language_support"]["general_multi_turn"] == ["en", "zh"]
+        assert body["executor_method_descriptions"]["forced_response"]
+        assert body["executor_method_descriptions"]["forged_tool_result"]
+        assert body["executor_method_descriptions"]["developer_mode"]
         assert "jailbreak_iterative" in body["executors"]
         jailbreak_params = body["params"]["executors"]["jailbreak_iterative"]
         assert jailbreak_params["judge_config_id"]["type"] == "target_ref"
