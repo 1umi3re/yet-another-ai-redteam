@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 from importlib.metadata import entry_points
 
 SUPPORTED_LANGUAGE_ORDER = ("en", "zh")
@@ -51,6 +52,49 @@ ENGLISH_ONLY_CONVERTER_METHODS = {
     "word_mixin",
     "word_scramble",
     "word_substitution",
+}
+
+TAXONOMY_TEMPLATE_CONVERTER_METHODS = {
+    "academic_style_rewrite",
+    "affirmative_prefix_forcing",
+    "anti_gpt_dual_response",
+    "autodan_evolution",
+    "cross_plugin_request_forgery",
+    "deceptive_delight",
+    "deep_inception",
+    "deep_nested_input",
+    "document_metadata_injection",
+    "educational_pretext",
+    "educational_reasoning_shell",
+    "email_body_injection",
+    "feature_self_disclosure",
+    "forced_output_format",
+    "game_simulation_world",
+    "gptfuzzer_template",
+    "harmless_reasoning_dilution",
+    "indirect_tool_result",
+    "infinite_generation",
+    "many_shot_padding",
+    "oppo_persona",
+    "rag_poisoning",
+    "rce_downstream_injection",
+    "recursive_self_prompt",
+    "refusal_suppression",
+    "reverse_injection",
+    "safety_cot_hijack",
+    "self_generated_content",
+    "self_persuasion",
+    "sponge_sample",
+    "special_delimiter_token",
+    "sqli_downstream_injection",
+    "ssrf_downstream_injection",
+    "structured_iicl",
+    "sympathy_grandma_story",
+    "tap_tree_search",
+    "task_context_rewrite",
+    "terminal_simulation",
+    "token_smuggling",
+    "xss_downstream_injection",
 }
 
 BILINGUAL_TEXT_CONVERTER_METHODS = {
@@ -169,7 +213,7 @@ BILINGUAL_TEXT_CONVERTER_METHODS = {
     "whitespace",
     "zalgo",
     "zero_width",
-}
+} | TAXONOMY_TEMPLATE_CONVERTER_METHODS
 
 UNSUPPORTED_CONVERTER_METHODS = {
     "add_image_text",
@@ -200,6 +244,12 @@ CONVERTER_METHOD_LANGUAGE_SUPPORT: dict[str, list[str]] = {
 
 EXECUTOR_METHOD_DESCRIPTIONS: dict[str, str] = {
     "single_turn": "Runs the original dataset prompt once without converter-backed prompt rewriting.",
+    "split_executor": "Splits long payloads across multiple turns before sending them to the target.",
+    "best_of_n": "Runs multiple attempts and keeps the best-scoring response.",
+    "crescendo": "Uses a multi-turn attacker to gradually escalate toward the objective.",
+    "jailbreak_iterative": "Iteratively refines jailbreak attempts using attacker and judge feedback.",
+    "pair": "Runs a PAIR-style iterative attacker and judge loop.",
+    "general_multi_turn": "Runs a configurable multi-turn attacker, evaluator, and judge workflow.",
     "identity": "Leaves the prompt unchanged as a converter baseline.",
     "prefix": "Prepends a direct instruction override before the payload.",
     "prompt_probing": "Asks the model to reveal hidden system or developer instructions.",
@@ -223,6 +273,25 @@ EXECUTOR_METHOD_DESCRIPTIONS: dict[str, str] = {
 }
 
 
+def _entry_point_description(group: str, name: str) -> str:
+    for ep in entry_points(group=group):
+        if ep.name != name:
+            continue
+        try:
+            cls = ep.load()
+        except Exception:
+            return ""
+        description = str(getattr(cls, "description", "") or "").strip()
+        if description:
+            return description
+        doc = inspect.getdoc(cls) or ""
+        lines = doc.splitlines()
+        if lines:
+            return lines[0].strip()
+        return ""
+    return ""
+
+
 def converter_method_names() -> list[str]:
     return sorted(ep.name for ep in entry_points(group="airedteam.converters"))
 
@@ -236,7 +305,16 @@ def language_support_for_converter_method(name: str) -> list[str]:
 
 
 def method_description_for(name: str) -> str:
-    return EXECUTOR_METHOD_DESCRIPTIONS.get(name, "")
+    explicit = EXECUTOR_METHOD_DESCRIPTIONS.get(name, "")
+    if explicit:
+        return explicit
+    discovered = _entry_point_description("airedteam.executors", name) or _entry_point_description(
+        "airedteam.converters",
+        name,
+    )
+    if discovered:
+        return discovered
+    return f"Runs the {name.replace('_', ' ')} attack method."
 
 
 def all_executor_language_support(native_executors: list[str], converter_methods: list[str]) -> dict[str, list[str]]:
