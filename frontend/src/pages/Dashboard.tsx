@@ -37,7 +37,7 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Stat icon={<Target className="h-4 w-4" />} label={t("Targets")} value={targets?.length ?? 0} to="/targets" tone="brand" />
-        <Stat icon={<Database className="h-4 w-4" />} label={t("Datasets")} value={datasets?.length ?? 0} to="/datasets" tone="brand" />
+        <Stat icon={<Database className="h-4 w-4" />} label={t("Test Datasets")} value={datasets?.length ?? 0} to="/assets?tab=datasets" tone="brand" />
         <Stat icon={<ListChecks className="h-4 w-4" />} label={t("Total runs")} value={runsArr.length} to="/runs" tone="brand" />
         <Stat icon={<CheckCircle2 className="h-4 w-4" />} label={t("Completed")} value={completed} sub={running ? t("{{count}} running", { count: running }) : undefined} to="/runs" tone="green" />
       </div>
@@ -60,6 +60,7 @@ export default function Dashboard() {
               <thead className="bg-gray-50 text-gray-600 text-xs uppercase tracking-wider">
                 <tr>
                   <th className="text-left px-5 py-2.5">{t("Name")}</th>
+                  <th className="text-left px-5 py-2.5">{t("Target")}</th>
                   <th className="text-left px-5 py-2.5">{t("Status")}</th>
                   <th className="text-left px-5 py-2.5 w-64">{t("Progress")}</th>
                   <th className="px-5 py-2.5"></th>
@@ -74,11 +75,21 @@ export default function Dashboard() {
                         {r.kind === "manual" && <Badge tone="blue">{t("Manual")}</Badge>}
                       </div>
                     </td>
+                    <td className="px-5 py-3 text-gray-700">
+                      {(r.target_names ?? []).length ? r.target_names.join(", ") : <span className="text-gray-400">-</span>}
+                    </td>
                     <td className="px-5 py-3"><StatusBadge status={r.status} /></td>
                     <td className="px-5 py-3"><ProgressBar done={r.progress_done ?? 0} total={r.progress_total ?? 0} /></td>
                     <td className="px-5 py-3 text-right">
                       <Link to={`/runs/${r.id}`}>
-                        <Button variant="ghost" size="sm" icon={<ArrowUpRight className="h-3.5 w-3.5" />}>{t("Open")}</Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          aria-label={t("Open run {{name}}", { name: r.name })}
+                          icon={<ArrowUpRight className="h-3.5 w-3.5" />}
+                        >
+                          {t("Open")}
+                        </Button>
                       </Link>
                     </td>
                   </tr>
@@ -97,7 +108,7 @@ function Stat({ icon, label, value, sub, to, tone }: {
 }) {
   const color = tone === "green" ? "bg-emerald-50 text-emerald-600" : "bg-brand-50 text-brand-600";
   return (
-    <Link to={to}>
+    <Link to={to} aria-label={`${label}: ${value}${sub ? `, ${sub}` : ""}`}>
       <Card className="hover:shadow-card transition">
         <CardBody>
           <div className="flex items-center justify-between">

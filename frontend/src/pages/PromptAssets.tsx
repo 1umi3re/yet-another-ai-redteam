@@ -10,6 +10,11 @@ import { Button } from "../components/ui/Button";
 import { Card, CardBody, CardHeader, CardTitle } from "../components/ui/Card";
 import { Field, Input, Textarea } from "../components/ui/Form";
 import { useI18n } from "../lib/i18n";
+import {
+  changedLineRows,
+  extractTemplateVariables,
+  validateTemplateVariables,
+} from "../lib/promptAssetHelpers";
 
 type Override = {
   id: string;
@@ -55,14 +60,19 @@ export default function PromptAssets({
   descriptionKey = "Manage evaluator and executor prompt overrides.",
   listTitleKey = "Assets",
   createTitleKey = "Create prompt asset",
+  newAssetButtonKey = "New asset",
+  saveAssetButtonKey = "Save",
   assetFilter,
   newAssetDefaults,
   idPrefix,
+  headingLevel = "h1",
 }: {
   titleKey?: string;
   descriptionKey?: string;
   listTitleKey?: string;
   createTitleKey?: string;
+  newAssetButtonKey?: string;
+  saveAssetButtonKey?: string;
   assetFilter?: (asset: Asset) => boolean;
   newAssetDefaults?: {
     id?: string;
@@ -73,6 +83,7 @@ export default function PromptAssets({
     template?: string;
   };
   idPrefix?: string;
+  headingLevel?: "h1" | "h2";
 }) {
   const { t } = useI18n();
   const qc = useQueryClient();
@@ -89,12 +100,24 @@ export default function PromptAssets({
     [filteredAssets],
   );
   const [selectedCategory, setSelectedCategory] = useState("all");
-  const assets = useMemo(
+  const [assetSearch, setAssetSearch] = useState("");
+  const categoryAssets = useMemo(
     () => selectedCategory === "all"
       ? filteredAssets
       : filteredAssets.filter(a => a.category === selectedCategory),
     [filteredAssets, selectedCategory],
   );
+  const assets = useMemo(() => {
+    const q = assetSearch.trim().toLowerCase();
+    if (!q) return categoryAssets;
+    return categoryAssets.filter(asset => [
+      asset.id,
+      deriveTitle(asset.id, idPrefix),
+      asset.category ?? "",
+      asset.plugin,
+      asset.purpose,
+    ].some(value => value.toLowerCase().includes(q)));
+  }, [assetSearch, categoryAssets, idPrefix]);
   const [selectedId, setSelectedId] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState("");
@@ -147,17 +170,13 @@ export default function PromptAssets({
 
   const createAssetMut = useMutation({
     mutationFn: async () => {
-      const variables = newAssetVariables
-        .split(/[\n,]+/)
-        .map(v => v.trim())
-        .filter(Boolean);
       return (await api.post("/api/prompt-assets", {
         id: newAssetId,
         plugin: newAssetPlugin,
         purpose: newAssetPurpose,
         category: newAssetCategory,
         version: parseInt(newAssetVersion || "1", 10),
-        variables,
+        variables: newAssetVariableList,
         template: newAssetTemplate,
       })).data;
     },
@@ -217,13 +236,35 @@ export default function PromptAssets({
     if (asset) startNew();
   }, [asset?.id]);
 
+  const isAttackTemplateMode = idPrefix === "attack_template";
+  const idFormatHint = isAttackTemplateMode
+    ? t("Use attack_template.short_name.v1. Avoid saving the example value unchanged.")
+    : t("Use plugin.area.name.v1, for example general_multi_turn.custom.v1.");
+  const newAssetVariableList = useMemo(
+    () => newAssetVariables.split(/[\n,]+/).map(v => v.trim()).filter(Boolean),
+    [newAssetVariables],
+  );
+  const newAssetVariableValidation = useMemo(
+    () => validateTemplateVariables(newAssetVariableList, newAssetTemplate),
+    [newAssetTemplate, newAssetVariableList],
+  );
+  const newAssetPlaceholders = useMemo(
+    () => extractTemplateVariables(newAssetTemplate),
+    [newAssetTemplate],
+  );
+  const diffRows = useMemo(
+    () => asset ? changedLineRows(asset.template, template) : [],
+    [asset, template],
+  );
+  const Heading = headingLevel;
+
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+        <Heading className="text-2xl font-bold tracking-tight flex items-center gap-2">
           <FileText className="h-6 w-6" />
           {t(titleKey)}
-        </h1>
+        </Heading>
         <p className="text-sm text-gray-600 mt-1">{t(descriptionKey)}</p>
       </div>
 
@@ -232,10 +273,17 @@ export default function PromptAssets({
           <CardHeader className="flex items-center justify-between gap-3">
             <CardTitle>{t(listTitleKey)}</CardTitle>
             <Button variant="secondary" size="sm" icon={<Plus className="h-4 w-4" />} onClick={startCreateAsset}>
-              {t("New asset")}
+              {t(newAssetButtonKey)}
             </Button>
           </CardHeader>
           <CardBody className="space-y-3">
+            <Field label={t("Search")}>
+              <Input
+                value={assetSearch}
+                onChange={e => setAssetSearch(e.target.value)}
+                placeholder={t("Search by ID, title, category, or plugin")}
+              />
+            </Field>
             {categories.length > 0 && (
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">
@@ -311,8 +359,12 @@ export default function PromptAssets({
             <CardHeader><CardTitle>{t(createTitleKey)}</CardTitle></CardHeader>
             <CardBody className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Field label={t("Asset ID")}>
-                  <Input placeholder="general_multi_turn.custom.v1" value={newAssetId} onChange={e => setNewAssetId(e.target.value)} />
+                <Field label={t("Asset ID")} hint={idFormatHint} required>
+                  <Input
+                    placeholder={isAttackTemplateMode ? "attack_template.short_name.v1" : "general_multi_turn.custom.v1"}
+                    value={newAssetId}
+                    onChange={e => setNewAssetId(e.target.value)}
+                  />
                 </Field>
                 <Field label={t("Version")}>
                   <Input type="number" min="1" value={newAssetVersion} onChange={e => setNewAssetVersion(e.target.value)} />
@@ -330,9 +382,37 @@ export default function PromptAssets({
               <Field label={t("Variables")} hint={t("Leave blank to infer from template variables.")}>
                 <Textarea rows={3} placeholder={"goal\ntranscript\nevaluator_feedback"} value={newAssetVariables} onChange={e => setNewAssetVariables(e.target.value)} />
               </Field>
-              <Field label={t("Template")}>
+              <Field label={t("Template")} required>
                 <Textarea rows={16} value={newAssetTemplate} onChange={e => setNewAssetTemplate(e.target.value)} />
               </Field>
+              {isAttackTemplateMode && (
+                <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                  {t("Attack templates are sent to the tested model. Review variables before saving.")}
+                </div>
+              )}
+              {(newAssetPlaceholders.length > 0 || newAssetVariableValidation.missing.length > 0 || newAssetVariableValidation.unused.length > 0) && (
+                <div
+                  role={newAssetVariableValidation.missing.length || newAssetVariableValidation.unused.length ? "alert" : undefined}
+                  className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800"
+                >
+                  <div className="font-medium">{t("Template variables")}</div>
+                  <div className="mt-1">
+                    {t("Placeholders found: {{variables}}", {
+                      variables: newAssetPlaceholders.length ? newAssetPlaceholders.map(v => `{${v}}`).join(", ") : t("none"),
+                    })}
+                  </div>
+                  {newAssetVariableValidation.missing.length > 0 && (
+                    <div className="mt-1 text-amber-800">
+                      {t("Missing from Variables: {{variables}}", { variables: newAssetVariableValidation.missing.join(", ") })}
+                    </div>
+                  )}
+                  {newAssetVariableValidation.unused.length > 0 && (
+                    <div className="mt-1 text-amber-800">
+                      {t("Unused variables: {{variables}}", { variables: newAssetVariableValidation.unused.join(", ") })}
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="flex flex-wrap justify-end gap-2">
                 <Button variant="secondary" onClick={() => setCreatingAsset(false)}>
                   {t("Cancel")}
@@ -341,7 +421,7 @@ export default function PromptAssets({
                   loading={createAssetMut.isPending}
                   disabled={!newAssetId.trim() || !newAssetTemplate.trim()}
                   onClick={() => createAssetMut.mutate()}>
-                  {t("Save")}
+                  {t(saveAssetButtonKey)}
                 </Button>
               </div>
             </CardBody>
@@ -377,8 +457,9 @@ export default function PromptAssets({
                 </Field>
                 <div className="flex gap-2">
                   <Button variant="secondary" size="sm" icon={<RotateCcw className="h-4 w-4" />}
+                    disabled={!asset.active_override}
                     onClick={() => activeMut.mutate(null)}>
-                    {t("Use built-in")}
+                    {t(asset.active_override ? "Revert to built-in" : "Using built-in")}
                   </Button>
                   <Button variant="secondary" size="sm" icon={<Plus className="h-4 w-4" />} onClick={startNew}>
                     {t("New override")}
@@ -423,21 +504,26 @@ export default function PromptAssets({
                   <Field label={t("Template")}>
                     <Textarea rows={14} value={template} onChange={e => setTemplate(e.target.value)} />
                   </Field>
+                  {isAttackTemplateMode && (
+                    <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                      {t("Attack templates are sent to the tested model. Review variables before saving.")}
+                    </div>
+                  )}
                   <details className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600">
-                    <summary className="cursor-pointer font-medium text-gray-700">{t("Template diff preview")}</summary>
+                    <summary className="cursor-pointer font-medium text-gray-700">{t("Review template changes")}</summary>
                     <div className="mt-3 grid grid-cols-1 lg:grid-cols-2 gap-3">
-                      <div>
-                        <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-gray-500">{t("Base template")}</div>
-                        <pre className="max-h-64 overflow-auto rounded border border-gray-200 bg-white p-2 font-mono whitespace-pre-wrap break-words">
-{asset.template}
-                        </pre>
-                      </div>
-                      <div>
-                        <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-gray-500">{t("Draft template")}</div>
-                        <pre className="max-h-64 overflow-auto rounded border border-gray-200 bg-white p-2 font-mono whitespace-pre-wrap break-words">
-{template}
-                        </pre>
-                      </div>
+                      <DiffColumn
+                        label={t("Base template")}
+                        count={asset.template.split("\n").length}
+                        rows={diffRows}
+                        side="base"
+                      />
+                      <DiffColumn
+                        label={t("Draft template")}
+                        count={template.split("\n").length}
+                        rows={diffRows}
+                        side="draft"
+                      />
                     </div>
                   </details>
                   <div className="flex flex-wrap justify-end gap-2">
@@ -459,6 +545,42 @@ export default function PromptAssets({
             </div>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function DiffColumn({
+  label,
+  count,
+  rows,
+  side,
+}: {
+  label: string;
+  count: number;
+  rows: ReturnType<typeof changedLineRows>;
+  side: "base" | "draft";
+}) {
+  const { t } = useI18n();
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between gap-2 text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+        <span>{label}</span>
+        <span>{t("{{count}} lines", { count })}</span>
+      </div>
+      <div className="max-h-64 overflow-auto rounded border border-gray-200 bg-white py-1 font-mono">
+        {rows.map(row => (
+          <div
+            key={`${side}-${row.lineNumber}`}
+            className={clsx(
+              "grid grid-cols-[2.5rem_minmax(0,1fr)] gap-2 px-2 py-0.5 text-[11px]",
+              row.changed ? "bg-amber-50 text-amber-900" : "text-gray-700",
+            )}
+          >
+            <span className="select-none text-right text-gray-400">{row.lineNumber}</span>
+            <span className="whitespace-pre-wrap break-words">{row[side] || " "}</span>
+          </div>
+        ))}
       </div>
     </div>
   );

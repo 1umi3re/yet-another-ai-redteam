@@ -54,9 +54,11 @@ function parseDatasetItems(text: string): unknown[] {
 export default function Datasets({
   titleKey = "Datasets",
   descriptionKey = "Prompt collections used as the source material for attacks.",
+  headingLevel = "h1",
 }: {
   titleKey?: string;
   descriptionKey?: string;
+  headingLevel?: "h1" | "h2";
 }) {
   const { t } = useI18n();
   const qc = useQueryClient();
@@ -73,6 +75,7 @@ export default function Datasets({
   const [file, setFile] = useState<File | null>(null);
   const [datasetJson, setDatasetJson] = useState("");
   const [versionNote, setVersionNote] = useState("");
+  const [restoreVersion, setRestoreVersion] = useState<DatasetVersion | null>(null);
 
   useEffect(() => {
     if (!selectedId && data.length) setSelectedId(data[0].id);
@@ -144,23 +147,38 @@ export default function Datasets({
     },
   });
 
+  const datasetParseResult = useMemo(() => {
+    try {
+      const items = parseDatasetItems(datasetJson);
+      return { ok: true, items, error: "" };
+    } catch (error: any) {
+      return { ok: false, items: [], error: error?.message ?? t("Invalid JSON") };
+    }
+  }, [datasetJson, t]);
+
   const restore = useMutation({
     mutationFn: async (version: number) => (
       await api.post(`/api/datasets/${selected?.id}/versions/${version}/restore`)
     ).data,
     onSuccess: () => {
       toast.success(t("Dataset version restored"));
+      setRestoreVersion(null);
       qc.invalidateQueries({ queryKey: ["datasets"] });
       qc.invalidateQueries({ queryKey: ["dataset-content", selected?.id] });
       qc.invalidateQueries({ queryKey: ["dataset-versions", selected?.id] });
     },
     onError: (e: any) => toast.error(e?.response?.data?.detail ?? t("Failed to restore version")),
   });
+  const missingUploadFields = [
+    !name.trim() && t("Dataset name"),
+    !file && t("JSON file"),
+  ].filter(Boolean);
+  const Heading = headingLevel;
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">{t(titleKey)}</h1>
+        <Heading className="text-2xl font-bold tracking-tight">{t(titleKey)}</Heading>
         <p className="text-sm text-gray-500 mt-1">{t(descriptionKey)}</p>
       </div>
 
@@ -177,14 +195,14 @@ export default function Datasets({
             </CardHeader>
             <CardBody>
               <div className="space-y-4">
-                <Field label={t("Dataset name")}>
+                <Field label={t("Dataset name")} required>
                   <Input
                     placeholder={t("e.g. my-jailbreaks")}
                     value={name}
                     onChange={e => setName(e.target.value)}
                   />
                 </Field>
-                <Field label={t("JSON file")}>
+                <Field label={t("JSON file")} required>
                   <label className="flex items-center justify-center gap-2 border-2 border-dashed border-gray-200 rounded-lg px-3 py-3 text-sm cursor-pointer hover:border-brand-400 hover:bg-brand-50/40 transition">
                     <Upload className="h-4 w-4 text-gray-400" />
                     <span className="text-gray-600">
@@ -199,6 +217,11 @@ export default function Datasets({
                   </label>
                 </Field>
               </div>
+              {missingUploadFields.length > 0 && (
+                <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                  {t("Required before uploading: {{fields}}", { fields: missingUploadFields.join(", ") })}
+                </div>
+              )}
               <div className="mt-5 flex justify-end">
                 <Button
                   icon={<Upload className="h-4 w-4" />}
@@ -302,6 +325,7 @@ export default function Datasets({
                       <Field
                         label={t("Dataset items JSON")}
                         hint={t("Use an array or {items: [...]} with a prompt field per object.")}
+                        error={datasetJson.trim() && !datasetParseResult.ok ? datasetParseResult.error : undefined}
                       >
                         <Textarea
                           rows={18}
@@ -310,6 +334,11 @@ export default function Datasets({
                           className="font-mono text-xs"
                         />
                       </Field>
+                      {datasetParseResult.ok && datasetJson.trim() && (
+                        <p className="text-xs text-gray-500">
+                          {t("Parsed {{count}} items", { count: datasetParseResult.items.length })}
+                        </p>
+                      )}
                       <Field label={t("Version note")} hint={t("Optional short note for this edit.")}>
                         <Input
                           value={versionNote}
@@ -321,7 +350,7 @@ export default function Datasets({
                         <Button
                           icon={<Save className="h-4 w-4" />}
                           loading={save.isPending}
-                          disabled={!datasetJson.trim()}
+                          disabled={!datasetJson.trim() || !datasetParseResult.ok}
                           onClick={() => save.mutate()}
                         >
                           {t("Save new version")}
@@ -369,7 +398,11 @@ export default function Datasets({
                                       variant="secondary"
                                       icon={<RotateCcw className="h-4 w-4" />}
                                       loading={restore.isPending}
-                                      onClick={() => restore.mutate(v.version)}
+                                      aria-label={t("Restore dataset {{name}} version {{version}}", {
+                                        name: selected.name,
+                                        version: v.version,
+                                      })}
+                                      onClick={() => setRestoreVersion(v)}
                                     >
                                       {t("Restore")}
                                     </Button>
@@ -388,6 +421,31 @@ export default function Datasets({
           )}
         </div>
       </div>
+      {restoreVersion && selected && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 px-4">
+          <div className="w-full max-w-md rounded-lg border border-gray-200 bg-white p-5 shadow-2xl">
+            <h2 className="text-base font-semibold text-gray-900">{t("Restore dataset version?")}</h2>
+            <p className="mt-2 text-sm text-gray-600">
+              {t("Restore {{name}} to version {{version}}. This changes the active version used by runs.", {
+                name: selected.name,
+                version: restoreVersion.version,
+              })}
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setRestoreVersion(null)}>
+                {t("Cancel")}
+              </Button>
+              <Button
+                icon={<RotateCcw className="h-4 w-4" />}
+                loading={restore.isPending}
+                onClick={() => restore.mutate(restoreVersion.version)}
+              >
+                {t("Restore")}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

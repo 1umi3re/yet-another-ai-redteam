@@ -15,6 +15,12 @@ const nav = [
   { to: "/manual",    labelKey: "Manual Console", icon: MessageSquare },
 ];
 
+const assetSubnav = [
+  { to: "/assets?tab=datasets", tab: "datasets", labelKey: "Test Datasets" },
+  { to: "/assets?tab=prompt-templates", tab: "prompt-templates", labelKey: "Prompt Templates" },
+  { to: "/assets?tab=attack-templates", tab: "attack-templates", labelKey: "Attack Templates" },
+];
+
 export default function Layout() {
   const setToken = useAuth(s => s.setToken);
   const navigate = useNavigate();
@@ -28,6 +34,7 @@ export default function Layout() {
     if (to === "/assets") return path === "/assets" || path === "/datasets" || path === "/prompt-assets";
     return path === to;
   };
+  const activeAssetTab = new URLSearchParams(location.search).get("tab") ?? "datasets";
 
   return (
     <div className="h-[100dvh] max-h-[100dvh] min-h-0 flex overflow-hidden bg-gray-50">
@@ -45,13 +52,37 @@ export default function Layout() {
           {nav.map(({ to, labelKey, icon: Icon }) => {
             const active = isNavActive(to);
             return (
-              <Link key={to} to={to} aria-current={active ? "page" : undefined} className={clsx(
-                "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition",
-                active ? "bg-brand-50 text-brand-700 font-medium" : "text-gray-700 hover:bg-gray-100"
-              )}>
-                <Icon className="h-4 w-4" />
-                {t(labelKey)}
-              </Link>
+              <div key={to}>
+                <Link to={to} aria-current={active ? "page" : undefined} className={clsx(
+                  "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition",
+                  active ? "bg-brand-50 text-brand-700 font-medium" : "text-gray-700 hover:bg-gray-100"
+                )}>
+                  <Icon className="h-4 w-4" />
+                  {t(labelKey)}
+                </Link>
+                {to === "/assets" && active && (
+                  <div className="mt-1 ml-6 space-y-0.5 border-l border-gray-100 pl-2">
+                    {assetSubnav.map(item => {
+                      const itemActive = location.pathname === "/assets" && activeAssetTab === item.tab;
+                      return (
+                        <Link
+                          key={item.tab}
+                          to={item.to}
+                          aria-current={itemActive ? "page" : undefined}
+                          className={clsx(
+                            "block rounded-md px-2 py-1.5 text-xs transition",
+                            itemActive
+                              ? "bg-brand-50 text-brand-700 font-medium"
+                              : "text-gray-500 hover:bg-gray-100 hover:text-gray-700",
+                          )}
+                        >
+                          {t(item.labelKey)}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             );
           })}
         </nav>
@@ -67,7 +98,7 @@ export default function Layout() {
       </aside>
       <main className="flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden">
         <div className="flex-1 min-h-0 overflow-auto">
-          <div className="max-w-6xl min-w-0 mx-auto px-8 py-8">
+          <div className="max-w-[88rem] min-w-0 mx-auto px-8 py-8">
             <Outlet />
           </div>
         </div>

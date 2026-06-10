@@ -7,7 +7,8 @@ import { Card, CardBody, CardHeader, CardTitle, CardDescription } from "../compo
 import { Badge, StatusBadge } from "../components/ui/Badge";
 import { ProgressBar } from "../components/ui/ProgressBar";
 import { Button } from "../components/ui/Button";
-import { Textarea } from "../components/ui/Form";
+import { Field, Select, Textarea } from "../components/ui/Form";
+import { Tabs, TabItem } from "../components/ui/Tabs";
 import { ArrowLeft, X, Clock, Hash, AlertCircle, MessageSquare, Download, Ban, Pause, Play, RotateCcw } from "lucide-react";
 import clsx from "clsx";
 import { toast } from "sonner";
@@ -124,14 +125,14 @@ export default function RunDetail() {
   });
 
   useEffect(() => {
-    if (!id || !token) return;
+    if (!id || !token || isTerminalStatus(run?.status)) return;
     const url = `${api.defaults.baseURL}/api/runs/${id}/events?token=${encodeURIComponent(token)}`;
     const es = new EventSource(url);
     es.onmessage = (e) => setEvents(prev => [...prev.slice(-199), JSON.parse(e.data)]);
     // Intentionally no onerror handler — EventSource auto-reconnects on transient
     // network errors. The cleanup below closes the stream on unmount.
     return () => es.close();
-  }, [id, token]);
+  }, [id, token, run?.status]);
 
   const scoreByAttempt = useMemo(() => {
     const m = new Map<string, any>();
@@ -308,6 +309,11 @@ export default function RunDetail() {
   const highestRiskTarget = targetRiskRows.find((row: any) => (row.scored ?? 0) > 0);
   const highestRiskExecutor = executorRiskRows.find((row: any) => (row.scored ?? 0) > 0);
   const highestRiskTargetExecutor = targetExecutorRows.find((row: any) => (row.scored ?? 0) > 0);
+  const runTabs: Array<TabItem<Tab>> = [
+    { id: "overview", label: t("Overview") },
+    { id: "attempts", label: t("Attempts ({{count}})", { count: attemptsPage.total ?? attempts.length }) },
+    { id: "events", label: t("Live events") },
+  ];
 
   return (
     <div className="space-y-6">
@@ -364,17 +370,24 @@ export default function RunDetail() {
             </Button>
           )}
           {run?.kind === "automated" && run?.status === "completed" && (
-            <div className="flex items-center gap-2">
-              <select
-                className="input h-8 min-w-40 text-xs"
-                value={judgeTargetId}
-                onChange={e => setJudgeTargetId(e.target.value)}
-              >
-                <option value="">{t("-- pick judger --")}</option>
-                {targets.map((target: any) => (
-                  <option key={target.id} value={target.id}>{target.name}</option>
-                ))}
-              </select>
+            <div className="flex items-end gap-2">
+              <div className="min-w-44">
+                <Field label={t("Judger target")}>
+                  <Select
+                    className="h-8 text-xs"
+                    value={judgeTargetId}
+                    onChange={e => setJudgeTargetId(e.target.value)}
+                  >
+                    <option value="">{t("-- pick judger --")}</option>
+                    {targets.map((target: any) => (
+                      <option key={target.id} value={target.id}>{target.name}</option>
+                    ))}
+                  </Select>
+                </Field>
+                {!judgeTargetId && (
+                  <p className="mt-1 text-xs text-gray-500">{t("Choose a judger target to rejudge this run.")}</p>
+                )}
+              </div>
               <Button
                 variant="secondary"
                 size="sm"
@@ -413,19 +426,10 @@ export default function RunDetail() {
         </CardBody></Card>
       </div>
 
-      <div className="flex gap-1 border-b border-gray-200">
-        {(["overview", "attempts", "events"] as Tab[]).map(tabId => (
-          <button key={tabId} onClick={() => setTab(tabId)}
-            className={clsx(
-              "px-4 py-2 text-sm font-medium border-b-2 -mb-px transition",
-              tab === tabId ? "border-brand-600 text-brand-700" : "border-transparent text-gray-500 hover:text-gray-700",
-            )}>
-            {tabId === "overview" ? t("Overview") : tabId === "attempts" ? t("Attempts ({{count}})", { count: attemptsPage.total ?? attempts.length }) : t("Live events")}
-          </button>
-        ))}
-      </div>
-
-      {tab === "overview" && (
+      <Tabs tabs={runTabs} value={tab} onChange={setTab} idBase="run-detail">
+        {activeTab => (
+          <>
+      {activeTab === "overview" && (
         <div className="space-y-4">
           <Card>
             <CardHeader>
@@ -589,7 +593,7 @@ export default function RunDetail() {
         </div>
       )}
 
-      {tab === "attempts" && (
+      {activeTab === "attempts" && (
         <Card>
           <CardBody className="border-b border-gray-100">
             <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
@@ -656,8 +660,14 @@ export default function RunDetail() {
                           : <Badge>-</Badge>}
                       </td>
                       <td className="px-5 py-3 text-right">
-                        <button onClick={() => setDetailAttemptId(a.id)}
-                          className="text-xs font-medium text-brand-600 hover:text-brand-700">{t("View")}</button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          aria-label={t("Inspect attempt {{id}}", { id: a.id.slice(0, 8) })}
+                          onClick={() => setDetailAttemptId(a.id)}
+                        >
+                          {t("Inspect")}
+                        </Button>
                       </td>
                     </tr>
                   );
@@ -682,19 +692,30 @@ export default function RunDetail() {
         </Card>
       )}
 
-      {tab === "events" && (
+      {activeTab === "events" && (
         <Card>
           <CardHeader>
             <CardTitle>{t("Live events")}</CardTitle>
-            <CardDescription>{t("Streamed via Server-Sent Events. Last 200 messages.")}</CardDescription>
+            <CardDescription>
+              {isTerminalStatus(run?.status)
+                ? t("Live stream is inactive for terminal runs.")
+                : t("Streamed via Server-Sent Events. Last 200 messages.")}
+            </CardDescription>
           </CardHeader>
           <CardBody>
             <pre className="text-xs bg-gray-900 text-gray-100 rounded-lg p-3 max-h-80 overflow-auto font-mono">
-{events.length ? events.map(e => JSON.stringify(e)).join("\n") : t("(waiting for events…)")}
+{events.length
+  ? events.map(e => JSON.stringify(e)).join("\n")
+  : isTerminalStatus(run?.status)
+    ? t("This run is complete. Live events are only shown while a run is active.")
+    : t("(waiting for events…)")}
             </pre>
           </CardBody>
         </Card>
       )}
+          </>
+        )}
+      </Tabs>
 
       <AttemptDetailDrawer
         runId={id}

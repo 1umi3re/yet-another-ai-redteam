@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "test:unit": "tsc --target ES2022 --module NodeNext --moduleResolution NodeNext --esModuleInterop --skipLibCheck --types node --rootDir . --outDir /tmp/airedteam-frontend-tests tests/converterLlmParams.test.ts && node --test /tmp/airedteam-frontend-tests/tests/converterLlmParams.test.js"
+    "test:unit": "tsc --target ES2022 --module NodeNext --moduleResolution NodeNext --esModuleInterop --skipLibCheck --types node --rootDir . --outDir /tmp/airedteam-frontend-tests tests/*.test.ts && node --test /tmp/airedteam-frontend-tests/tests/*.test.js"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.51.0",

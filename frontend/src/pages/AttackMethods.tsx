@@ -4,10 +4,18 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
-import { Card, CardBody, CardHeader, CardTitle } from "../components/ui/Card";
+import { Card, CardBody } from "../components/ui/Card";
 import { Field, Input, Select, Textarea } from "../components/ui/Form";
 import { api } from "../lib/api";
+import {
+  CategoryScope,
+  filterMappings,
+  mappingKey,
+  scopeMappings,
+  sortCategories,
+} from "../lib/attackMethodTaxonomy";
 import { useI18n } from "../lib/i18n";
+import clsx from "clsx";
 
 type Category = {
   id: string;
@@ -42,6 +50,8 @@ type Draft = {
   display_order: string;
 };
 
+type CategoryEditMode = "none" | "create" | "edit";
+
 const emptyDraft: Draft = {
   id: "",
   name: "",
@@ -63,34 +73,70 @@ export default function AttackMethods() {
     queryFn: async () => (await api.get("/api/plugins")).data,
   });
 
-  const [draft, setDraft] = useState<Draft>(emptyDraft);
-  const [editingId, setEditingId] = useState("");
+  const [scope, setScope] = useState<CategoryScope>({ kind: "all" });
+  const [selectedMethodKey, setSelectedMethodKey] = useState("");
+  const [selectedMappingKeys, setSelectedMappingKeys] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   const [kindFilter, setKindFilter] = useState("all");
-  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [draft, setDraft] = useState<Draft>(emptyDraft);
+  const [editingId, setEditingId] = useState("");
+  const [categoryEditMode, setCategoryEditMode] = useState<CategoryEditMode>("none");
+  const [mappingEditKey, setMappingEditKey] = useState("");
+  const [mappingDraft, setMappingDraft] = useState({ categoryId: "", technicalCategory: "" });
+  const [batchCategoryId, setBatchCategoryId] = useState("");
+  const [updatedMappingKey, setUpdatedMappingKey] = useState("");
 
   const categories = catalog?.categories ?? [];
   const mappings = catalog?.mappings ?? [];
+  const sortedCategories = useMemo(() => sortCategories(categories), [categories]);
   const categoryById = useMemo(
     () => new Map(categories.map(category => [category.id, category])),
     [categories],
   );
   const executorLanguageSupport: Record<string, string[]> = plugins?.executor_language_support ?? {};
+  const selectedMapping = useMemo(
+    () => mappings.find(mapping => mappingKey(mapping) === selectedMethodKey) ?? null,
+    [mappings, selectedMethodKey],
+  );
+  const selectedCategory = scope.kind === "category" ? categoryById.get(scope.id) : undefined;
+  const uncategorizedCount = useMemo(
+    () => mappings.filter(mapping => !categoryById.has(mapping.category_id)).length,
+    [categoryById, mappings],
+  );
+  const scopedMappings = useMemo(
+    () => scopeMappings(mappings, categoryById, scope),
+    [categoryById, mappings, scope],
+  );
+  const filteredMappings = useMemo(
+    () => filterMappings(scopedMappings, categoryById, search, kindFilter),
+    [categoryById, kindFilter, scopedMappings, search],
+  );
+  const selectedBatchMappings = useMemo(
+    () => mappings.filter(mapping => selectedMappingKeys.has(mappingKey(mapping))),
+    [mappings, selectedMappingKeys],
+  );
+  const canSaveCategory = draft.name.trim() && (editingId || draft.id.trim());
+  const missingCategoryFields = [
+    !editingId && !draft.id.trim() && t("Category ID"),
+    !draft.name.trim() && t("Name"),
+  ].filter(Boolean);
 
-  const filteredMappings = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return mappings.filter(mapping => {
-      if (kindFilter !== "all" && mapping.executor_kind !== kindFilter) return false;
-      if (categoryFilter !== "all" && mapping.category_id !== categoryFilter) return false;
-      if (!q) return true;
-      const category = categoryById.get(mapping.category_id);
-      return mapping.executor_name.toLowerCase().includes(q)
-        || mapping.executor_kind.toLowerCase().includes(q)
-        || (mapping.technical_category ?? "").toLowerCase().includes(q)
-        || (category?.name ?? "").toLowerCase().includes(q)
-        || (category?.alias ?? "").toLowerCase().includes(q);
-    });
-  }, [categoryById, categoryFilter, kindFilter, mappings, search]);
+  const categoryLabel = (category: Category | undefined) => {
+    if (!category) return t("Uncategorized");
+    return language === "zh" ? category.name : (category.alias || category.name);
+  };
+  const methodKindLabel = (mapping: Mapping) => (
+    mapping.executor_kind === "executor" ? t("Native executor") : t("Converter method")
+  );
+  const languageLabel = (name: string) => {
+    const languages = executorLanguageSupport[name] ?? [];
+    return languages.length ? languages.join(", ") : t("No compatible language support");
+  };
+  const scopeTitle = () => {
+    if (scope.kind === "all") return t("All methods");
+    if (scope.kind === "uncategorized") return t("Uncategorized");
+    return categoryLabel(selectedCategory);
+  };
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["attack-method-categories"] });
@@ -113,10 +159,12 @@ export default function AttackMethods() {
       }
       return (await api.post("/api/attack-method-categories", body)).data;
     },
-    onSuccess: () => {
+    onSuccess: (category) => {
       toast.success(t("Attack category saved"));
       setDraft(emptyDraft);
       setEditingId("");
+      setCategoryEditMode("none");
+      if (category?.id) setScope({ kind: "category", id: category.id });
       invalidate();
     },
     onError: (e: any) => toast.error(e?.response?.data?.detail ?? t("Failed to save attack category")),
@@ -128,29 +176,90 @@ export default function AttackMethods() {
     },
     onSuccess: () => {
       toast.success(t("Attack category deleted"));
+      setScope({ kind: "all" });
+      setCategoryEditMode("none");
+      setEditingId("");
       invalidate();
     },
     onError: (e: any) => toast.error(e?.response?.data?.detail ?? t("Failed to delete attack category")),
   });
 
   const updateMapping = useMutation({
-    mutationFn: async ({ mapping, categoryId }: { mapping: Mapping; categoryId: string }) => (
+    mutationFn: async ({
+      mapping,
+      categoryId,
+      technicalCategory,
+    }: {
+      mapping: Mapping;
+      categoryId: string;
+      technicalCategory?: string;
+    }) => (
       await api.put(
         `/api/attack-method-categories/mappings/${mapping.executor_kind}/${mapping.executor_name}`,
         {
           category_id: categoryId,
-          technical_category: mapping.technical_category,
+          technical_category: technicalCategory ?? mapping.technical_category,
         },
       )
     ).data,
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       toast.success(t("Attack mapping saved"));
+      setUpdatedMappingKey(mappingKey(variables.mapping));
+      setMappingEditKey("");
       invalidate();
     },
     onError: (e: any) => toast.error(e?.response?.data?.detail ?? t("Failed to save attack mapping")),
   });
 
-  const editCategory = (category: Category) => {
+  const batchUpdate = useMutation({
+    mutationFn: async ({ selected, categoryId }: { selected: Mapping[]; categoryId: string }) => {
+      await Promise.all(selected.map(mapping => api.put(
+        `/api/attack-method-categories/mappings/${mapping.executor_kind}/${mapping.executor_name}`,
+        {
+          category_id: categoryId,
+          technical_category: mapping.technical_category,
+        },
+      )));
+    },
+    onSuccess: () => {
+      toast.success(t("Updated {{count}} mappings", { count: selectedBatchMappings.length }));
+      setSelectedMappingKeys(new Set());
+      setBatchCategoryId("");
+      invalidate();
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.detail ?? t("Failed to update selected mappings")),
+  });
+
+  const selectScope = (next: CategoryScope) => {
+    setScope(next);
+    setSearch("");
+    setSelectedMethodKey("");
+    setMappingEditKey("");
+    setCategoryEditMode("none");
+    setEditingId("");
+  };
+
+  const toggleMappingSelection = (key: string) => {
+    setSelectedMappingKeys(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const startCreateCategory = () => {
+    setSelectedMethodKey("");
+    setMappingEditKey("");
+    setCategoryEditMode("create");
+    setEditingId("");
+    setDraft(emptyDraft);
+  };
+
+  const startEditCategory = (category: Category) => {
+    setSelectedMethodKey("");
+    setMappingEditKey("");
+    setCategoryEditMode("edit");
     setEditingId(category.id);
     setDraft({
       id: category.id,
@@ -162,247 +271,675 @@ export default function AttackMethods() {
     });
   };
 
-  const resetDraft = () => {
-    setEditingId("");
-    setDraft(emptyDraft);
+  const startEditMapping = (mapping: Mapping) => {
+    setMappingEditKey(mappingKey(mapping));
+    setMappingDraft({
+      categoryId: mapping.category_id,
+      technicalCategory: mapping.technical_category ?? "",
+    });
   };
 
-  const categoryLabel = (category: Category | undefined) => {
-    if (!category) return t("Uncategorized");
-    return language === "zh" ? category.name : (category.alias || category.name);
+  const emptyMessage = () => {
+    if (search.trim()) return t("No attack methods match this search.");
+    if (scope.kind === "uncategorized") return t("No uncategorized methods.");
+    if (scope.kind === "category") return t("No methods are mapped to this category yet.");
+    return t("No attack methods match this search.");
   };
-
-  const languageLabel = (name: string) => {
-    const languages = executorLanguageSupport[name] ?? [];
-    return languages.length ? languages.join(", ") : t("No compatible language support");
-  };
-
-  const canSave = draft.name.trim() && (editingId || draft.id.trim());
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{t("Attack Method Categories")}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">{t("Attack Method Taxonomy")}</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            {t("Find methods, organize mappings, and maintain taxonomy categories.")}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2 text-xs text-gray-500">
+          <Badge tone="gray">{t("{{count}} methods", { count: mappings.length })}</Badge>
+          <Badge tone="gray">{t("{{count}} categories", { count: categories.length })}</Badge>
+          {uncategorizedCount > 0 && <Badge tone="amber">{t("{{count}} uncategorized", { count: uncategorizedCount })}</Badge>}
         </div>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-        <Card>
-          <CardHeader>
-            <CardTitle>{t("Categories")}</CardTitle>
-          </CardHeader>
-          <CardBody className="space-y-5">
-            <div className="grid gap-3 md:grid-cols-2">
-              <Field label={t("Category ID")}>
-                <Input
-                  value={draft.id}
-                  disabled={!!editingId}
-                  placeholder="custom_strategy"
-                  onChange={e => setDraft(prev => ({ ...prev, id: e.target.value }))}
-                />
-              </Field>
-              <Field label={t("Display order")}>
-                <Input
-                  type="number"
-                  value={draft.display_order}
-                  onChange={e => setDraft(prev => ({ ...prev, display_order: e.target.value }))}
-                />
-              </Field>
-              <Field label={t("Name")}>
-                <Input
-                  value={draft.name}
-                  onChange={e => setDraft(prev => ({ ...prev, name: e.target.value }))}
-                />
-              </Field>
-              <Field label={t("Alias")}>
-                <Input
-                  value={draft.alias}
-                  onChange={e => setDraft(prev => ({ ...prev, alias: e.target.value }))}
-                />
-              </Field>
-              <Field label={t("Type")}>
-                <Input
-                  value={draft.type}
-                  onChange={e => setDraft(prev => ({ ...prev, type: e.target.value }))}
-                />
-              </Field>
-              <div className="md:col-span-2">
-                <Field label={t("Description")}>
-                  <Textarea
-                    rows={3}
-                    value={draft.description}
-                    onChange={e => setDraft(prev => ({ ...prev, description: e.target.value }))}
-                  />
-                </Field>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                icon={editingId ? <Save className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-                loading={saveCategory.isPending}
-                disabled={!canSave}
-                onClick={() => saveCategory.mutate()}
-              >
-                {editingId ? t("Save") : t("Create")}
-              </Button>
-              {editingId && (
-                <Button
-                  variant="secondary"
-                  icon={<X className="h-4 w-4" />}
-                  onClick={resetDraft}
-                >
-                  {t("Cancel")}
-                </Button>
-              )}
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="text-xs uppercase tracking-wide text-gray-500">
-                  <tr>
-                    <th className="px-2 py-2">{t("Category")}</th>
-                    <th className="px-2 py-2">{t("Type")}</th>
-                    <th className="px-2 py-2">{t("Mapped")}</th>
-                    <th className="px-2 py-2 text-right">{t("Action")}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {categories.map(category => (
-                    <tr key={category.id} className="align-top">
-                      <td className="px-2 py-2">
-                        <div className="font-medium text-gray-900">{category.name}</div>
-                        <div className="mt-0.5 text-xs text-gray-500">{category.alias || category.id}</div>
-                        <div className="mt-1 flex flex-wrap gap-1">
-                          <Badge tone={category.is_builtin ? "blue" : "green"}>
-                            {category.is_builtin ? t("Built-in") : t("custom")}
-                          </Badge>
-                          <Badge>{category.id}</Badge>
-                        </div>
-                      </td>
-                      <td className="px-2 py-2 text-xs text-gray-600">{category.type}</td>
-                      <td className="px-2 py-2 tabular-nums text-gray-700">{category.mapped_count}</td>
-                      <td className="px-2 py-2">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            icon={<Edit3 className="h-3.5 w-3.5" />}
-                            onClick={() => editCategory(category)}
-                          >
-                            {t("Edit")}
-                          </Button>
-                          <Button
-                            variant="danger"
-                            size="sm"
-                            icon={<Trash2 className="h-3.5 w-3.5" />}
-                            disabled={category.mapped_count > 0 || deleteCategory.isPending}
-                            onClick={() => {
-                              if (confirm(t("Delete this category?"))) deleteCategory.mutate(category.id);
-                            }}
-                          >
-                            {t("Delete")}
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardBody>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>{t("Executor mappings")}</CardTitle>
-          </CardHeader>
-          <CardBody className="space-y-4">
-            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_160px_180px]">
-              <Field label={t("Search")}>
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-                  <Input
-                    className="pl-9"
-                    value={search}
-                    onChange={e => setSearch(e.target.value)}
-                    placeholder={t("Search attack methods")}
-                  />
+      <Card className="overflow-hidden">
+        <CardBody className="p-0">
+          <div className="grid min-h-[calc(100dvh-12rem)] lg:grid-cols-[16rem_minmax(0,1fr)_22rem]">
+            <section className="min-h-0 border-b border-gray-200 bg-gray-50/60 lg:border-b-0 lg:border-r">
+              <div className="flex items-center justify-between gap-2 border-b border-gray-200 px-3 py-2.5">
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">{t("Scope")}</div>
+                  <div className="text-sm font-medium text-gray-900">{t("Categories")}</div>
                 </div>
-              </Field>
-              <Field label={t("Kind")}>
-                <Select value={kindFilter} onChange={e => setKindFilter(e.target.value)}>
-                  <option value="all">{t("All")}</option>
-                  <option value="executor">{t("Native executor")}</option>
-                  <option value="converter_method">{t("Converter method")}</option>
-                </Select>
-              </Field>
-              <Field label={t("Category")}>
-                <Select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}>
-                  <option value="all">{t("All categories")}</option>
-                  {categories.map(category => (
-                    <option key={category.id} value={category.id}>{categoryLabel(category)}</option>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-label={t("Create category")}
+                  icon={<Plus className="h-3.5 w-3.5" />}
+                  onClick={startCreateCategory}
+                >
+                  {t("New")}
+                </Button>
+              </div>
+              <div className="max-h-[calc(100dvh-16rem)] space-y-1 overflow-y-auto p-2">
+                <ScopeButton
+                  active={scope.kind === "all"}
+                  label={t("All methods")}
+                  meta={t("Every mapped method")}
+                  count={mappings.length}
+                  onClick={() => selectScope({ kind: "all" })}
+                />
+                <ScopeButton
+                  active={scope.kind === "uncategorized"}
+                  label={t("Uncategorized")}
+                  meta={t("Missing category")}
+                  count={uncategorizedCount}
+                  tone={uncategorizedCount ? "amber" : "gray"}
+                  onClick={() => selectScope({ kind: "uncategorized" })}
+                />
+                <div className="pt-1">
+                  {sortedCategories.map(category => (
+                    <ScopeButton
+                      key={category.id}
+                      active={scope.kind === "category" && scope.id === category.id}
+                      label={categoryLabel(category)}
+                      meta={category.type || category.id}
+                      count={category.mapped_count}
+                      badge={category.is_builtin ? t("Built-in") : t("custom")}
+                      tone={category.is_builtin ? "blue" : "green"}
+                      onClick={() => selectScope({ kind: "category", id: category.id })}
+                    />
                   ))}
-                </Select>
-              </Field>
-            </div>
+                </div>
+              </div>
+            </section>
 
-            <div className="text-xs text-gray-500">
-              {t("Showing {{count}} of {{total}}", { count: filteredMappings.length, total: mappings.length })}
-            </div>
+            <section className="min-w-0 border-b border-gray-200 lg:border-b-0 lg:border-r">
+              <div className="border-b border-gray-200 px-4 py-3">
+                <div className="flex flex-wrap items-end justify-between gap-3">
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">{t("Methods")}</div>
+                    <div className="text-sm font-medium text-gray-900">
+                      {scopeTitle()} · {t("Showing {{count}} of {{total}}", {
+                        count: filteredMappings.length,
+                        total: scopedMappings.length,
+                      })}
+                    </div>
+                  </div>
+                  <div className="grid w-full gap-2 sm:w-auto sm:grid-cols-[minmax(16rem,1fr)_10rem]">
+                    <Field label={t("Search")}>
+                      <div className="relative">
+                        <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                        <Input
+                          className="pl-9"
+                          value={search}
+                          onChange={event => setSearch(event.target.value)}
+                          placeholder={t("Search methods")}
+                        />
+                      </div>
+                    </Field>
+                    <Field label={t("Kind")}>
+                      <Select value={kindFilter} onChange={event => setKindFilter(event.target.value)}>
+                        <option value="all">{t("All")}</option>
+                        <option value="executor">{t("Native")}</option>
+                        <option value="converter_method">{t("Converter")}</option>
+                      </Select>
+                    </Field>
+                  </div>
+                </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="text-xs uppercase tracking-wide text-gray-500">
-                  <tr>
-                    <th className="px-2 py-2">{t("Attack method")}</th>
-                    <th className="px-2 py-2">{t("Technical category")}</th>
-                    <th className="px-2 py-2">{t("Languages")}</th>
-                    <th className="px-2 py-2">{t("Category")}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {filteredMappings.map(mapping => (
-                    <tr key={`${mapping.executor_kind}:${mapping.executor_name}`} className="align-middle">
-                      <td className="px-2 py-2">
-                        <div className="flex items-center gap-2">
-                          <Tags className="h-4 w-4 text-gray-400" />
-                          <div>
-                            <div className="font-medium text-gray-900">{mapping.executor_name}</div>
-                            <div className="text-xs text-gray-500">
-                              {mapping.executor_kind === "executor" ? t("Native executor") : t("Converter method")}
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-2 py-2 text-xs text-gray-600">{mapping.technical_category ?? "other"}</td>
-                      <td className="px-2 py-2 text-xs text-gray-600">{languageLabel(mapping.executor_name)}</td>
-                      <td className="px-2 py-2">
+                {selectedMappingKeys.size > 0 && (
+                  <div className="mt-3 flex flex-wrap items-end gap-2 rounded-md border border-brand-100 bg-brand-50/60 px-3 py-2">
+                    <div className="mr-auto text-sm">
+                      <span className="font-medium text-brand-900">
+                        {t("{{count}} selected", { count: selectedMappingKeys.size })}
+                      </span>
+                      <span className="ml-2 text-xs text-brand-700">{t("Applies to selected methods only.")}</span>
+                    </div>
+                    <div className="min-w-56">
+                      <Field label={t("Category")}>
                         <Select
-                          value={mapping.category_id}
-                          disabled={updateMapping.isPending}
-                          onChange={e => updateMapping.mutate({ mapping, categoryId: e.target.value })}
+                          value={batchCategoryId}
+                          disabled={batchUpdate.isPending}
+                          onChange={event => setBatchCategoryId(event.target.value)}
                         >
-                          {categories.map(category => (
+                          <option value="">{t("-- pick category --")}</option>
+                          {sortedCategories.map(category => (
                             <option key={category.id} value={category.id}>{categoryLabel(category)}</option>
                           ))}
                         </Select>
-                      </td>
-                    </tr>
-                  ))}
-                  {filteredMappings.length === 0 && (
+                      </Field>
+                    </div>
+                    <Button
+                      size="sm"
+                      icon={<Save className="h-3.5 w-3.5" />}
+                      loading={batchUpdate.isPending}
+                      disabled={!batchCategoryId || selectedBatchMappings.length === 0}
+                      onClick={() => batchUpdate.mutate({ selected: selectedBatchMappings, categoryId: batchCategoryId })}
+                    >
+                      {t("Apply category")}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={batchUpdate.isPending}
+                      onClick={() => setSelectedMappingKeys(new Set())}
+                    >
+                      {t("Clear selection")}
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              <div className="max-h-[calc(100dvh-20rem)] overflow-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="sticky top-0 z-10 bg-white text-xs uppercase tracking-wide text-gray-500 shadow-[0_1px_0_0_rgb(229,231,235)]">
                     <tr>
-                      <td colSpan={4} className="px-2 py-8 text-center text-xs text-gray-500">
-                        {t("No attack methods match.")}
-                      </td>
+                      <th className="px-4 py-2">{t("Method")}</th>
+                      <th className="px-4 py-2">{t("Technical category")}</th>
+                      <th className="px-4 py-2">{t("Languages")}</th>
+                      <th className="px-4 py-2">{t("Category")}</th>
                     </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </CardBody>
-        </Card>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {filteredMappings.map(mapping => {
+                      const key = mappingKey(mapping);
+                      const active = selectedMethodKey === key;
+                      const checked = selectedMappingKeys.has(key);
+                      const rowCategory = categoryById.get(mapping.category_id);
+                      const showCheckbox = selectedMappingKeys.size > 0;
+                      return (
+                        <tr
+                          key={key}
+                          tabIndex={0}
+                          aria-selected={active}
+                          className={clsx(
+                            "group cursor-pointer outline-none transition focus-within:bg-brand-50/60 focus:bg-brand-50/60 hover:bg-gray-50",
+                            active && "bg-brand-50/70",
+                            checked && "bg-brand-50/50",
+                          )}
+                          onClick={() => {
+                            setSelectedMethodKey(key);
+                            setCategoryEditMode("none");
+                          }}
+                          onKeyDown={event => {
+                            if (event.key === "Enter") {
+                              setSelectedMethodKey(key);
+                              setCategoryEditMode("none");
+                            }
+                          }}
+                        >
+                          <td className="px-4 py-2.5">
+                            <div className="flex items-start gap-2">
+                              <input
+                                type="checkbox"
+                                aria-label={t("Select attack method {{name}}", { name: mapping.executor_name })}
+                                checked={checked}
+                                onClick={event => event.stopPropagation()}
+                                onChange={() => toggleMappingSelection(key)}
+                                className={clsx(
+                                  "mt-0.5 h-4 w-4 rounded border-gray-300 text-brand-600 transition focus:opacity-100",
+                                  showCheckbox ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
+                                )}
+                              />
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <Tags className="h-4 w-4 shrink-0 text-gray-400" />
+                                  <span className="font-medium text-gray-900 break-all">{mapping.executor_name}</span>
+                                </div>
+                                <div className="mt-0.5 text-xs text-gray-500">{methodKindLabel(mapping)}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-2.5 text-xs text-gray-600">{mapping.technical_category ?? "other"}</td>
+                          <td className="px-4 py-2.5 text-xs text-gray-600">{languageLabel(mapping.executor_name)}</td>
+                          <td className="px-4 py-2.5">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="text-xs text-gray-700">{categoryLabel(rowCategory)}</span>
+                              {mapping.is_builtin && <Badge tone="blue">{t("Built-in")}</Badge>}
+                              {updatedMappingKey === key && <span aria-live="polite" className="text-[11px] text-emerald-700">{t("Updated")}</span>}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {filteredMappings.length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="px-4 py-12 text-center text-sm text-gray-500">
+                          {emptyMessage()}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <aside className="min-h-0 bg-white">
+              <div className="flex items-center justify-between gap-2 border-b border-gray-200 px-4 py-3">
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">{t("Detail")}</div>
+                  <div className="text-sm font-medium text-gray-900">
+                    {selectedMapping ? mappingName(selectedMapping) : scopeTitle()}
+                  </div>
+                </div>
+                {selectedMapping && (
+                  <button
+                    type="button"
+                    className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                    aria-label={t("Back to category")}
+                    onClick={() => {
+                      setSelectedMethodKey("");
+                      setMappingEditKey("");
+                    }}
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+
+              <div className="max-h-[calc(100dvh-16rem)] overflow-y-auto p-4">
+                {selectedMapping ? (
+                  <MethodDetail
+                    mapping={selectedMapping}
+                    currentCategory={categoryById.get(selectedMapping.category_id)}
+                    categories={sortedCategories}
+                    categoryLabel={categoryLabel}
+                    languageLabel={languageLabel}
+                    methodKindLabel={methodKindLabel}
+                    mappingEditKey={mappingEditKey}
+                    mappingDraft={mappingDraft}
+                    setMappingDraft={setMappingDraft}
+                    startEditMapping={startEditMapping}
+                    cancelEdit={() => setMappingEditKey("")}
+                    saveEdit={() => updateMapping.mutate({
+                      mapping: selectedMapping,
+                      categoryId: mappingDraft.categoryId,
+                      technicalCategory: mappingDraft.technicalCategory,
+                    })}
+                    saving={updateMapping.isPending}
+                  />
+                ) : categoryEditMode !== "none" ? (
+                  <CategoryEditForm
+                    mode={categoryEditMode}
+                    draft={draft}
+                    setDraft={setDraft}
+                    canSave={!!canSaveCategory}
+                    missingFields={missingCategoryFields}
+                    isBuiltin={categoryEditMode === "edit" && !!categoryById.get(editingId)?.is_builtin}
+                    onSave={() => saveCategory.mutate()}
+                    onCancel={() => {
+                      setCategoryEditMode("none");
+                      setEditingId("");
+                      setDraft(emptyDraft);
+                    }}
+                    saving={saveCategory.isPending}
+                  />
+                ) : scope.kind === "category" && selectedCategory ? (
+                  <CategoryDetail
+                    category={selectedCategory}
+                    label={categoryLabel(selectedCategory)}
+                    onEdit={() => startEditCategory(selectedCategory)}
+                    onDelete={() => {
+                      if (confirm(t("Delete attack category {{name}}?", {
+                        name: categoryLabel(selectedCategory),
+                      }))) deleteCategory.mutate(selectedCategory.id);
+                    }}
+                    deleting={deleteCategory.isPending}
+                    deleteDisabled={selectedCategory.mapped_count > 0}
+                    deleteTitle={selectedCategory.mapped_count > 0
+                      ? t("Cannot delete while {{count}} methods are mapped", { count: selectedCategory.mapped_count })
+                      : undefined}
+                  />
+                ) : (
+                  <ScopeDetail
+                    scope={scope}
+                    totalMethods={mappings.length}
+                    totalCategories={categories.length}
+                    uncategorizedCount={uncategorizedCount}
+                    scopedCount={scopedMappings.length}
+                    onCreateCategory={startCreateCategory}
+                  />
+                )}
+              </div>
+            </aside>
+          </div>
+        </CardBody>
+      </Card>
+    </div>
+  );
+}
+
+function mappingName(mapping: Mapping): string {
+  return mapping.executor_name;
+}
+
+function ScopeButton({
+  active,
+  label,
+  meta,
+  count,
+  badge,
+  tone = "gray",
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  meta: string;
+  count: number;
+  badge?: string;
+  tone?: "gray" | "blue" | "green" | "amber";
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={clsx(
+        "w-full rounded-md border px-2.5 py-2 text-left transition",
+        active
+          ? "border-brand-300 bg-white shadow-soft ring-1 ring-brand-100"
+          : "border-transparent hover:border-gray-200 hover:bg-white",
+      )}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="truncate text-sm font-medium text-gray-900">{label}</div>
+          <div className="mt-0.5 truncate text-xs text-gray-500">{meta}</div>
+        </div>
+        <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs tabular-nums text-gray-600">{count}</span>
       </div>
+      {badge && (
+        <div className="mt-1.5">
+          <Badge tone={tone}>{badge}</Badge>
+        </div>
+      )}
+    </button>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="border-b border-gray-100 pb-2 last:border-b-0 last:pb-0">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{label}</div>
+      <div className="mt-0.5 text-sm text-gray-900 break-words">{value || "—"}</div>
+    </div>
+  );
+}
+
+function CategoryDetail({
+  category,
+  label,
+  onEdit,
+  onDelete,
+  deleting,
+  deleteDisabled,
+  deleteTitle,
+}: {
+  category: Category;
+  label: string;
+  onEdit: () => void;
+  onDelete: () => void;
+  deleting: boolean;
+  deleteDisabled: boolean;
+  deleteTitle?: string;
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <div className="text-base font-semibold text-gray-900">{label}</div>
+          <div className="mt-1 font-mono text-xs text-gray-500">{category.id}</div>
+        </div>
+        <Badge tone={category.is_builtin ? "blue" : "green"}>
+          {category.is_builtin ? t("Built-in") : t("custom")}
+        </Badge>
+      </div>
+      <div className="space-y-3">
+        <DetailRow label={t("Name")} value={category.name} />
+        <DetailRow label={t("Alias")} value={category.alias} />
+        <DetailRow label={t("Type")} value={category.type} />
+        <DetailRow label={t("Display order")} value={category.display_order} />
+        <DetailRow label={t("Mapped methods")} value={category.mapped_count} />
+        <DetailRow label={t("Description")} value={category.description || t("No description")} />
+      </div>
+      <div className="flex flex-wrap gap-2 pt-2">
+        <Button variant="secondary" size="sm" icon={<Edit3 className="h-3.5 w-3.5" />} onClick={onEdit}>
+          {t("Edit category")}
+        </Button>
+        <Button
+          variant="danger"
+          size="sm"
+          icon={<Trash2 className="h-3.5 w-3.5" />}
+          loading={deleting}
+          disabled={deleteDisabled}
+          title={deleteTitle}
+          onClick={onDelete}
+        >
+          {t("Delete")}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function ScopeDetail({
+  scope,
+  totalMethods,
+  totalCategories,
+  uncategorizedCount,
+  scopedCount,
+  onCreateCategory,
+}: {
+  scope: CategoryScope;
+  totalMethods: number;
+  totalCategories: number;
+  uncategorizedCount: number;
+  scopedCount: number;
+  onCreateCategory: () => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="space-y-4">
+      {scope.kind === "all" ? (
+        <>
+          <div>
+            <div className="text-base font-semibold text-gray-900">{t("Taxonomy overview")}</div>
+            <p className="mt-1 text-sm text-gray-500">
+              {t("Review every attack method and use the left list to focus on a category.")}
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <Metric label={t("Methods")} value={totalMethods} />
+            <Metric label={t("Categories")} value={totalCategories} />
+            <Metric label={t("Uncategorized")} value={uncategorizedCount} />
+            <Metric label={t("In scope")} value={scopedCount} />
+          </div>
+        </>
+      ) : (
+        <>
+          <div>
+            <div className="text-base font-semibold text-gray-900">{t("Uncategorized")}</div>
+            <p className="mt-1 text-sm text-gray-500">
+              {t("Methods here reference a category that is missing from the current catalog.")}
+            </p>
+          </div>
+          <Metric label={t("Uncategorized methods")} value={uncategorizedCount} />
+        </>
+      )}
+      <Button variant="secondary" size="sm" icon={<Plus className="h-3.5 w-3.5" />} onClick={onCreateCategory}>
+        {t("Create category")}
+      </Button>
+    </div>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2">
+      <div className="text-xs text-gray-500">{label}</div>
+      <div className="mt-0.5 text-lg font-semibold tabular-nums text-gray-900">{value}</div>
+    </div>
+  );
+}
+
+function CategoryEditForm({
+  mode,
+  draft,
+  setDraft,
+  canSave,
+  missingFields,
+  isBuiltin,
+  onSave,
+  onCancel,
+  saving,
+}: {
+  mode: CategoryEditMode;
+  draft: Draft;
+  setDraft: React.Dispatch<React.SetStateAction<Draft>>;
+  canSave: boolean;
+  missingFields: Array<string | false>;
+  isBuiltin: boolean;
+  onSave: () => void;
+  onCancel: () => void;
+  saving: boolean;
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="space-y-4">
+      <div>
+        <div className="text-base font-semibold text-gray-900">
+          {mode === "create" ? t("Create category") : t("Edit category")}
+        </div>
+        <p className="mt-1 text-sm text-gray-500">{t("Category maintenance is saved to this workspace taxonomy.")}</p>
+      </div>
+      <div className="space-y-3">
+        <Field label={t("Category ID")} required={mode === "create"}>
+          <Input
+            value={draft.id}
+            disabled={mode === "edit"}
+            placeholder="custom_strategy"
+            onChange={event => setDraft(prev => ({ ...prev, id: event.target.value }))}
+          />
+        </Field>
+        <Field label={t("Name")} required>
+          <Input value={draft.name} onChange={event => setDraft(prev => ({ ...prev, name: event.target.value }))} />
+        </Field>
+        <Field label={t("Alias")}>
+          <Input value={draft.alias} onChange={event => setDraft(prev => ({ ...prev, alias: event.target.value }))} />
+        </Field>
+        <Field label={t("Type")}>
+          <Input value={draft.type} onChange={event => setDraft(prev => ({ ...prev, type: event.target.value }))} />
+        </Field>
+        <Field label={t("Display order")}>
+          <Input
+            type="number"
+            value={draft.display_order}
+            onChange={event => setDraft(prev => ({ ...prev, display_order: event.target.value }))}
+          />
+        </Field>
+        <Field label={t("Description")}>
+          <Textarea rows={4} value={draft.description} onChange={event => setDraft(prev => ({ ...prev, description: event.target.value }))} />
+        </Field>
+      </div>
+      {isBuiltin && (
+        <div className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-800">
+          {t("Editing built-in category metadata affects how this workspace displays and groups attack methods.")}
+        </div>
+      )}
+      {!canSave && missingFields.length > 0 && (
+        <div role="alert" className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          {t("Required before saving: {{fields}}", { fields: missingFields.join(", ") })}
+        </div>
+      )}
+      <div className="flex flex-wrap justify-end gap-2">
+        <Button variant="secondary" onClick={onCancel}>{t("Cancel")}</Button>
+        <Button icon={<Save className="h-4 w-4" />} loading={saving} disabled={!canSave} onClick={onSave}>
+          {mode === "create" ? t("Create") : t("Save")}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function MethodDetail({
+  mapping,
+  currentCategory,
+  categories,
+  categoryLabel,
+  languageLabel,
+  methodKindLabel,
+  mappingEditKey,
+  mappingDraft,
+  setMappingDraft,
+  startEditMapping,
+  cancelEdit,
+  saveEdit,
+  saving,
+}: {
+  mapping: Mapping;
+  currentCategory: Category | undefined;
+  categories: Category[];
+  categoryLabel: (category: Category | undefined) => string;
+  languageLabel: (name: string) => string;
+  methodKindLabel: (mapping: Mapping) => string;
+  mappingEditKey: string;
+  mappingDraft: { categoryId: string; technicalCategory: string };
+  setMappingDraft: React.Dispatch<React.SetStateAction<{ categoryId: string; technicalCategory: string }>>;
+  startEditMapping: (mapping: Mapping) => void;
+  cancelEdit: () => void;
+  saveEdit: () => void;
+  saving: boolean;
+}) {
+  const { t } = useI18n();
+  const editing = mappingEditKey === mappingKey(mapping);
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="break-all text-base font-semibold text-gray-900">{mapping.executor_name}</div>
+          <div className="mt-1 text-xs text-gray-500">{methodKindLabel(mapping)}</div>
+        </div>
+        {mapping.is_builtin && <Badge tone="blue">{t("Built-in")}</Badge>}
+      </div>
+      <div className="space-y-3">
+        <DetailRow label={t("Technical category")} value={mapping.technical_category ?? "other"} />
+        <DetailRow label={t("Compatible languages")} value={languageLabel(mapping.executor_name)} />
+        <DetailRow label={t("Current category")} value={categoryLabel(currentCategory)} />
+        <DetailRow label={t("Mapping key")} value={<span className="font-mono text-xs">{mappingKey(mapping)}</span>} />
+      </div>
+      {!editing ? (
+        <Button variant="secondary" size="sm" icon={<Edit3 className="h-3.5 w-3.5" />} onClick={() => startEditMapping(mapping)}>
+          {t("Edit mapping")}
+        </Button>
+      ) : (
+        <div className="space-y-3 rounded-md border border-gray-200 bg-gray-50 p-3">
+          <Field label={t("Category")}>
+            <Select
+              value={mappingDraft.categoryId}
+              onChange={event => setMappingDraft(prev => ({ ...prev, categoryId: event.target.value }))}
+            >
+              {categories.map(category => (
+                <option key={category.id} value={category.id}>{categoryLabel(category)}</option>
+              ))}
+            </Select>
+          </Field>
+          <Field label={t("Technical category")}>
+            <Input
+              value={mappingDraft.technicalCategory}
+              onChange={event => setMappingDraft(prev => ({ ...prev, technicalCategory: event.target.value }))}
+            />
+          </Field>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button variant="secondary" size="sm" onClick={cancelEdit}>{t("Cancel")}</Button>
+            <Button size="sm" icon={<Save className="h-3.5 w-3.5" />} loading={saving} disabled={!mappingDraft.categoryId} onClick={saveEdit}>
+              {t("Save mapping")}
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { Button } from "../components/ui/Button";
 import { Input, Select, Field, Textarea } from "../components/ui/Form";
 import { ConfiguredPlugin, defaultsFor, ParamField, PluginSchemas } from "../components/PluginParamsForm";
 import { MessageSquare, Plus, CheckCircle, Send, Eye, Wand2, X, ClipboardCheck } from "lucide-react";
+import { Badge, StatusBadge } from "../components/ui/Badge";
 import clsx from "clsx";
 import { toast } from "sonner";
 import { useI18n } from "../lib/i18n";
@@ -63,6 +64,7 @@ export default function ManualConsole() {
   const [datasetPromptPage, setDatasetPromptPage] = useState(0);
   const [converterSearch, setConverterSearch] = useState("");
   const [converterCategory, setConverterCategory] = useState("all");
+  const [resumeErrorByRunId, setResumeErrorByRunId] = useState<Record<string, string>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const urlBootstrappedRef = useRef(false);
 
@@ -215,6 +217,11 @@ export default function ManualConsole() {
     mutationFn: async (run_id: string) =>
       (await api.get(`/api/manual/runs/${run_id}/session`)).data,
     onSuccess: (data) => {
+      setResumeErrorByRunId(prev => {
+        const next = { ...prev };
+        delete next[data.run_id];
+        return next;
+      });
       setSessionState({
         run_id: data.run_id,
         attempt_id: data.attempt_id,
@@ -226,7 +233,11 @@ export default function ManualConsole() {
         messages: data.conversation || [],
       });
     },
-    onError: () => toast.error(t("Failed to resume manual session")),
+    onError: (e: any, runId) => {
+      const detail = e?.response?.data?.detail ?? t("Failed to resume manual session");
+      setResumeErrorByRunId(prev => ({ ...prev, [runId]: detail }));
+      toast.error(detail);
+    },
   });
 
   // Handle query param replay. Runs once when URL params are present so the
@@ -348,7 +359,7 @@ export default function ManualConsole() {
                 />
               </Field>
 
-              <Field label={t("Target *")}>
+              <Field label={t("Target")} required>
                 <Select value={selectedTargetId} onChange={e => setSelectedTargetId(e.target.value)}>
                   <option value="">{t("-- select target --")}</option>
                   {targets.map((target: any) => (
@@ -361,9 +372,13 @@ export default function ManualConsole() {
                 variant="primary"
                 onClick={handleStartSession}
                 loading={createRunMut.isPending || startConversationMut.isPending}
+                disabled={!selectedTargetId}
               >
                 {t("Start session")}
               </Button>
+              {!selectedTargetId && (
+                <p className="text-xs text-gray-500">{t("Choose a target to start a manual session.")}</p>
+              )}
             </div>
           </CardBody>
         </Card>
@@ -377,15 +392,26 @@ export default function ManualConsole() {
               {runningManualRuns.map((run: any) => (
                 <button key={run.id} type="button"
                   onClick={() => resumeMut.mutate(run.id)}
+                  aria-label={t("Resume manual session {{name}}", { name: run.name })}
                   className="w-full rounded-lg border border-gray-200 px-3 py-2 text-left hover:border-gray-300 hover:bg-gray-50 transition">
                   <div className="flex items-center justify-between gap-3">
-                    <div>
+                    <div className="min-w-0">
                       <div className="text-sm font-medium text-gray-900">{run.name}</div>
-                      <div className="text-xs text-gray-500 mt-0.5">
+                      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-gray-500">
+                        <StatusBadge status={run.status} />
+                        <Badge>{run.id.slice(0, 8)}</Badge>
                         {(run.target_names ?? []).join(", ") || t("No target")}
                       </div>
+                      {resumeErrorByRunId[run.id] && (
+                        <div role="alert" className="mt-2 text-xs text-red-600">
+                          {resumeErrorByRunId[run.id]}
+                        </div>
+                      )}
                     </div>
-                    <MessageSquare className="h-4 w-4 text-gray-400" />
+                    <span className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-brand-700">
+                      {t("Resume")}
+                      <MessageSquare className="h-4 w-4" />
+                    </span>
                   </div>
                 </button>
               ))}
@@ -572,6 +598,7 @@ export default function ManualConsole() {
                   <button
                     key={category}
                     type="button"
+                    aria-pressed={converterCategory === category}
                     onClick={() => setConverterCategory(category)}
                     className={clsx(
                       "rounded-full border px-2.5 py-1 text-[11px] font-medium transition",
@@ -608,6 +635,7 @@ export default function ManualConsole() {
                           <button
                             key={plugin}
                             type="button"
+                            aria-pressed={active}
                             onClick={() => toggleConverter(plugin)}
                             className={clsx(
                               "flex items-center justify-between gap-3 rounded-md border px-2.5 py-2 text-left text-xs transition",
@@ -628,6 +656,22 @@ export default function ManualConsole() {
                     <div className="py-6 text-center text-xs text-gray-500">{t("No converters match.")}</div>
                   )}
                 </div>
+              </div>
+
+              <div className="flex items-center justify-between gap-2 text-xs text-gray-500">
+                <span>{t("Selected converters: {{count}}", { count: converters.length })}</span>
+                {converters.length > 0 && (
+                  <button
+                    type="button"
+                    className="font-medium text-brand-700 hover:text-brand-800"
+                    onClick={() => {
+                      setConverters([]);
+                      setPreview(null);
+                    }}
+                  >
+                    {t("Clear all")}
+                  </button>
+                )}
               </div>
 
               {converters.map((converter, idx) => {

@@ -34,6 +34,7 @@ export default function Targets() {
   });
   const [checkResults, setCheckResults] = useState<Record<string, CheckResult | null>>({});
   const [expandedChecks, setExpandedChecks] = useState<Record<string, boolean>>({});
+  const [deleteTarget, setDeleteTarget] = useState<T | null>(null);
   const [limitDrafts, setLimitDrafts] = useState<Record<string, { timeout: string; max_concurrency: string; max_input_chars: string }>>({});
   const timeoutValue = form.timeout ? Number(form.timeout) : null;
   const maxConcurrencyValue = form.max_concurrency ? Number(form.max_concurrency) : null;
@@ -41,6 +42,13 @@ export default function Targets() {
   const validLimits = (timeoutValue === null || timeoutValue > 0)
     && (maxConcurrencyValue === null || (Number.isInteger(maxConcurrencyValue) && maxConcurrencyValue > 0))
     && (maxInputCharsValue === null || (Number.isInteger(maxInputCharsValue) && maxInputCharsValue > 0));
+  const missingCreateFields = [
+    !form.name && t("Name"),
+    !form.base_url && t("Base URL"),
+    !form.model && t("Model"),
+    !form.api_key && t("API key"),
+    !validLimits && t("Valid positive limits"),
+  ].filter(Boolean);
   
   const create = useMutation({
     mutationFn: async () => {
@@ -69,7 +77,11 @@ export default function Targets() {
   });
   const del = useMutation({
     mutationFn: async (id: string) => api.delete(`/api/targets/${id}`),
-    onSuccess: () => { toast.success(t("Deleted")); qc.invalidateQueries({ queryKey: ["targets"] }); },
+    onSuccess: () => {
+      toast.success(t("Deleted"));
+      setDeleteTarget(null);
+      qc.invalidateQueries({ queryKey: ["targets"] });
+    },
   });
   const updateLimits = useMutation({
     mutationFn: async ({ id, draft }: { id: string; draft: { timeout: string; max_concurrency: string; max_input_chars: string } }) => {
@@ -111,7 +123,22 @@ export default function Targets() {
         toast.error(t("Target check failed: {{error}}", { error: result.error ?? "" }));
       }
     },
-    onError: (e: any) => toast.error(e?.response?.data?.detail ?? t("Check failed")),
+    onError: (e: any, id) => {
+      const detail = e?.response?.data?.detail ?? t("Check failed");
+      setCheckResults(prev => ({
+        ...prev,
+        [id]: {
+          ok: false,
+          latency_ms: null,
+          response_preview: null,
+          stream_ok: null,
+          stream_error: null,
+          error: detail,
+          model_echo: null,
+        },
+      }));
+      toast.error(detail);
+    },
   });
 
   return (
@@ -128,7 +155,7 @@ export default function Targets() {
         </CardHeader>
         <CardBody>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Field label={t("Name")}><Input placeholder="e.g. gpt-4o-mini" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></Field>
+            <Field label={t("Name")} required><Input placeholder="e.g. gpt-4o-mini" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></Field>
             <Field label={t("Plugin")}>
               <Select value={form.plugin} onChange={e => setForm({ ...form, plugin: e.target.value })}>
                 <option value="openai_compat">openai_compat</option>
@@ -136,8 +163,8 @@ export default function Targets() {
                 <option value="anthropic_compat">anthropic_compat</option>
               </Select>
             </Field>
-            <Field label={t("Base URL")} hint="e.g. https://api.openai.com/v1"><Input value={form.base_url} onChange={e => setForm({ ...form, base_url: e.target.value })} /></Field>
-            <Field label={t("Model")}><Input placeholder="e.g. gpt-4o-mini" value={form.model} onChange={e => setForm({ ...form, model: e.target.value })} /></Field>
+            <Field label={t("Base URL")} hint="e.g. https://api.openai.com/v1" required><Input value={form.base_url} onChange={e => setForm({ ...form, base_url: e.target.value })} /></Field>
+            <Field label={t("Model")} required><Input placeholder="e.g. gpt-4o-mini" value={form.model} onChange={e => setForm({ ...form, model: e.target.value })} /></Field>
             <Field label={t("Request timeout")} hint={t("Seconds. Blank uses the target plugin default.")}>
               <Input
                 type="number"
@@ -169,12 +196,17 @@ export default function Targets() {
               />
             </Field>
             <div className="md:col-span-2">
-              <Field label={t("API key")} hint={t("Stored encrypted. Never exposed via API.")}>
+              <Field label={t("API key")} hint={t("Stored encrypted. Never exposed via API.")} required>
                 <Input type="password" value={form.api_key} onChange={e => setForm({ ...form, api_key: e.target.value })} />
               </Field>
             </div>
           </div>
-          <div className="mt-5 flex justify-end">
+          <div className="mt-5 flex flex-wrap items-center justify-end gap-3">
+            {missingCreateFields.length > 0 && (
+              <div className="mr-auto rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                {t("Required before creating: {{fields}}", { fields: missingCreateFields.join(", ") })}
+              </div>
+            )}
             <Button
               icon={<Plus className="h-4 w-4" />}
               loading={create.isPending}
@@ -274,6 +306,7 @@ export default function Targets() {
                               variant="secondary"
                               size="sm"
                               icon={<Save className="h-3.5 w-3.5" />}
+                              aria-label={t("Save limits for target {{name}}", { name: target.name })}
                               disabled={!draftValid}
                               loading={updateLimits.isPending && updateLimits.variables?.id === target.id}
                               onClick={() => updateLimits.mutate({ id: target.id, draft })}
@@ -290,13 +323,15 @@ export default function Targets() {
                             variant="ghost" 
                             size="sm" 
                             icon={<CheckCircle2 className="h-3.5 w-3.5" />}
+                            aria-label={t("Test target {{name}}", { name: target.name })}
                             onClick={() => check.mutate(target.id)}
                             loading={check.isPending && check.variables === target.id}
                           >
                             {t("Test")}
                           </Button>
                           <Button variant="ghost" size="sm" icon={<Trash2 className="h-3.5 w-3.5" />}
-                            onClick={() => { if (confirm(t("Delete this target?"))) del.mutate(target.id); }}>
+                            aria-label={t("Delete target {{name}}", { name: target.name })}
+                            onClick={() => setDeleteTarget(target)}>
                             {t("Delete")}
                           </Button>
                         </td>
@@ -306,9 +341,14 @@ export default function Targets() {
                           <td colSpan={6} className="px-5 py-2 bg-gray-50">
                             <div className="text-sm">
                               {result.ok ? (
-                                <div className="flex items-center gap-2 text-green-700">
+                                <div role="status" className="flex items-center gap-2 text-green-700">
                                   <CheckCircle2 className="h-4 w-4" />
-                                  <span className="font-medium">✓ OK ({result.latency_ms} ms)</span>
+                                  <span className="font-medium">
+                                    {t("Target {{name}} OK ({{latency}} ms)", {
+                                      name: target.name,
+                                      latency: result.latency_ms ?? "-",
+                                    })}
+                                  </span>
                                   {result.stream_ok === true && <Badge tone="green">{t("stream")}</Badge>}
                                   {result.stream_ok === false && <Badge tone="amber">{t("no stream")}</Badge>}
                                   {result.response_preview && (
@@ -321,10 +361,10 @@ export default function Targets() {
                                   )}
                                 </div>
                               ) : (
-                                <div className="flex items-start gap-2 text-red-700">
+                                <div role="alert" className="flex items-start gap-2 text-red-700">
                                   <AlertCircle className="h-4 w-4 mt-0.5" />
                                   <div>
-                                    <span className="font-medium">✗ {t("Error")}: </span>
+                                    <span className="font-medium">{t("Target {{name}} check failed", { name: target.name })}: </span>
                                     <span className="text-sm">{result.error}</span>
                                   </div>
                                 </div>
@@ -351,6 +391,31 @@ export default function Targets() {
           </div>
         )}
       </Card>
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 px-4">
+          <div className="w-full max-w-md rounded-lg border border-gray-200 bg-white p-5 shadow-2xl">
+            <h2 className="text-base font-semibold text-gray-900">{t("Delete target?")}</h2>
+            <p className="mt-2 text-sm text-gray-600">
+              {t("Delete {{name}}. Existing runs keep their historical data, but this target can no longer be selected.", {
+                name: deleteTarget.name,
+              })}
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setDeleteTarget(null)}>
+                {t("Cancel")}
+              </Button>
+              <Button
+                variant="danger"
+                icon={<Trash2 className="h-4 w-4" />}
+                loading={del.isPending}
+                onClick={() => del.mutate(deleteTarget.id)}
+              >
+                {t("Delete target")}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

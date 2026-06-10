@@ -106,6 +106,10 @@ export default function NewRun() {
     () => targets?.find((target: any) => target.id === targetId),
     [targets, targetId],
   );
+  const selectedDataset = useMemo(
+    () => datasets?.find((dataset: any) => dataset.id === datasetId),
+    [datasets, datasetId],
+  );
   const selectedTargetMaxInputChars = selectedTarget?.params?.max_input_chars;
   const targetHasInputLimit = selectedTargetMaxInputChars != null && selectedTargetMaxInputChars !== "";
   const showSplitExecutorRecommendation = mode === "custom"
@@ -435,9 +439,22 @@ export default function NewRun() {
   const canSubmit = !!targetId && !!datasetId
     && (mode === "custom" || (!!scenarioId && scenarioRequirements.every((req: any) => !!scenarioHelpers[req.id])))
     && paramValidation.length === 0;
+  const missingRunRequirements = [
+    !targetId && t("Choose a target"),
+    !datasetId && t("Choose a dataset"),
+    mode === "preset" && !scenarioId && t("Choose a scenario"),
+    mode === "preset" && scenarioRequirements.some((req: any) => !scenarioHelpers[req.id]) && t("Complete scenario helper targets"),
+    mode === "custom" && nativeExecutors.length + converters.length === 0 && t("Choose at least one attack method"),
+    ...paramValidation.map(field => t("Complete {{field}}", { field })),
+  ].filter(Boolean);
+  const selectedMethodCount = nativeExecutors.length + converters.length;
+  const samplingSummary = samplingEnabled
+    ? t("Enabled{{limit}}", { limit: samplingLimit ? `, ${samplingLimit}` : "" })
+    : t("Off");
 
   return (
-    <div className="max-w-3xl space-y-6">
+    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">{t("New run")}</h1>
         <p className="text-sm text-gray-500 mt-1">{t("Pick a preset scenario or assemble your own pipeline.")}</p>
@@ -457,7 +474,7 @@ export default function NewRun() {
           </div>
           <div className="mt-5">
             <div className="label">{t("Mode")}</div>
-            <div className="grid grid-cols-2 gap-3">
+            <div role="radiogroup" aria-label={t("Run mode")} className="grid grid-cols-2 gap-3">
               {([
                 { id: "preset", title: t("Preset scenario"), desc: t("Curated pipelines (OWASP, jailbreak, …)"), icon: Sparkles },
                 { id: "custom", title: t("Custom pipeline"), desc: t("Choose your own executors, methods, scorer"), icon: Wrench },
@@ -465,7 +482,7 @@ export default function NewRun() {
                 const Icon = opt.icon;
                 const active = mode === opt.id;
                 return (
-                  <button key={opt.id} type="button" onClick={() => setMode(opt.id)}
+                  <button key={opt.id} type="button" role="radio" aria-checked={active} onClick={() => setMode(opt.id)}
                     className={clsx(
                       "text-left rounded-xl border px-4 py-3 transition",
                       active ? "border-brand-500 ring-2 ring-brand-200 bg-brand-50/50" : "border-gray-200 hover:border-gray-300",
@@ -775,6 +792,11 @@ export default function NewRun() {
                       <button
                         key={category}
                         type="button"
+                        aria-pressed={attackCategory === category}
+                        aria-label={t("Filter attack methods by {{category}}, {{count}} methods", {
+                          category: attackCategoryLabel(category),
+                          count: attackCategoryCounts[category] ?? 0,
+                        })}
                         onClick={() => setAttackCategory(category)}
                         className={clsx(
                           "rounded-full border px-2.5 py-1 text-[11px] font-medium transition",
@@ -871,6 +893,9 @@ export default function NewRun() {
                                     key={method.key}
                                     type="button"
                                     disabled={disabled}
+                                    aria-disabled={disabled || undefined}
+                                    aria-pressed={on}
+                                    aria-label={t("Toggle attack method {{name}}", { name: method.plugin })}
                                     title={executorLanguageLabel(method.plugin)}
                                     onClick={() => toggleAttackMethod(method)}
                                     className={clsx(
@@ -1013,9 +1038,12 @@ export default function NewRun() {
         </Card>
       )}
 
-      {paramValidation.length > 0 && (
+      {missingRunRequirements.length > 0 && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          {t("Missing required fields: {{fields}}", { fields: paramValidation.join(", ") })}
+          <div className="font-medium">{t("Required before creating")}</div>
+          <ul className="mt-1 list-disc space-y-0.5 pl-5">
+            {missingRunRequirements.map(item => <li key={String(item)}>{item}</li>)}
+          </ul>
         </div>
       )}
 
@@ -1025,6 +1053,61 @@ export default function NewRun() {
           {t("Create & start")}
         </Button>
       </div>
+      </div>
+      <aside className="hidden xl:block">
+        <Card className="sticky top-8">
+          <CardHeader>
+            <CardTitle>{t("Review run")}</CardTitle>
+            <CardDescription>{t("Confirm the setup before starting.")}</CardDescription>
+          </CardHeader>
+          <CardBody className="space-y-4">
+            <div className="space-y-3 text-sm">
+              <SummaryRow label={t("Mode")} value={mode === "preset" ? t("Preset scenario") : t("Custom pipeline")} />
+              <SummaryRow label={t("Run name")} value={name || t("Untitled run")} />
+              <SummaryRow label={t("Target")} value={selectedTarget?.name ?? t("Not selected")} />
+              <SummaryRow label={t("Dataset")} value={selectedDataset?.name ?? t("Not selected")} />
+              <SummaryRow
+                label={mode === "preset" ? t("Scenario") : t("Attack methods")}
+                value={mode === "preset"
+                  ? (selectedScenario?.title ?? t("Not selected"))
+                  : t("{{count}} selected", { count: selectedMethodCount })}
+              />
+              <SummaryRow label={t("Scorer")} value={scorer.plugin} />
+              <SummaryRow label={t("Sampling")} value={samplingSummary} />
+            </div>
+            {missingRunRequirements.length > 0 ? (
+              <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                <div className="font-medium">{t("Missing requirements")}</div>
+                <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                  {missingRunRequirements.map(item => <li key={String(item)}>{item}</li>)}
+                </ul>
+              </div>
+            ) : (
+              <div role="status" className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+                {t("Ready to create.")}
+              </div>
+            )}
+            <Button
+              className="w-full justify-center"
+              icon={<PlayCircle className="h-4 w-4" />}
+              loading={submit.isPending}
+              disabled={!canSubmit}
+              onClick={() => submit.mutate()}
+            >
+              {t("Create & start")}
+            </Button>
+          </CardBody>
+        </Card>
+      </aside>
+    </div>
+  );
+}
+
+function SummaryRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-start justify-between gap-3 border-b border-gray-100 pb-2 last:border-b-0 last:pb-0">
+      <span className="text-xs font-medium uppercase tracking-wide text-gray-500">{label}</span>
+      <span className="max-w-[11rem] text-right text-sm font-medium text-gray-900 break-words">{value}</span>
     </div>
   );
 }
