@@ -138,6 +138,31 @@ def test_prefix_injection_audit_uses_confirmed_method_set():
         assert language_support_for_converter_method(method) == ["en", "zh"]
 
 
+def test_indirect_prompt_injection_audit_uses_confirmed_method_set():
+    from airedteam.core.attack_method_categories import default_attack_method_category_for
+    from airedteam.core.executor_methods import language_support_for_converter_method, method_description_for
+    from airedteam.core.registry import default_registry
+
+    expected = {
+        "indirect_web_pwn",
+        "document_metadata_injection",
+        "email_body_injection",
+        "indirect_tool_result",
+        "rag_poisoning",
+        "cross_plugin_request_forgery",
+        "deepset_injection_dataset",
+        "embedded_instruction_json",
+        "context_poisoning",
+        "context_flooding",
+        "synthetic_context_injection",
+    }
+    for method in expected:
+        assert default_attack_method_category_for("converter_method", method) == "indirect_prompt_injection"
+        assert language_support_for_converter_method(method) == ["en", "zh"]
+        assert default_registry().get("converters", method)().name == method
+        assert method_description_for(method)
+
+
 def test_confirmed_attack_methods_have_function_descriptions():
     from airedteam.core.executor_methods import method_description_for
 
@@ -181,6 +206,17 @@ def test_confirmed_attack_methods_have_function_descriptions():
         "payload_mask_attack",
         "sandwich",
         "sg_sentence_generator",
+        "indirect_web_pwn",
+        "document_metadata_injection",
+        "email_body_injection",
+        "indirect_tool_result",
+        "rag_poisoning",
+        "cross_plugin_request_forgery",
+        "deepset_injection_dataset",
+        "embedded_instruction_json",
+        "context_poisoning",
+        "context_flooding",
+        "synthetic_context_injection",
     }
     descriptions = {method: method_description_for(method) for method in expected}
 
@@ -289,6 +325,42 @@ async def test_prefix_injection_converters_wrap_prompt_with_output_control_shape
     assert terminal.text.endswith("payload")
     assert "JSON" in output_format.text
     assert output_format.text.endswith("payload")
+
+
+@pytest.mark.asyncio
+async def test_indirect_prompt_injection_converters_wrap_prompt_as_external_content():
+    from airedteam.builtins.converters.prompt_framing.cross_plugin_request_forgery import (
+        CrossPluginRequestForgeryConverter,
+    )
+    from airedteam.builtins.converters.prompt_framing.document_metadata_injection import (
+        DocumentMetadataInjectionConverter,
+    )
+    from airedteam.builtins.converters.prompt_framing.email_body_injection import (
+        EmailBodyInjectionConverter,
+    )
+    from airedteam.builtins.converters.prompt_framing.indirect_tool_result import (
+        IndirectToolResultConverter,
+    )
+    from airedteam.builtins.converters.prompt_framing.rag_poisoning import RagPoisoningConverter
+    from airedteam.core.types import Prompt
+
+    payload = Prompt(text="payload")
+    metadata = await DocumentMetadataInjectionConverter().convert(payload)
+    email = await EmailBodyInjectionConverter().convert(payload)
+    tool = await IndirectToolResultConverter().convert(payload)
+    rag = await RagPoisoningConverter().convert(payload)
+    plugin = await CrossPluginRequestForgeryConverter().convert(payload)
+
+    assert "metadata" in metadata.text.lower()
+    assert metadata.text.endswith("payload")
+    assert "email body" in email.text.lower()
+    assert email.text.endswith("payload")
+    assert "api result" in tool.text.lower()
+    assert "payload" in tool.text
+    assert "retrieved" in rag.text.lower()
+    assert rag.text.endswith("payload")
+    assert "plugin" in plugin.text.lower()
+    assert plugin.text.endswith("payload")
 
 
 @pytest.mark.asyncio

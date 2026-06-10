@@ -234,20 +234,25 @@ Policy: upstream benchmark method names stay in source spelling; local converter
 | `affirmative_prefix_forcing` | prompt framing | AiredTeam taxonomy |
 | `anti_gpt_dual_response` | prompt framing | AiredTeam taxonomy |
 | `completion_continuation` | prompt framing | AiredTeam taxonomy |
+| `cross_plugin_request_forgery` | prompt framing | AiredTeam taxonomy |
 | `deep_inception` | prompt framing | AiredTeam taxonomy |
 | `developer_mode` | prompt framing | AiredTeam taxonomy |
+| `document_metadata_injection` | prompt framing | AiredTeam taxonomy |
 | `dual_persona_split` | prompt framing | AiredTeam taxonomy |
+| `email_body_injection` | prompt framing | AiredTeam taxonomy |
 | `forced_response` | prompt framing | AiredTeam taxonomy |
 | `forged_assistant_approval` | prompt framing | AiredTeam taxonomy |
 | `forged_dialogue_history` | prompt framing | AiredTeam taxonomy |
 | `forged_tool_result` | prompt framing | AiredTeam taxonomy |
 | `forced_output_format` | prompt framing | AiredTeam taxonomy |
 | `game_simulation_world` | prompt framing | AiredTeam taxonomy |
+| `indirect_tool_result` | prompt framing | AiredTeam taxonomy |
 | `oppo_persona` | prompt framing | AiredTeam taxonomy |
+| `rag_poisoning` | prompt framing | AiredTeam taxonomy |
 | `refusal_suppression` | prompt framing | AiredTeam taxonomy |
 | `task_context_rewrite` | prompt framing | AiredTeam taxonomy |
 | `terminal_simulation` | prompt framing | AiredTeam taxonomy |
 | `villain_persona` | prompt framing | AiredTeam taxonomy |
 
 Total investigated frameworks: 54.
-Total current canonical converters: 179.
+Total current canonical converters: 184.
