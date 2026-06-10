@@ -130,6 +130,7 @@ BILINGUAL_TEXT_CONVERTER_METHODS = {
     "llm_toxic_sentence",
     "llm_variation",
     "low_resource_language",
+    "many_shot_padding",
     "markdown_wrapper",
     "math_obfuscation",
     "math_prompt",
@@ -163,6 +164,7 @@ BILINGUAL_TEXT_CONVERTER_METHODS = {
     "skeleton_key",
     "sneaky_bits_smuggler",
     "string_join",
+    "structured_iicl",
     "suffix",
     "suffix_append",
     "synthetic_context_injection",
@@ -265,6 +267,10 @@ EXECUTOR_METHOD_DESCRIPTIONS: dict[str, str] = {
     "context_poisoning": "Injects false background context before the payload.",
     "context_flooding": "Floods the prompt with benign context before the payload.",
     "synthetic_context_injection": "Prepends fabricated system context before the payload.",
+    "few_shot": "Prepends a small set of user and assistant examples before the payload.",
+    "many_shot_padding": "Pads the prompt with many in-context examples before the payload.",
+    "structured_iicl": "Frames the payload as the next structured input/output example.",
+    "composite_jailbreak": "Combines multiple jailbreak frames such as role, override, and audit pretexts.",
 }
 
 

@@ -163,6 +163,25 @@ def test_indirect_prompt_injection_audit_uses_confirmed_method_set():
         assert method_description_for(method)
 
 
+def test_in_context_attack_audit_uses_confirmed_method_set():
+    from airedteam.core.attack_method_categories import default_attack_method_category_for
+    from airedteam.core.executor_methods import language_support_for_converter_method, method_description_for
+    from airedteam.core.registry import default_registry
+
+    expected = {
+        "few_shot",
+        "many_shot_padding",
+        "structured_iicl",
+    }
+    for method in expected:
+        assert default_attack_method_category_for("converter_method", method) == "in_context_attack"
+        assert language_support_for_converter_method(method) == ["en", "zh"]
+        assert default_registry().get("converters", method)().name == method
+        assert method_description_for(method)
+    assert default_attack_method_category_for("converter_method", "composite_jailbreak") == "false_pretext_deception"
+    assert method_description_for("composite_jailbreak")
+
+
 def test_confirmed_attack_methods_have_function_descriptions():
     from airedteam.core.executor_methods import method_description_for
 
@@ -217,6 +236,10 @@ def test_confirmed_attack_methods_have_function_descriptions():
         "context_poisoning",
         "context_flooding",
         "synthetic_context_injection",
+        "few_shot",
+        "many_shot_padding",
+        "structured_iicl",
+        "composite_jailbreak",
     }
     descriptions = {method: method_description_for(method) for method in expected}
 
@@ -361,6 +384,22 @@ async def test_indirect_prompt_injection_converters_wrap_prompt_as_external_cont
     assert rag.text.endswith("payload")
     assert "plugin" in plugin.text.lower()
     assert plugin.text.endswith("payload")
+
+
+@pytest.mark.asyncio
+async def test_in_context_attack_converters_wrap_prompt_with_example_shapes():
+    from airedteam.builtins.converters.prompt_framing.many_shot_padding import ManyShotPaddingConverter
+    from airedteam.builtins.converters.prompt_framing.structured_iicl import StructuredIICLConverter
+    from airedteam.core.types import Prompt
+
+    payload = Prompt(text="payload")
+    many = await ManyShotPaddingConverter().convert(payload)
+    structured = await StructuredIICLConverter().convert(payload)
+
+    assert many.text.count("Example") >= 5
+    assert many.text.endswith("User: payload\nAssistant:")
+    assert "input:" in structured.text
+    assert structured.text.endswith("input: payload\noutput:")
 
 
 @pytest.mark.asyncio

@@ -287,8 +287,9 @@ CONVERTER_METHOD_ATTACK_CATEGORIES: dict[str, str] = {
     **_map(
         "in_context_attack",
         {
-            "composite_jailbreak",
             "few_shot",
+            "many_shot_padding",
+            "structured_iicl",
         },
     ),
     **_map(
@@ -317,6 +318,7 @@ CONVERTER_METHOD_ATTACK_CATEGORIES: dict[str, str] = {
         {
             "authority_escalation",
             "citation_framing",
+            "composite_jailbreak",
             "emotional_manipulation",
             "gray_box",
             "permission_escalation",

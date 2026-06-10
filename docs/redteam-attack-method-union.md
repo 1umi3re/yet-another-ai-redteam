@@ -166,6 +166,7 @@ Policy: upstream benchmark method names stay in source spelling; local converter
 | `llm_variation` | LLM rewrite | AegisRT, AgentVigil, AutoRedTeamer, Counterfit, EasyJailbreak, FuzzyAI, GPTFuzzer, LLAMATOR, Moonshot, OpenAttack, OpenBackdoor, PandaGuard, PromptBench, PyRIT, TextAttack, garak, h4rm3l |
 | `low_resource_language` | obfuscation | AISafetyLab, AutoRedTeamer, GuidedBench, JailTrickBench, LLAMATOR, OpenRT, StrongREJECT, garak, h4rm3l |
 | `lowercase` | obfuscation | PyRIT, garak |
+| `many_shot_padding` | prompt framing | AiredTeam suite only |
 | `markdown_wrapper` | prompt framing | AegisRT, JailbreakLLM, PyRIT |
 | `math_obfuscation` | obfuscation | PyRIT |
 | `math_prompt` | prompt framing | AutoRedTeamer, DeepTeam, Giskard, Promptfoo, PyRIT |
@@ -205,6 +206,7 @@ Policy: upstream benchmark method names stay in source spelling; local converter
 | `skeleton_key` | prompt framing | AISafetyLab, AutoRedTeamer, JailbreakLLM, OpenRT, Promptfoo, PyRIT, RaccoonBench, StrongREJECT, h4rm3l |
 | `sneaky_bits_smuggler` | encoding | AI-Infra-Guard, PyRIT |
 | `string_join` | obfuscation | Azure AI Evaluation, PyRIT |
+| `structured_iicl` | prompt framing | AiredTeam suite only |
 | `suffix` | prompt framing | AegisRT, Counterfit, FuzzyAI, LLAMATOR, OpenBackdoor, PromptBench, StrongREJECT, TextAttack, h4rm3l |
 | `suffix_append` | obfuscation | Agent Security Bench, Azure AI Evaluation, Counterfit, FuzzyAI, LLAMATOR, Open-Prompt-Injection, OpenBackdoor, PromptBench, PyRIT, StrongREJECT, TextAttack, UDora, h4rm3l |
 | `superscript` | encoding | PyRIT |
