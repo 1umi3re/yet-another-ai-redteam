@@ -196,6 +196,12 @@ def _map(category_id: str, names: set[str]) -> dict[str, str]:
 
 CONVERTER_METHOD_ATTACK_CATEGORIES: dict[str, str] = {
     **_map(
+        UNCATEGORIZED_ATTACK_METHOD_CATEGORY_ID,
+        {
+            "chat_inject",
+        },
+    ),
+    **_map(
         "instruction_override",
         {
             "forced_response",
@@ -231,34 +237,27 @@ CONVERTER_METHOD_ATTACK_CATEGORIES: dict[str, str] = {
     **_map(
         "nested_scenario_fiction",
         {
-            "deep_inception",
+            "adversarial_poetry",
             "fictional",
-            "game_simulation_world",
-            "task_context_rewrite",
         },
     ),
     **_map(
         "opposite_mode",
         {
-            "anti_gpt_dual_response",
             "negation_trap",
-            "oppo_persona",
         },
     ),
     **_map(
         "prefix_injection",
         {
-            "affirmative_prefix_forcing",
-            "forced_output_format",
             "input_bypass",
             "instruction_tag",
             "payload_mask_attack",
             "prompt_injection",
-            "refusal_suppression",
+            "sandwich",
             "sg_sentence_generator",
             "suffix",
             "suffix_append",
-            "terminal_simulation",
         },
     ),
     **_map(
@@ -266,14 +265,9 @@ CONVERTER_METHOD_ATTACK_CATEGORIES: dict[str, str] = {
         {
             "context_flooding",
             "context_poisoning",
-            "cross_plugin_request_forgery",
             "deepset_injection_dataset",
-            "document_metadata_injection",
-            "email_body_injection",
             "embedded_instruction_json",
-            "indirect_tool_result",
             "indirect_web_pwn",
-            "rag_poisoning",
             "synthetic_context_injection",
         },
     ),
@@ -282,15 +276,11 @@ CONVERTER_METHOD_ATTACK_CATEGORIES: dict[str, str] = {
         {
             "composite_jailbreak",
             "few_shot",
-            "many_shot_padding",
-            "structured_iicl",
         },
     ),
     **_map(
         "reformulation",
         {
-            "academic_style_rewrite",
-            "adversarial_poetry",
             "colloquial_wordswap",
             "llm_generic",
             "llm_malicious_question",
@@ -313,21 +303,17 @@ CONVERTER_METHOD_ATTACK_CATEGORIES: dict[str, str] = {
         {
             "authority_escalation",
             "citation_framing",
-            "educational_pretext",
             "emotional_manipulation",
             "gray_box",
             "permission_escalation",
             "research",
-            "sandwich",
             "semantic_manipulation",
-            "sympathy_grandma_story",
             "transparency_attack",
         },
     ),
     **_map(
         "multi_turn_escalation",
         {
-            "deceptive_delight",
             "likert_framing",
             "skeleton_key",
         },
@@ -337,16 +323,12 @@ CONVERTER_METHOD_ATTACK_CATEGORIES: dict[str, str] = {
         {
             "payload_split",
             "template_segment",
-            "token_smuggling",
         },
     ),
     **_map(
         "adversarial_suffix_optimization",
         {
-            "autodan_evolution",
             "gcg",
-            "gptfuzzer_template",
-            "tap_tree_search",
         },
     ),
     **_map(
@@ -454,9 +436,7 @@ CONVERTER_METHOD_ATTACK_CATEGORIES: dict[str, str] = {
         "special_token_template_injection",
         {
             "authoritative_markup",
-            "chat_inject",
             "code_chameleon",
-            "special_delimiter_token",
             "template_jailbreak",
         },
     ),
@@ -464,44 +444,29 @@ CONVERTER_METHOD_ATTACK_CATEGORIES: dict[str, str] = {
         "cot_reasoning_hijacking",
         {
             "chain_of_thought",
-            "educational_reasoning_shell",
-            "harmless_reasoning_dilution",
             "math_prompt",
-            "safety_cot_hijack",
         },
     ),
     **_map(
         "self_elicitation",
         {
-            "feature_self_disclosure",
             "goal_redirection",
             "human_in_the_loop",
             "linguistic_confusion",
             "meta_agent",
-            "recursive_self_prompt",
-            "self_generated_content",
-            "self_persuasion",
         },
     ),
     **_map(
         "secondary_injection",
         {
             "markdown_wrapper",
-            "rce_downstream_injection",
-            "reverse_injection",
-            "sqli_downstream_injection",
-            "ssrf_downstream_injection",
-            "xss_downstream_injection",
         },
     ),
     **_map(
         "resource_exhaustion",
         {
             "control_chars_repetition",
-            "deep_nested_input",
-            "infinite_generation",
             "repeat_token",
-            "sponge_sample",
         },
     ),
 }

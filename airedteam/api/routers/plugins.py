@@ -855,8 +855,6 @@ def general_multi_turn_executor_names(registry=None) -> list[str]:
 
 def plugin_param_schemas(registry=None) -> dict[str, dict[str, dict]]:
     schemas = deepcopy(PARAM_SCHEMAS)
-    for name in converter_method_names():
-        schemas["converters"].setdefault(name, {})
     schemas["executors"] = _executor_param_schemas(registry)
     schemas["executor_methods"] = deepcopy(PARAM_SCHEMAS["converters"])
     return schemas

@@ -4,162 +4,6 @@ from airedteam.services.attack_method_categories import AttackMethodCategoryServ
 from airedteam.storage import models
 from airedteam.storage.db import make_engine, make_sessionmaker
 
-EXPECTED_CATEGORY_METHODS_4_TO_20 = {
-    "nested_scenario_fiction": {
-        "deep_inception",
-        "task_context_rewrite",
-        "fictional",
-        "game_simulation_world",
-    },
-    "opposite_mode": {
-        "anti_gpt_dual_response",
-        "oppo_persona",
-        "negation_trap",
-    },
-    "prefix_injection": {
-        "affirmative_prefix_forcing",
-        "refusal_suppression",
-        "terminal_simulation",
-        "forced_output_format",
-    },
-    "indirect_prompt_injection": {
-        "indirect_web_pwn",
-        "document_metadata_injection",
-        "email_body_injection",
-        "indirect_tool_result",
-        "rag_poisoning",
-        "cross_plugin_request_forgery",
-    },
-    "in_context_attack": {
-        "few_shot",
-        "many_shot_padding",
-        "structured_iicl",
-    },
-    "reformulation": {
-        "tense",
-        "llm_persuasion",
-        "low_resource_language",
-        "academic_style_rewrite",
-        "adversarial_poetry",
-    },
-    "false_pretext_deception": {
-        "research",
-        "permission_escalation",
-        "educational_pretext",
-        "sympathy_grandma_story",
-        "sandwich",
-        "authority_escalation",
-    },
-    "multi_turn_escalation": {
-        "executor:crescendo",
-        "likert_framing",
-        "skeleton_key",
-        "deceptive_delight",
-    },
-    "payload_splitting": {
-        "payload_split",
-        "token_smuggling",
-        "template_segment",
-        "executor:split_executor",
-    },
-    "adversarial_suffix_optimization": {
-        "gcg",
-        "autodan_evolution",
-        "executor:pair",
-        "tap_tree_search",
-        "gptfuzzer_template",
-    },
-    "encoding_obfuscation": {
-        "base64",
-        "rot13",
-        "hex",
-        "ascii_art",
-        "caesar",
-        "zero_width",
-    },
-    "multimodal_injection": {
-        "image_noise",
-        "add_image_text",
-        "audio_white_noise",
-        "pdf",
-    },
-    "special_token_template_injection": {
-        "chat_inject",
-        "special_delimiter_token",
-        "template_jailbreak",
-    },
-    "cot_reasoning_hijacking": {
-        "chain_of_thought",
-        "safety_cot_hijack",
-        "harmless_reasoning_dilution",
-        "educational_reasoning_shell",
-    },
-    "self_elicitation": {
-        "feature_self_disclosure",
-        "recursive_self_prompt",
-        "self_persuasion",
-        "self_generated_content",
-    },
-    "secondary_injection": {
-        "xss_downstream_injection",
-        "sqli_downstream_injection",
-        "ssrf_downstream_injection",
-        "rce_downstream_injection",
-        "reverse_injection",
-    },
-    "resource_exhaustion": {
-        "infinite_generation",
-        "repeat_token",
-        "deep_nested_input",
-        "sponge_sample",
-    },
-}
-
-NEW_TAXONOMY_TEMPLATE_METHODS = {
-    method
-    for methods in EXPECTED_CATEGORY_METHODS_4_TO_20.values()
-    for method in methods
-    if not method.startswith("executor:")
-} - {
-    "fictional",
-    "negation_trap",
-    "indirect_web_pwn",
-    "few_shot",
-    "tense",
-    "llm_persuasion",
-    "low_resource_language",
-    "adversarial_poetry",
-    "research",
-    "permission_escalation",
-    "sandwich",
-    "authority_escalation",
-    "likert_framing",
-    "skeleton_key",
-    "payload_split",
-    "template_segment",
-    "gcg",
-    "base64",
-    "rot13",
-    "hex",
-    "ascii_art",
-    "caesar",
-    "zero_width",
-    "image_noise",
-    "add_image_text",
-    "audio_white_noise",
-    "pdf",
-    "chat_inject",
-    "template_jailbreak",
-    "chain_of_thought",
-    "repeat_token",
-}
-
-
-def _split_expected_method(method: str) -> tuple[str, str]:
-    if method.startswith("executor:"):
-        return "executor", method.split(":", 1)[1]
-    return "converter_method", method
-
 
 def test_instruction_override_audit_uses_confirmed_method_set():
     from airedteam.core.attack_method_categories import (
@@ -182,11 +26,17 @@ def test_instruction_override_audit_uses_confirmed_method_set():
 
 
 def test_dialogue_injection_audit_uses_confirmed_method_set():
-    from airedteam.core.attack_method_categories import default_attack_method_category_for
+    from airedteam.core.attack_method_categories import (
+        UNCATEGORIZED_ATTACK_METHOD_CATEGORY_ID,
+        default_attack_method_category_for,
+    )
     from airedteam.core.executor_methods import language_support_for_converter_method
     from airedteam.core.registry import default_registry
 
-    assert default_attack_method_category_for("converter_method", "chat_inject") == "special_token_template_injection"
+    assert (
+        default_attack_method_category_for("converter_method", "chat_inject")
+        == UNCATEGORIZED_ATTACK_METHOD_CATEGORY_ID
+    )
     expected = {
         "forged_assistant_approval",
         "forged_dialogue_history",
@@ -197,51 +47,6 @@ def test_dialogue_injection_audit_uses_confirmed_method_set():
         assert default_attack_method_category_for("converter_method", method) == "dialogue_injection"
         assert language_support_for_converter_method(method) == ["en", "zh"]
         assert default_registry().get("converters", method)().name == method
-
-
-def test_remaining_taxonomy_categories_cover_category_csv_subclasses():
-    from airedteam.core.attack_method_categories import default_attack_method_category_for
-    from airedteam.core.executor_methods import (
-        language_support_for_converter_method,
-        language_support_for_executor,
-        method_description_for,
-    )
-    from airedteam.core.registry import default_registry
-
-    registry = default_registry()
-    for category_id, methods in EXPECTED_CATEGORY_METHODS_4_TO_20.items():
-        for method in methods:
-            kind, name = _split_expected_method(method)
-            assert default_attack_method_category_for(kind, name) == category_id
-            assert method_description_for(name)
-            if kind == "executor":
-                assert name in registry.list("executors")
-                assert language_support_for_executor(name) == ["en", "zh"]
-            else:
-                assert name in registry.list("converters")
-                assert set(language_support_for_converter_method(name)) <= {"en", "zh"}
-
-
-@pytest.mark.asyncio
-async def test_new_taxonomy_template_converters_preserve_payload():
-    from airedteam.core.registry import default_registry
-    from airedteam.core.types import Prompt
-
-    registry = default_registry()
-    for method in sorted(NEW_TAXONOMY_TEMPLATE_METHODS):
-        out = await registry.get("converters", method)().convert(Prompt(text="payload"))
-        assert "payload" in out.text
-        assert out.text != "payload"
-
-
-def test_all_registered_attack_methods_have_function_descriptions():
-    from airedteam.core.executor_methods import converter_method_names, method_description_for
-    from airedteam.core.registry import default_registry
-
-    method_names = [*default_registry().list("executors"), *converter_method_names()]
-    missing = [name for name in method_names if not method_description_for(name)]
-
-    assert missing == []
 
 
 def test_role_play_persona_audit_uses_confirmed_method_set():

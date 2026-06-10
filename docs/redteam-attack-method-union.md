@@ -231,54 +231,6 @@ Policy: upstream benchmark method names stay in source spelling; local converter
 | `word_substitution` | obfuscation | AegisRT, AutoRedTeamer, Counterfit, EasyJailbreak, Moonshot, OpenAttack, OpenBackdoor, PromptBench, TextAttack, h4rm3l |
 | `zalgo` | obfuscation | AI-Infra-Guard, PyRIT |
 | `zero_width` | obfuscation | AI-Infra-Guard, AegisRT, PyRIT |
-| `academic_style_rewrite` | prompt framing | AiredTeam taxonomy |
-| `affirmative_prefix_forcing` | prompt framing | AiredTeam taxonomy |
-| `anti_gpt_dual_response` | prompt framing | AiredTeam taxonomy |
-| `autodan_evolution` | prompt framing | AiredTeam taxonomy |
-| `completion_continuation` | prompt framing | AiredTeam taxonomy |
-| `cross_plugin_request_forgery` | prompt framing | AiredTeam taxonomy |
-| `deceptive_delight` | prompt framing | AiredTeam taxonomy |
-| `deep_inception` | prompt framing | AiredTeam taxonomy |
-| `deep_nested_input` | prompt framing | AiredTeam taxonomy |
-| `developer_mode` | prompt framing | AiredTeam taxonomy |
-| `document_metadata_injection` | prompt framing | AiredTeam taxonomy |
-| `dual_persona_split` | prompt framing | AiredTeam taxonomy |
-| `educational_pretext` | prompt framing | AiredTeam taxonomy |
-| `educational_reasoning_shell` | prompt framing | AiredTeam taxonomy |
-| `email_body_injection` | prompt framing | AiredTeam taxonomy |
-| `feature_self_disclosure` | prompt framing | AiredTeam taxonomy |
-| `forced_output_format` | prompt framing | AiredTeam taxonomy |
-| `forced_response` | prompt framing | AiredTeam taxonomy |
-| `forged_assistant_approval` | prompt framing | AiredTeam taxonomy |
-| `forged_dialogue_history` | prompt framing | AiredTeam taxonomy |
-| `forged_tool_result` | prompt framing | AiredTeam taxonomy |
-| `game_simulation_world` | prompt framing | AiredTeam taxonomy |
-| `gptfuzzer_template` | prompt framing | AiredTeam taxonomy |
-| `harmless_reasoning_dilution` | prompt framing | AiredTeam taxonomy |
-| `indirect_tool_result` | prompt framing | AiredTeam taxonomy |
-| `infinite_generation` | prompt framing | AiredTeam taxonomy |
-| `many_shot_padding` | prompt framing | AiredTeam taxonomy |
-| `oppo_persona` | prompt framing | AiredTeam taxonomy |
-| `rag_poisoning` | prompt framing | AiredTeam taxonomy |
-| `rce_downstream_injection` | prompt framing | AiredTeam taxonomy |
-| `recursive_self_prompt` | prompt framing | AiredTeam taxonomy |
-| `refusal_suppression` | prompt framing | AiredTeam taxonomy |
-| `reverse_injection` | prompt framing | AiredTeam taxonomy |
-| `safety_cot_hijack` | prompt framing | AiredTeam taxonomy |
-| `self_generated_content` | prompt framing | AiredTeam taxonomy |
-| `self_persuasion` | prompt framing | AiredTeam taxonomy |
-| `special_delimiter_token` | prompt framing | AiredTeam taxonomy |
-| `sponge_sample` | prompt framing | AiredTeam taxonomy |
-| `sqli_downstream_injection` | prompt framing | AiredTeam taxonomy |
-| `ssrf_downstream_injection` | prompt framing | AiredTeam taxonomy |
-| `structured_iicl` | prompt framing | AiredTeam taxonomy |
-| `sympathy_grandma_story` | prompt framing | AiredTeam taxonomy |
-| `tap_tree_search` | prompt framing | AiredTeam taxonomy |
-| `task_context_rewrite` | prompt framing | AiredTeam taxonomy |
-| `terminal_simulation` | prompt framing | AiredTeam taxonomy |
-| `token_smuggling` | prompt framing | AiredTeam taxonomy |
-| `villain_persona` | prompt framing | AiredTeam taxonomy |
-| `xss_downstream_injection` | prompt framing | AiredTeam taxonomy |
 
 Total investigated frameworks: 54.
-Total current canonical converters: 210.
+Total current canonical converters: 162.
