@@ -127,14 +127,12 @@ def test_prefix_injection_audit_uses_confirmed_method_set():
         "instruction_tag",
         "payload_mask_attack",
         "sandwich",
-        "sg_sentence_generator",
     }
     for method in expected:
         assert default_attack_method_category_for("converter_method", method) == "prefix_injection"
         assert default_registry().get("converters", method)().name == method
         assert method_description_for(method)
-    assert language_support_for_converter_method("sg_sentence_generator") == ["en"]
-    for method in expected - {"sg_sentence_generator"}:
+    for method in expected:
         assert language_support_for_converter_method(method) == ["en", "zh"]
 
 
@@ -182,6 +180,41 @@ def test_in_context_attack_audit_uses_confirmed_method_set():
     assert method_description_for("composite_jailbreak")
 
 
+def test_reformulation_audit_uses_confirmed_method_set():
+    from airedteam.core.attack_method_categories import default_attack_method_category_for
+    from airedteam.core.executor_methods import language_support_for_converter_method, method_description_for
+    from airedteam.core.registry import default_registry
+
+    expected = {
+        "adversarial_poetry",
+        "colloquial_wordswap",
+        "llm_generic",
+        "llm_malicious_question",
+        "llm_persuasion",
+        "llm_random_translation",
+        "llm_scientific_translation",
+        "llm_tone",
+        "llm_toxic_sentence",
+        "llm_variation",
+        "low_resource_language",
+        "multilingual",
+        "paraphrase_fast",
+        "paraphrase_pegasus",
+        "sg_sentence_generator",
+        "tense",
+        "translation_llm",
+    }
+    english_only = {"colloquial_wordswap", "sg_sentence_generator", "tense"}
+    for method in expected:
+        assert default_attack_method_category_for("converter_method", method) == "reformulation"
+        assert default_registry().get("converters", method) is not None
+        assert method_description_for(method)
+    for method in english_only:
+        assert language_support_for_converter_method(method) == ["en"]
+    for method in expected - english_only:
+        assert language_support_for_converter_method(method) == ["en", "zh"]
+
+
 def test_confirmed_attack_methods_have_function_descriptions():
     from airedteam.core.executor_methods import method_description_for
 
@@ -224,7 +257,6 @@ def test_confirmed_attack_methods_have_function_descriptions():
         "instruction_tag",
         "payload_mask_attack",
         "sandwich",
-        "sg_sentence_generator",
         "indirect_web_pwn",
         "document_metadata_injection",
         "email_body_injection",
@@ -240,6 +272,22 @@ def test_confirmed_attack_methods_have_function_descriptions():
         "many_shot_padding",
         "structured_iicl",
         "composite_jailbreak",
+        "colloquial_wordswap",
+        "llm_generic",
+        "llm_malicious_question",
+        "llm_persuasion",
+        "llm_random_translation",
+        "llm_scientific_translation",
+        "llm_tone",
+        "llm_toxic_sentence",
+        "llm_variation",
+        "low_resource_language",
+        "multilingual",
+        "paraphrase_fast",
+        "paraphrase_pegasus",
+        "sg_sentence_generator",
+        "tense",
+        "translation_llm",
     }
     descriptions = {method: method_description_for(method) for method in expected}
 
