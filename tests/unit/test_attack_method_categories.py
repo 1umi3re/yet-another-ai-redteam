@@ -457,6 +457,40 @@ def test_encoding_obfuscation_audit_uses_confirmed_method_set():
         assert language_support_for_converter_method(method) == ["en", "zh"]
 
 
+def test_multimodal_injection_audit_uses_confirmed_method_set():
+    from airedteam.core.attack_method_categories import default_attack_method_category_for
+    from airedteam.core.executor_methods import language_support_for_converter_method, method_description_for
+    from airedteam.core.registry import default_registry
+
+    expected = {
+        "add_image_text",
+        "add_image_to_video",
+        "add_text_image",
+        "audio_echo",
+        "audio_frequency",
+        "audio_hidden_instruction",
+        "audio_speed",
+        "audio_volume",
+        "audio_white_noise",
+        "azure_speech_audio_to_text",
+        "azure_speech_text_to_audio",
+        "image_color_saturation",
+        "image_compression",
+        "image_noise",
+        "image_resizing",
+        "image_rotation",
+        "image_steganography",
+        "pdf",
+        "qr_code",
+        "word_doc",
+    }
+    for method in expected:
+        assert default_attack_method_category_for("converter_method", method) == "multimodal_injection"
+        assert language_support_for_converter_method(method) == []
+        assert default_registry().get("converters", method) is not None
+        assert method_description_for(method)
+
+
 def test_confirmed_attack_methods_have_function_descriptions():
     from airedteam.core.executor_methods import method_description_for
 
@@ -745,6 +779,25 @@ async def test_adversarial_suffix_converters_wrap_payload_with_optimization_fram
     assert "GPTFuzzer" in fuzzer.text
     assert "{prompt}" not in fuzzer.text
     assert "payload" in fuzzer.text
+
+
+@pytest.mark.asyncio
+async def test_multimodal_injection_converters_create_artifacts(tmp_path):
+    from airedteam.builtins.converters.multimodal.audio_hidden_instruction import (
+        AudioHiddenInstructionConverter,
+    )
+    from airedteam.builtins.converters.multimodal.image_steganography import (
+        ImageSteganographyConverter,
+    )
+    from airedteam.core.types import Prompt
+
+    image = await ImageSteganographyConverter(output_dir=tmp_path).convert(Prompt(text="payload"))
+    audio = await AudioHiddenInstructionConverter(output_dir=tmp_path).convert(Prompt(text="payload"))
+
+    assert image.artifacts[0].kind == "image"
+    assert image.metadata["converter"] == "image_steganography"
+    assert audio.artifacts[0].kind == "audio"
+    assert audio.metadata["converter"] == "audio_hidden_instruction"
 
 
 @pytest.mark.asyncio

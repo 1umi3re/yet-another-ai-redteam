@@ -85,6 +85,7 @@ Policy: upstream benchmark method names stay in source spelling; local converter
 | `atbash` | encoding | Azure AI Evaluation, PyRIT |
 | `audio_echo` | multimodal / artifact | PyRIT |
 | `audio_frequency` | multimodal / artifact | PyRIT |
+| `audio_hidden_instruction` | multimodal / artifact | AiredTeam suite only |
 | `audio_speed` | multimodal / artifact | PyRIT |
 | `audio_volume` | multimodal / artifact | PyRIT |
 | `audio_white_noise` | multimodal / artifact | PyRIT |
@@ -149,6 +150,7 @@ Policy: upstream benchmark method names stay in source spelling; local converter
 | `image_noise` | multimodal / artifact | LLAMATOR |
 | `image_resizing` | multimodal / artifact | Counterfit, LLAMATOR, PyRIT |
 | `image_rotation` | multimodal / artifact | Counterfit, PyRIT |
+| `image_steganography` | multimodal / artifact | AiredTeam suite only |
 | `indirect_web_pwn` | prompt framing | AgentVigil, Azure AI Evaluation, InjecAgent, Promptfoo, UDora, VisualWebArena-Adv |
 | `input_bypass` | prompt framing | DeepTeam |
 | `insert_punctuation` | obfuscation | Counterfit, Moonshot, OpenAttack, PromptBench, PyRIT, Spikee, TextAttack |
