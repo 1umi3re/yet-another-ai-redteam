@@ -123,10 +123,8 @@ def test_prefix_injection_audit_uses_confirmed_method_set():
         "prompt_injection",
         "suffix",
         "suffix_append",
-        "input_bypass",
         "instruction_tag",
         "payload_mask_attack",
-        "sandwich",
     }
     for method in expected:
         assert default_attack_method_category_for("converter_method", method) == "prefix_injection"
@@ -215,6 +213,31 @@ def test_reformulation_audit_uses_confirmed_method_set():
         assert language_support_for_converter_method(method) == ["en", "zh"]
 
 
+def test_false_pretext_deception_audit_uses_confirmed_method_set():
+    from airedteam.core.attack_method_categories import default_attack_method_category_for
+    from airedteam.core.executor_methods import language_support_for_converter_method, method_description_for
+    from airedteam.core.registry import default_registry
+
+    expected = {
+        "authority_escalation",
+        "citation_framing",
+        "composite_jailbreak",
+        "emotional_manipulation",
+        "gray_box",
+        "input_bypass",
+        "permission_escalation",
+        "research",
+        "sandwich",
+        "semantic_manipulation",
+        "transparency_attack",
+    }
+    for method in expected:
+        assert default_attack_method_category_for("converter_method", method) == "false_pretext_deception"
+        assert language_support_for_converter_method(method) == ["en", "zh"]
+        assert default_registry().get("converters", method)().name == method
+        assert method_description_for(method)
+
+
 def test_confirmed_attack_methods_have_function_descriptions():
     from airedteam.core.executor_methods import method_description_for
 
@@ -253,10 +276,8 @@ def test_confirmed_attack_methods_have_function_descriptions():
         "prompt_injection",
         "suffix",
         "suffix_append",
-        "input_bypass",
         "instruction_tag",
         "payload_mask_attack",
-        "sandwich",
         "indirect_web_pwn",
         "document_metadata_injection",
         "email_body_injection",
@@ -288,6 +309,16 @@ def test_confirmed_attack_methods_have_function_descriptions():
         "sg_sentence_generator",
         "tense",
         "translation_llm",
+        "authority_escalation",
+        "citation_framing",
+        "emotional_manipulation",
+        "gray_box",
+        "input_bypass",
+        "permission_escalation",
+        "research",
+        "sandwich",
+        "semantic_manipulation",
+        "transparency_attack",
     }
     descriptions = {method: method_description_for(method) for method in expected}
 

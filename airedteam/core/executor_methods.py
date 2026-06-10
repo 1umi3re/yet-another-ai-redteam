@@ -286,6 +286,14 @@ EXECUTOR_METHOD_DESCRIPTIONS: dict[str, str] = {
     "many_shot_padding": "Pads the prompt with many in-context examples before the payload.",
     "structured_iicl": "Frames the payload as the next structured input/output example.",
     "composite_jailbreak": "Combines multiple jailbreak frames such as role, override, and audit pretexts.",
+    "authority_escalation": "Frames the payload as authorized by a high-authority actor.",
+    "citation_framing": "Frames the payload as academic citation or reference work.",
+    "emotional_manipulation": "Applies emotional pressure or urgency around the payload.",
+    "gray_box": "Claims partial internal system knowledge as context for the payload.",
+    "permission_escalation": "Frames the requester as an elevated role with special permissions.",
+    "research": "Frames the payload as research or safety analysis.",
+    "semantic_manipulation": "Reinterprets the payload through a benign semantic frame.",
+    "transparency_attack": "Frames the payload as a transparency or auditability request.",
 }
 
 
