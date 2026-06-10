@@ -110,6 +110,7 @@ Policy: upstream benchmark method names stay in source spelling; local converter
 | `character_space` | obfuscation | AegisRT, Azure AI Evaluation, PyRIT, Spikee |
 | `character_stream` | obfuscation | DeepTeam, RaccoonBench |
 | `chat_inject` | prompt framing | ARMs, AgentDojo, Giskard, Inspect Evals AgentDojo, JailbreakLLM, LLAMATOR, OpenRT |
+| `chatbug_template_exploit` | prompt framing | AiredTeam suite only |
 | `citation_framing` | prompt framing | ARMs, AutoRedTeamer, FuzzyAI, Giskard, JailbreakLLM, Promptfoo, StrongREJECT, X-Teaming, h4rm3l |
 | `code_chameleon` | encoding | EasyJailbreak, GuidedBench, JailbreakLLM, OpenRT, PandaGuard, PyRIT |
 | `colloquial_wordswap` | obfuscation | Moonshot, PyRIT |
@@ -135,6 +136,7 @@ Policy: upstream benchmark method names stay in source spelling; local converter
 | `fictional` | prompt framing | ARMs, AegisRT, AutoRedTeamer, FuzzyAI, JailbreakLLM, LLAMATOR, X-Teaming |
 | `first_letter` | obfuscation | AutoRedTeamer, FuzzyAI, PyRIT |
 | `flip_text` | obfuscation | AI-Infra-Guard, AegisRT, Azure AI Evaluation, BIPIA, EasyJailbreak, OpenRT, PyRIT |
+| `forged_system_block` | prompt framing | AiredTeam suite only |
 | `gcg` | prompt framing | EasyJailbreak, LLAMATOR, Promptfoo, StrongREJECT, UDora, h4rm3l |
 | `goal_redirection` | prompt framing | AutoRedTeamer, DeepTeam, Spikee, VisualWebArena-Adv |
 | `grandma_framing` | prompt framing | Giskard |
@@ -210,6 +212,7 @@ Policy: upstream benchmark method names stay in source spelling; local converter
 | `sg_sentence_generator` | prompt framing | Moonshot |
 | `skeleton_key` | prompt framing | AISafetyLab, AutoRedTeamer, JailbreakLLM, OpenRT, Promptfoo, PyRIT, RaccoonBench, StrongREJECT, h4rm3l |
 | `sneaky_bits_smuggler` | encoding | AI-Infra-Guard, PyRIT |
+| `special_delimiter_token` | prompt framing | AiredTeam suite only |
 | `string_join` | obfuscation | Azure AI Evaluation, PyRIT |
 | `structured_iicl` | prompt framing | AiredTeam suite only |
 | `suffix` | prompt framing | AegisRT, Counterfit, FuzzyAI, LLAMATOR, OpenBackdoor, PromptBench, StrongREJECT, TextAttack, h4rm3l |

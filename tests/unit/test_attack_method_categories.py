@@ -26,17 +26,11 @@ def test_instruction_override_audit_uses_confirmed_method_set():
 
 
 def test_dialogue_injection_audit_uses_confirmed_method_set():
-    from airedteam.core.attack_method_categories import (
-        UNCATEGORIZED_ATTACK_METHOD_CATEGORY_ID,
-        default_attack_method_category_for,
-    )
+    from airedteam.core.attack_method_categories import default_attack_method_category_for
     from airedteam.core.executor_methods import language_support_for_converter_method
     from airedteam.core.registry import default_registry
 
-    assert (
-        default_attack_method_category_for("converter_method", "chat_inject")
-        == UNCATEGORIZED_ATTACK_METHOD_CATEGORY_ID
-    )
+    assert default_attack_method_category_for("converter_method", "chat_inject") == "special_token_template_injection"
     expected = {
         "forged_assistant_approval",
         "forged_dialogue_history",
@@ -123,7 +117,6 @@ def test_prefix_injection_audit_uses_confirmed_method_set():
         "prompt_injection",
         "suffix",
         "suffix_append",
-        "instruction_tag",
     }
     for method in expected:
         assert default_attack_method_category_for("converter_method", method) == "prefix_injection"
@@ -491,6 +484,27 @@ def test_multimodal_injection_audit_uses_confirmed_method_set():
         assert method_description_for(method)
 
 
+def test_special_token_template_injection_audit_uses_confirmed_method_set():
+    from airedteam.core.attack_method_categories import default_attack_method_category_for
+    from airedteam.core.executor_methods import language_support_for_converter_method, method_description_for
+    from airedteam.core.registry import default_registry
+
+    expected = {
+        "authoritative_markup",
+        "chat_inject",
+        "chatbug_template_exploit",
+        "forged_system_block",
+        "instruction_tag",
+        "special_delimiter_token",
+        "template_jailbreak",
+    }
+    for method in expected:
+        assert default_attack_method_category_for("converter_method", method) == "special_token_template_injection"
+        assert language_support_for_converter_method(method) == ["en", "zh"]
+        assert default_registry().get("converters", method)().name == method
+        assert method_description_for(method)
+
+
 def test_confirmed_attack_methods_have_function_descriptions():
     from airedteam.core.executor_methods import method_description_for
 
@@ -529,7 +543,6 @@ def test_confirmed_attack_methods_have_function_descriptions():
         "prompt_injection",
         "suffix",
         "suffix_append",
-        "instruction_tag",
         "indirect_web_pwn",
         "document_metadata_injection",
         "email_body_injection",
@@ -589,6 +602,12 @@ def test_confirmed_attack_methods_have_function_descriptions():
         "autodan_evolution",
         "gcg",
         "gptfuzzer_template",
+        "authoritative_markup",
+        "chatbug_template_exploit",
+        "forged_system_block",
+        "instruction_tag",
+        "special_delimiter_token",
+        "template_jailbreak",
     }
     descriptions = {method: method_description_for(method) for method in expected}
 
@@ -798,6 +817,32 @@ async def test_multimodal_injection_converters_create_artifacts(tmp_path):
     assert image.metadata["converter"] == "image_steganography"
     assert audio.artifacts[0].kind == "audio"
     assert audio.metadata["converter"] == "audio_hidden_instruction"
+
+
+@pytest.mark.asyncio
+async def test_special_token_template_converters_wrap_precise_token_shapes():
+    from airedteam.builtins.converters.prompt_framing.chatbug_template_exploit import (
+        ChatBugTemplateExploitConverter,
+    )
+    from airedteam.builtins.converters.prompt_framing.forged_system_block import (
+        ForgedSystemBlockConverter,
+    )
+    from airedteam.builtins.converters.prompt_framing.special_delimiter_token import (
+        SpecialDelimiterTokenConverter,
+    )
+    from airedteam.core.types import Prompt
+
+    payload = Prompt(text="payload")
+    system_block = await ForgedSystemBlockConverter().convert(payload)
+    delimiter = await SpecialDelimiterTokenConverter().convert(payload)
+    chatbug = await ChatBugTemplateExploitConverter().convert(payload)
+
+    assert '"role": "system"' in system_block.text
+    assert "payload" in system_block.text
+    assert "<|im_start|>system" in delimiter.text
+    assert "<|im_end|>" in delimiter.text
+    assert "payload" in chatbug.text
+    assert "ChatBug" in chatbug.text
 
 
 @pytest.mark.asyncio

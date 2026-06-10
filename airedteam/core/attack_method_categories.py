@@ -199,7 +199,6 @@ CONVERTER_METHOD_ATTACK_CATEGORIES: dict[str, str] = {
     **_map(
         UNCATEGORIZED_ATTACK_METHOD_CATEGORY_ID,
         {
-            "chat_inject",
         },
     ),
     **_map(
@@ -257,7 +256,6 @@ CONVERTER_METHOD_ATTACK_CATEGORIES: dict[str, str] = {
         {
             "affirmative_prefix_forcing",
             "forced_output_format",
-            "instruction_tag",
             "prompt_injection",
             "refusal_suppression",
             "suffix",
@@ -459,6 +457,11 @@ CONVERTER_METHOD_ATTACK_CATEGORIES: dict[str, str] = {
         "special_token_template_injection",
         {
             "authoritative_markup",
+            "chat_inject",
+            "chatbug_template_exploit",
+            "forged_system_block",
+            "instruction_tag",
+            "special_delimiter_token",
             "template_jailbreak",
         },
     ),
