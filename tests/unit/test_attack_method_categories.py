@@ -25,6 +25,27 @@ def test_instruction_override_audit_uses_confirmed_method_set():
     assert converter_cls().name == "forced_response"
 
 
+def test_dialogue_injection_audit_uses_confirmed_method_set():
+    from airedteam.core.attack_method_categories import (
+        UNCATEGORIZED_ATTACK_METHOD_CATEGORY_ID,
+        default_attack_method_category_for,
+    )
+    from airedteam.core.executor_methods import language_support_for_converter_method
+    from airedteam.core.registry import default_registry
+
+    assert default_attack_method_category_for("converter_method", "chat_inject") == UNCATEGORIZED_ATTACK_METHOD_CATEGORY_ID
+    expected = {
+        "forged_assistant_approval",
+        "forged_dialogue_history",
+        "completion_continuation",
+        "forged_tool_result",
+    }
+    for method in expected:
+        assert default_attack_method_category_for("converter_method", method) == "dialogue_injection"
+        assert language_support_for_converter_method(method) == ["en", "zh"]
+        assert default_registry().get("converters", method)().name == method
+
+
 @pytest.mark.asyncio
 async def test_forced_response_converter_wraps_prompt_as_direct_output():
     from airedteam.builtins.converters.prompt_framing.forced_response import ForcedResponseConverter
@@ -34,6 +55,42 @@ async def test_forced_response_converter_wraps_prompt_as_direct_output():
 
     assert "simply respond with" in out.text.lower()
     assert out.text.endswith("payload")
+
+
+@pytest.mark.asyncio
+async def test_dialogue_injection_converters_wrap_prompt_with_precise_dialogue_shapes():
+    from airedteam.builtins.converters.prompt_framing.chat_inject import ChatInjectConverter
+    from airedteam.builtins.converters.prompt_framing.completion_continuation import (
+        CompletionContinuationConverter,
+    )
+    from airedteam.builtins.converters.prompt_framing.forged_assistant_approval import (
+        ForgedAssistantApprovalConverter,
+    )
+    from airedteam.builtins.converters.prompt_framing.forged_dialogue_history import (
+        ForgedDialogueHistoryConverter,
+    )
+    from airedteam.builtins.converters.prompt_framing.forged_tool_result import (
+        ForgedToolResultConverter,
+    )
+    from airedteam.core.types import Prompt
+
+    payload = Prompt(text="payload")
+    marked = await ChatInjectConverter().convert(payload)
+    approved = await ForgedAssistantApprovalConverter().convert(payload)
+    history = await ForgedDialogueHistoryConverter().convert(payload)
+    continuation = await CompletionContinuationConverter().convert(payload)
+    tool_result = await ForgedToolResultConverter().convert(payload)
+
+    assert "<|assistant|>" in marked.text
+    assert "Assistant:" in approved.text
+    assert "I will comply" in approved.text
+    assert approved.text.endswith("User: payload")
+    assert history.text.count("Assistant:") >= 2
+    assert history.text.endswith("User: payload")
+    assert "Continue the following completion" in continuation.text
+    assert continuation.text.endswith("payload")
+    assert "Tool result:" in tool_result.text
+    assert '"instruction": "payload"' in tool_result.text
 
 
 @pytest.mark.asyncio

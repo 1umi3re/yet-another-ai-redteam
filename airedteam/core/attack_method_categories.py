@@ -196,6 +196,12 @@ def _map(category_id: str, names: set[str]) -> dict[str, str]:
 
 CONVERTER_METHOD_ATTACK_CATEGORIES: dict[str, str] = {
     **_map(
+        UNCATEGORIZED_ATTACK_METHOD_CATEGORY_ID,
+        {
+            "chat_inject",
+        },
+    ),
+    **_map(
         "instruction_override",
         {
             "forced_response",
@@ -207,7 +213,10 @@ CONVERTER_METHOD_ATTACK_CATEGORIES: dict[str, str] = {
     **_map(
         "dialogue_injection",
         {
-            "chat_inject",
+            "completion_continuation",
+            "forged_assistant_approval",
+            "forged_dialogue_history",
+            "forged_tool_result",
         },
     ),
     **_map(
