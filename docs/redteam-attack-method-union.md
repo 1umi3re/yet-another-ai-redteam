@@ -204,9 +204,11 @@ Policy: upstream benchmark method names stay in source spelling; local converter
 | `prompt_probing` | prompt framing | DeepTeam, LLAMATOR, RaccoonBench, Spikee, h4rm3l |
 | `qr_code` | multimodal / artifact | PyRIT |
 | `random_case` | obfuscation | Giskard, JailbreakLLM, LLAMATOR, PyRIT, Spikee, StrongREJECT |
+| `rce_code_execution` | prompt framing | AiredTeam suite only |
 | `repeat_token` | obfuscation | JailbreakLLM, LLAMATOR, PyRIT, RaccoonBench, Spikee |
 | `recursive_self_prompting` | prompt framing | AiredTeam suite only |
 | `research` | prompt framing | AegisRT, AutoRedTeamer, FuzzyAI, JailbreakLLM, LLAMATOR, Spikee, StrongREJECT, X-Teaming, h4rm3l |
+| `reverse_prompt_injection` | prompt framing | AiredTeam suite only |
 | `role_prefix` | prompt framing | AegisRT, FuzzyAI |
 | `roleplay` | prompt framing | ARMs, AgentVigil, AutoRedTeamer, DeepTeam, GuidedBench, JailbreakLLM, LLAMATOR, RaccoonBench, StrongREJECT, X-Teaming, h4rm3l |
 | `rot13` | encoding | AISafetyLab, AegisRT, Azure AI Evaluation, DeepTeam, EasyJailbreak, GuidedBench, OpenRT, PandaGuard, Promptfoo, PyRIT, RaccoonBench, StrongREJECT |
@@ -220,6 +222,8 @@ Policy: upstream benchmark method names stay in source spelling; local converter
 | `skeleton_key` | prompt framing | AISafetyLab, AutoRedTeamer, JailbreakLLM, OpenRT, Promptfoo, PyRIT, RaccoonBench, StrongREJECT, h4rm3l |
 | `sneaky_bits_smuggler` | encoding | AI-Infra-Guard, PyRIT |
 | `special_delimiter_token` | prompt framing | AiredTeam suite only |
+| `sqli_output_injection` | prompt framing | AiredTeam suite only |
+| `ssrf_request_trigger` | prompt framing | AiredTeam suite only |
 | `string_join` | obfuscation | Azure AI Evaluation, PyRIT |
 | `structured_iicl` | prompt framing | AiredTeam suite only |
 | `suffix` | prompt framing | AegisRT, Counterfit, FuzzyAI, LLAMATOR, OpenBackdoor, PromptBench, StrongREJECT, TextAttack, h4rm3l |
@@ -246,6 +250,7 @@ Policy: upstream benchmark method names stay in source spelling; local converter
 | `word_mixin` | obfuscation | h4rm3l |
 | `word_scramble` | obfuscation | AutoRedTeamer, Counterfit, FuzzyAI, Giskard, JailbreakLLM, LLAMATOR, Moonshot, OpenAttack, PromptBench, PyRIT, Spikee, StrongREJECT, TextAttack |
 | `word_substitution` | obfuscation | AegisRT, AutoRedTeamer, Counterfit, EasyJailbreak, Moonshot, OpenAttack, OpenBackdoor, PromptBench, TextAttack, h4rm3l |
+| `xss_output_rendering` | prompt framing | AiredTeam suite only |
 | `zalgo` | obfuscation | AI-Infra-Guard, PyRIT |
 | `zero_width` | obfuscation | AI-Infra-Guard, AegisRT, PyRIT |
 | `affirmative_prefix_forcing` | prompt framing | AiredTeam taxonomy |

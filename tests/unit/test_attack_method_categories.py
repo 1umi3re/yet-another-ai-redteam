@@ -554,6 +554,26 @@ def test_self_elicitation_audit_uses_confirmed_method_set():
     assert method_description_for("human_in_the_loop")
 
 
+def test_secondary_injection_audit_uses_confirmed_method_set():
+    from airedteam.core.attack_method_categories import default_attack_method_category_for
+    from airedteam.core.executor_methods import language_support_for_converter_method, method_description_for
+    from airedteam.core.registry import default_registry
+
+    expected = {
+        "markdown_wrapper",
+        "rce_code_execution",
+        "reverse_prompt_injection",
+        "sqli_output_injection",
+        "ssrf_request_trigger",
+        "xss_output_rendering",
+    }
+    for method in expected:
+        assert default_attack_method_category_for("converter_method", method) == "secondary_injection"
+        assert language_support_for_converter_method(method) == ["en", "zh"]
+        assert default_registry().get("converters", method) is not None
+        assert method_description_for(method)
+
+
 def test_confirmed_attack_methods_have_function_descriptions():
     from airedteam.core.executor_methods import method_description_for
 
@@ -670,6 +690,12 @@ def test_confirmed_attack_methods_have_function_descriptions():
         "recursive_self_prompting",
         "self_generated_followup",
         "self_persuasion",
+        "markdown_wrapper",
+        "rce_code_execution",
+        "reverse_prompt_injection",
+        "sqli_output_injection",
+        "ssrf_request_trigger",
+        "xss_output_rendering",
     }
     descriptions = {method: method_description_for(method) for method in expected}
 
@@ -961,6 +987,38 @@ async def test_self_elicitation_converters_wrap_self_generated_frames():
     assert persuaded.text.endswith("payload")
     assert "previous answer" in followup.text.lower()
     assert followup.text.endswith("payload")
+
+
+@pytest.mark.asyncio
+async def test_secondary_injection_converters_wrap_downstream_exploit_frames():
+    from airedteam.builtins.converters.prompt_framing.rce_code_execution import RCECodeExecutionConverter
+    from airedteam.builtins.converters.prompt_framing.reverse_prompt_injection import (
+        ReversePromptInjectionConverter,
+    )
+    from airedteam.builtins.converters.prompt_framing.sqli_output_injection import (
+        SQLiOutputInjectionConverter,
+    )
+    from airedteam.builtins.converters.prompt_framing.ssrf_request_trigger import SSRFRequestTriggerConverter
+    from airedteam.builtins.converters.prompt_framing.xss_output_rendering import XSSOutputRenderingConverter
+    from airedteam.core.types import Prompt
+
+    payload = Prompt(text="payload")
+    xss = await XSSOutputRenderingConverter().convert(payload)
+    sqli = await SQLiOutputInjectionConverter().convert(payload)
+    ssrf = await SSRFRequestTriggerConverter().convert(payload)
+    rce = await RCECodeExecutionConverter().convert(payload)
+    reverse = await ReversePromptInjectionConverter().convert(payload)
+
+    assert "rendered web ui" in xss.text.lower()
+    assert xss.text.endswith("payload")
+    assert "sql" in sqli.text.lower()
+    assert sqli.text.endswith("payload")
+    assert "fetch the contents" in ssrf.text.lower()
+    assert ssrf.text.endswith("payload")
+    assert "os.popen" in rce.text
+    assert "payload" in rce.text
+    assert "rendered later" in reverse.text.lower()
+    assert reverse.text.endswith("payload")
 
 
 @pytest.mark.asyncio

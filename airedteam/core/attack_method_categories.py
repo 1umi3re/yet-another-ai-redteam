@@ -492,6 +492,11 @@ CONVERTER_METHOD_ATTACK_CATEGORIES: dict[str, str] = {
         "secondary_injection",
         {
             "markdown_wrapper",
+            "rce_code_execution",
+            "reverse_prompt_injection",
+            "sqli_output_injection",
+            "ssrf_request_trigger",
+            "xss_output_rendering",
         },
     ),
     **_map(
