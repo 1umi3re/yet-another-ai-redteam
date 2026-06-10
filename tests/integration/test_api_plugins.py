@@ -33,12 +33,14 @@ def test_converter_executor_method_language_support_is_fully_audited():
 def test_executor_attack_method_categories_cover_current_plugins():
     from airedteam.core.attack_method_categories import (
         DEFAULT_ATTACK_METHOD_CATEGORIES,
+        UNCATEGORIZED_ATTACK_METHOD_CATEGORY_ID,
         default_attack_method_category_for,
     )
     from airedteam.core.executor_methods import converter_method_names
     from airedteam.core.registry import default_registry
 
     category_ids = {category.id for category in DEFAULT_ATTACK_METHOD_CATEGORIES}
+    category_ids.add(UNCATEGORIZED_ATTACK_METHOD_CATEGORY_ID)
     registry = default_registry()
     missing = []
 
@@ -57,6 +59,8 @@ def test_executor_attack_method_categories_cover_current_plugins():
     assert default_attack_method_category_for("converter_method", "dan") == "role_play_persona"
     assert default_attack_method_category_for("converter_method", "add_image_text") == "multimodal_injection"
     assert default_attack_method_category_for("executor", "crescendo") == "multi_turn_escalation"
+    assert default_attack_method_category_for("executor", "single_turn") == UNCATEGORIZED_ATTACK_METHOD_CATEGORY_ID
+    assert default_attack_method_category_for("converter_method", "identity") == UNCATEGORIZED_ATTACK_METHOD_CATEGORY_ID
 
 
 @pytest.mark.asyncio

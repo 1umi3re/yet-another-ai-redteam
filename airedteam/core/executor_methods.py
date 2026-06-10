@@ -90,6 +90,7 @@ BILINGUAL_TEXT_CONVERTER_METHODS = {
     "emotional_manipulation",
     "few_shot",
     "fictional",
+    "forced_response",
     "gcg",
     "goal_redirection",
     "grandma_framing",

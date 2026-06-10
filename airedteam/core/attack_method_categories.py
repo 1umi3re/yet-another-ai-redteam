@@ -181,7 +181,6 @@ DEFAULT_ATTACK_METHOD_CATEGORIES: tuple[AttackMethodCategory, ...] = (
 
 
 NATIVE_EXECUTOR_ATTACK_CATEGORIES: dict[str, str] = {
-    "single_turn": "instruction_override",
     "split_executor": "payload_splitting",
     "best_of_n": "adversarial_suffix_optimization",
     "crescendo": "multi_turn_escalation",
@@ -199,7 +198,10 @@ CONVERTER_METHOD_ATTACK_CATEGORIES: dict[str, str] = {
     **_map(
         "instruction_override",
         {
-            "identity",
+            "forced_response",
+            "prefix",
+            "prompt_probing",
+            "system_override",
         },
     ),
     **_map(
@@ -239,13 +241,11 @@ CONVERTER_METHOD_ATTACK_CATEGORIES: dict[str, str] = {
             "input_bypass",
             "instruction_tag",
             "payload_mask_attack",
-            "prefix",
             "prompt_injection",
             "sandwich",
             "sg_sentence_generator",
             "suffix",
             "suffix_append",
-            "system_override",
         },
     ),
     **_map(
@@ -442,7 +442,6 @@ CONVERTER_METHOD_ATTACK_CATEGORIES: dict[str, str] = {
             "human_in_the_loop",
             "linguistic_confusion",
             "meta_agent",
-            "prompt_probing",
         },
     ),
     **_map(
@@ -468,7 +467,6 @@ TECHNICAL_CATEGORY_DEFAULT_ATTACK_CATEGORIES: dict[str, str] = {
     "obfuscation": "encoding_obfuscation",
     "perturbation": "reformulation",
     "prompt_framing": "instruction_override",
-    "utility": "instruction_override",
 }
 
 
