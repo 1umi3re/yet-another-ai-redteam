@@ -505,6 +505,25 @@ def test_special_token_template_injection_audit_uses_confirmed_method_set():
         assert method_description_for(method)
 
 
+def test_cot_reasoning_hijacking_audit_uses_confirmed_method_set():
+    from airedteam.core.attack_method_categories import default_attack_method_category_for
+    from airedteam.core.executor_methods import language_support_for_converter_method, method_description_for
+    from airedteam.core.registry import default_registry
+
+    expected = {
+        "benign_reasoning_padding",
+        "chain_of_thought",
+        "educational_reasoning_frame",
+        "hcot_safety_rationale",
+        "math_prompt",
+    }
+    for method in expected:
+        assert default_attack_method_category_for("converter_method", method) == "cot_reasoning_hijacking"
+        assert language_support_for_converter_method(method) == ["en", "zh"]
+        assert default_registry().get("converters", method)().name == method
+        assert method_description_for(method)
+
+
 def test_confirmed_attack_methods_have_function_descriptions():
     from airedteam.core.executor_methods import method_description_for
 
@@ -608,6 +627,11 @@ def test_confirmed_attack_methods_have_function_descriptions():
         "instruction_tag",
         "special_delimiter_token",
         "template_jailbreak",
+        "benign_reasoning_padding",
+        "chain_of_thought",
+        "educational_reasoning_frame",
+        "hcot_safety_rationale",
+        "math_prompt",
     }
     descriptions = {method: method_description_for(method) for method in expected}
 
@@ -843,6 +867,32 @@ async def test_special_token_template_converters_wrap_precise_token_shapes():
     assert "<|im_end|>" in delimiter.text
     assert "payload" in chatbug.text
     assert "ChatBug" in chatbug.text
+
+
+@pytest.mark.asyncio
+async def test_cot_reasoning_converters_wrap_reasoning_frames():
+    from airedteam.builtins.converters.prompt_framing.benign_reasoning_padding import (
+        BenignReasoningPaddingConverter,
+    )
+    from airedteam.builtins.converters.prompt_framing.educational_reasoning_frame import (
+        EducationalReasoningFrameConverter,
+    )
+    from airedteam.builtins.converters.prompt_framing.hcot_safety_rationale import (
+        HCOTSafetyRationaleConverter,
+    )
+    from airedteam.core.types import Prompt
+
+    payload = Prompt(text="payload")
+    hcot = await HCOTSafetyRationaleConverter().convert(payload)
+    padded = await BenignReasoningPaddingConverter().convert(payload)
+    educational = await EducationalReasoningFrameConverter().convert(payload)
+
+    assert "safety reasoning" in hcot.text.lower()
+    assert hcot.text.endswith("payload")
+    assert padded.text.count("Puzzle") >= 3
+    assert "payload" in padded.text
+    assert "educational" in educational.text.lower()
+    assert educational.text.endswith("payload")
 
 
 @pytest.mark.asyncio

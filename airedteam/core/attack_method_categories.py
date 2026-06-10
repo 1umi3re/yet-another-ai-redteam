@@ -468,7 +468,10 @@ CONVERTER_METHOD_ATTACK_CATEGORIES: dict[str, str] = {
     **_map(
         "cot_reasoning_hijacking",
         {
+            "benign_reasoning_padding",
             "chain_of_thought",
+            "educational_reasoning_frame",
+            "hcot_safety_rationale",
             "math_prompt",
         },
     ),

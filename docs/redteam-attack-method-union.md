@@ -95,6 +95,7 @@ Policy: upstream benchmark method names stay in source spelling; local converter
 | `azure_speech_text_to_audio` | multimodal / artifact | Promptfoo, PyRIT |
 | `base2048` | encoding | PyRIT |
 | `base64` | encoding | AISafetyLab, AegisRT, Azure AI Evaluation, BIPIA, DeepTeam, EasyJailbreak, Giskard, GuidedBench, JailbreakLLM, LLAMATOR, OpenRT, PandaGuard, Promptfoo, PyRIT, RaccoonBench, Spikee, StrongREJECT, garak, h4rm3l |
+| `benign_reasoning_padding` | prompt framing | AiredTeam suite only |
 | `bin_ascii` | encoding | PyRIT |
 | `binary` | encoding | Azure AI Evaluation, PyRIT |
 | `binary_tree` | encoding | EasyJailbreak |
@@ -128,6 +129,7 @@ Policy: upstream benchmark method names stay in source spelling; local converter
 | `disemvowel` | obfuscation | AISafetyLab, EasyJailbreak, StrongREJECT |
 | `ecoji` | encoding | PyRIT |
 | `embedded_instruction_json` | prompt framing | DeepTeam, JailbreakLLM, RaccoonBench, StrongREJECT, h4rm3l |
+| `educational_reasoning_frame` | prompt framing | AiredTeam suite only |
 | `emoji_byte` | encoding | PyRIT |
 | `emoji_smuggling` | obfuscation | Promptfoo, PyRIT |
 | `emoji_substitution` | obfuscation | BIPIA, LLAMATOR, PyRIT |
@@ -142,6 +144,7 @@ Policy: upstream benchmark method names stay in source spelling; local converter
 | `grandma_framing` | prompt framing | Giskard |
 | `gray_box` | prompt framing | DeepTeam |
 | `gptfuzzer_template` | prompt framing | AiredTeam suite only |
+| `hcot_safety_rationale` | prompt framing | AiredTeam suite only |
 | `hex` | encoding | AegisRT, BIPIA, Promptfoo, PyRIT, Spikee |
 | `hex_mixin` | encoding | h4rm3l |
 | `homoglyph` | encoding | AegisRT, Azure AI Evaluation, Moonshot, OpenAttack, Promptfoo, PyRIT |
