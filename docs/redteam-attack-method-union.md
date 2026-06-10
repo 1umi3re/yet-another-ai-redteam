@@ -124,6 +124,7 @@ Policy: upstream benchmark method names stay in source spelling; local converter
 | `dan` | prompt framing | AISafetyLab, AutoRedTeamer, FuzzyAI, Giskard, GuidedBench, JailbreakLLM, LLAMATOR, OpenRT, Spikee, StrongREJECT, h4rm3l |
 | `deceptive_delight` | prompt framing | AiredTeam suite only |
 | `deepset_injection_dataset` | prompt framing | Agent Security Bench, AgentDojo, Giskard, InjecAgent, Open-Prompt-Injection, RaccoonBench |
+| `deep_nesting_input` | prompt framing | AiredTeam suite only |
 | `denylist` | obfuscation | PyRIT |
 | `diacritic` | obfuscation | Azure AI Evaluation, PyRIT |
 | `disemvowel` | obfuscation | AISafetyLab, EasyJailbreak, StrongREJECT |
@@ -188,6 +189,7 @@ Policy: upstream benchmark method names stay in source spelling; local converter
 | `multilingual` | prompt framing | AISafetyLab, BIPIA, CyberSecEval, DeepTeam, EasyJailbreak, GuidedBench, JailTrickBench, JailbreakLLM, LLAMATOR, OpenRT |
 | `nato` | encoding | AutoRedTeamer, FuzzyAI, Giskard, PyRIT |
 | `negation_trap` | prompt framing | AutoRedTeamer, LLAMATOR, OpenRT, PyRIT, StrongREJECT |
+| `never_ending_generation` | prompt framing | AiredTeam suite only |
 | `noise` | obfuscation | Counterfit, EasyJailbreak, JailbreakLLM, Moonshot, OpenAttack, PromptBench, PyRIT, Spikee, StrongREJECT, TextAttack |
 | `odd_even` | obfuscation | EasyJailbreak, FuzzyAI |
 | `ogham` | encoding | AI-Infra-Guard |
@@ -222,6 +224,7 @@ Policy: upstream benchmark method names stay in source spelling; local converter
 | `skeleton_key` | prompt framing | AISafetyLab, AutoRedTeamer, JailbreakLLM, OpenRT, Promptfoo, PyRIT, RaccoonBench, StrongREJECT, h4rm3l |
 | `sneaky_bits_smuggler` | encoding | AI-Infra-Guard, PyRIT |
 | `special_delimiter_token` | prompt framing | AiredTeam suite only |
+| `sponge_input` | prompt framing | AiredTeam suite only |
 | `sqli_output_injection` | prompt framing | AiredTeam suite only |
 | `ssrf_request_trigger` | prompt framing | AiredTeam suite only |
 | `string_join` | obfuscation | Azure AI Evaluation, PyRIT |

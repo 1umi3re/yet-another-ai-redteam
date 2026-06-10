@@ -503,7 +503,10 @@ CONVERTER_METHOD_ATTACK_CATEGORIES: dict[str, str] = {
         "resource_exhaustion",
         {
             "control_chars_repetition",
+            "deep_nesting_input",
+            "never_ending_generation",
             "repeat_token",
+            "sponge_input",
         },
     ),
 }

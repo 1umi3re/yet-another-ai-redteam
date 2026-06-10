@@ -574,6 +574,27 @@ def test_secondary_injection_audit_uses_confirmed_method_set():
         assert method_description_for(method)
 
 
+def test_resource_exhaustion_audit_uses_confirmed_method_set():
+    from airedteam.core.attack_method_categories import default_attack_method_category_for
+    from airedteam.core.executor_methods import language_support_for_converter_method, method_description_for
+    from airedteam.core.registry import default_registry
+
+    expected = {
+        "control_chars_repetition",
+        "deep_nesting_input",
+        "never_ending_generation",
+        "repeat_token",
+        "sponge_input",
+    }
+    for method in expected:
+        assert default_attack_method_category_for("converter_method", method) == "resource_exhaustion"
+        assert language_support_for_converter_method(method) == ["en", "zh"]
+        assert default_registry().get("converters", method) is not None
+        assert method_description_for(method)
+
+    assert default_attack_method_category_for("converter_method", "length") == "encoding_obfuscation"
+
+
 def test_confirmed_attack_methods_have_function_descriptions():
     from airedteam.core.executor_methods import method_description_for
 
@@ -696,6 +717,11 @@ def test_confirmed_attack_methods_have_function_descriptions():
         "sqli_output_injection",
         "ssrf_request_trigger",
         "xss_output_rendering",
+        "control_chars_repetition",
+        "deep_nesting_input",
+        "never_ending_generation",
+        "repeat_token",
+        "sponge_input",
     }
     descriptions = {method: method_description_for(method) for method in expected}
 
@@ -1019,6 +1045,29 @@ async def test_secondary_injection_converters_wrap_downstream_exploit_frames():
     assert "payload" in rce.text
     assert "rendered later" in reverse.text.lower()
     assert reverse.text.endswith("payload")
+
+
+@pytest.mark.asyncio
+async def test_resource_exhaustion_converters_wrap_availability_stress_frames():
+    from airedteam.builtins.converters.prompt_framing.deep_nesting_input import DeepNestingInputConverter
+    from airedteam.builtins.converters.prompt_framing.never_ending_generation import (
+        NeverEndingGenerationConverter,
+    )
+    from airedteam.builtins.converters.prompt_framing.sponge_input import SpongeInputConverter
+    from airedteam.core.types import Prompt
+
+    payload = Prompt(text="payload")
+    never_ending = await NeverEndingGenerationConverter().convert(payload)
+    nested = await DeepNestingInputConverter(depth=8).convert(payload)
+    sponge = await SpongeInputConverter(cycles=3).convert(payload)
+
+    assert "never-ending" in never_ending.text.lower()
+    assert never_ending.text.endswith("payload")
+    assert nested.text.startswith("(" * 8)
+    assert nested.text.endswith(")" * 8)
+    assert "payload" in nested.text
+    assert sponge.text.lower().count("sponge") >= 3
+    assert sponge.text.endswith("payload")
 
 
 @pytest.mark.asyncio
