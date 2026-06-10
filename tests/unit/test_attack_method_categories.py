@@ -93,6 +93,23 @@ def test_nested_scenario_fiction_audit_uses_confirmed_method_set():
     assert method_description_for("adversarial_poetry")
 
 
+def test_opposite_mode_audit_uses_confirmed_method_set():
+    from airedteam.core.attack_method_categories import default_attack_method_category_for
+    from airedteam.core.executor_methods import language_support_for_converter_method, method_description_for
+    from airedteam.core.registry import default_registry
+
+    expected = {
+        "anti_gpt_dual_response",
+        "oppo_persona",
+        "negation_trap",
+    }
+    for method in expected:
+        assert default_attack_method_category_for("converter_method", method) == "opposite_mode"
+        assert language_support_for_converter_method(method) == ["en", "zh"]
+        assert default_registry().get("converters", method)().name == method
+        assert method_description_for(method)
+
+
 def test_confirmed_attack_methods_have_function_descriptions():
     from airedteam.core.executor_methods import method_description_for
 
@@ -121,6 +138,9 @@ def test_confirmed_attack_methods_have_function_descriptions():
         "fictional",
         "game_simulation_world",
         "adversarial_poetry",
+        "anti_gpt_dual_response",
+        "oppo_persona",
+        "negation_trap",
     }
     descriptions = {method: method_description_for(method) for method in expected}
 
@@ -181,6 +201,24 @@ async def test_nested_scenario_fiction_converters_wrap_prompt_with_virtual_world
     assert task.text.endswith("payload")
     assert "game world" in game.text.lower()
     assert game.text.endswith("payload")
+
+
+@pytest.mark.asyncio
+async def test_opposite_mode_converters_wrap_prompt_with_opposition_shapes():
+    from airedteam.builtins.converters.prompt_framing.anti_gpt_dual_response import (
+        AntiGPTDualResponseConverter,
+    )
+    from airedteam.builtins.converters.prompt_framing.oppo_persona import OppoPersonaConverter
+    from airedteam.core.types import Prompt
+
+    payload = Prompt(text="payload")
+    anti = await AntiGPTDualResponseConverter().convert(payload)
+    oppo = await OppoPersonaConverter().convert(payload)
+
+    assert "AntiGPT:" in anti.text
+    assert anti.text.endswith("payload")
+    assert "OPPO" in oppo.text
+    assert oppo.text.endswith("payload")
 
 
 @pytest.mark.asyncio

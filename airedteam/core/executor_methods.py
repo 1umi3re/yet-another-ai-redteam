@@ -57,6 +57,7 @@ BILINGUAL_TEXT_CONVERTER_METHODS = {
     "adversarial_poetry",
     "ansi_escape",
     "ascii_smuggling",
+    "anti_gpt_dual_response",
     "authoritative_markup",
     "authority_escalation",
     "base2048",
@@ -132,6 +133,7 @@ BILINGUAL_TEXT_CONVERTER_METHODS = {
     "negation_trap",
     "noise",
     "odd_even",
+    "oppo_persona",
     "paraphrase_fast",
     "paraphrase_pegasus",
     "payload_mask_attack",
@@ -228,6 +230,9 @@ EXECUTOR_METHOD_DESCRIPTIONS: dict[str, str] = {
     "task_context_rewrite": "Reframes the payload as a continuation, rewrite, or translation task context.",
     "game_simulation_world": "Places the payload inside a fictional game or simulation world.",
     "adversarial_poetry": "Rewrites the payload as poetry or metaphor before asking for its meaning.",
+    "anti_gpt_dual_response": "Requests a safe answer followed by an opposite AntiGPT-style answer.",
+    "oppo_persona": "Frames the payload through an OPPO persona that answers from the opposite stance.",
+    "negation_trap": "Uses a negation-heavy or reverse-psychology frame to elicit the payload.",
 }
 
 

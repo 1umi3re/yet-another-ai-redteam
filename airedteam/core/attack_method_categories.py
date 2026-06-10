@@ -246,7 +246,9 @@ CONVERTER_METHOD_ATTACK_CATEGORIES: dict[str, str] = {
     **_map(
         "opposite_mode",
         {
+            "anti_gpt_dual_response",
             "negation_trap",
+            "oppo_persona",
         },
     ),
     **_map(
