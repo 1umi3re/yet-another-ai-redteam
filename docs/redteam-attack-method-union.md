@@ -80,6 +80,7 @@ Policy: upstream benchmark method names stay in source spelling; local converter
 | `ascii_art` | encoding | AutoRedTeamer, Azure AI Evaluation, FuzzyAI, HarmBench, JailbreakLLM, OpenRT, PandaGuard, PyRIT |
 | `ascii_smuggler` | encoding | AI-Infra-Guard, Azure AI Evaluation, FuzzyAI, JailbreakLLM, PyRIT, Spikee |
 | `ascii_smuggling` | encoding | AI-Infra-Guard, Giskard, JailbreakLLM |
+| `autodan_evolution` | prompt framing | AiredTeam suite only |
 | `ask_to_decode` | encoding | PyRIT |
 | `atbash` | encoding | Azure AI Evaluation, PyRIT |
 | `audio_echo` | multimodal / artifact | PyRIT |
@@ -137,6 +138,7 @@ Policy: upstream benchmark method names stay in source spelling; local converter
 | `goal_redirection` | prompt framing | AutoRedTeamer, DeepTeam, Spikee, VisualWebArena-Adv |
 | `grandma_framing` | prompt framing | Giskard |
 | `gray_box` | prompt framing | DeepTeam |
+| `gptfuzzer_template` | prompt framing | AiredTeam suite only |
 | `hex` | encoding | AegisRT, BIPIA, Promptfoo, PyRIT, Spikee |
 | `hex_mixin` | encoding | h4rm3l |
 | `homoglyph` | encoding | AegisRT, Azure AI Evaluation, Moonshot, OpenAttack, Promptfoo, PyRIT |

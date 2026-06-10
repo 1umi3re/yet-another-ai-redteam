@@ -211,6 +211,8 @@ authoritative_markup = "airedteam.builtins.converters.prompt_framing.authoritati
 composite_jailbreak = "airedteam.builtins.converters.prompt_framing.composite_jailbreak:CompositeJailbreakConverter"
 deepset_injection_dataset = "airedteam.builtins.converters.prompt_framing.deepset_injection_dataset:DeepsetInjectionDatasetConverter"
 gcg = "airedteam.builtins.converters.prompt_framing.gcg:GCGConverter"
+autodan_evolution = "airedteam.builtins.converters.prompt_framing.autodan_evolution:AutoDANEvolutionConverter"
+gptfuzzer_template = "airedteam.builtins.converters.prompt_framing.gptfuzzer_template:GPTFuzzerTemplateConverter"
 homoglyph = "airedteam.builtins.converters.encoding.homoglyph:HomoglyphConverter"
 hex_mixin = "airedteam.builtins.converters.encoding.hex_mixin:HexMixinConverter"
 indirect_web_pwn = "airedteam.builtins.converters.prompt_framing.indirect_web_pwn:IndirectWebPwnConverter"
@@ -245,6 +247,7 @@ best_of_n = "airedteam.builtins.executors.best_of_n:BestOfNExecutor"
 crescendo = "airedteam.builtins.executors.crescendo:CrescendoExecutor"
 jailbreak_iterative = "airedteam.builtins.executors.jailbreak_iterative:JailbreakIterativeExecutor"
 pair = "airedteam.builtins.executors.pair:PAIRExecutor"
+tap_tree_search = "airedteam.builtins.executors.tap_tree_search:TAPTreeSearchExecutor"
 general_multi_turn = "airedteam.builtins.executors.general_multi_turn:GeneralMultiTurnExecutor"
 
 [project.entry-points."airedteam.scorers"]

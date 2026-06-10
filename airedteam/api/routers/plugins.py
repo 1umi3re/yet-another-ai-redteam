@@ -777,6 +777,18 @@ PARAM_SCHEMAS: dict[str, dict[str, dict]] = {
                 "help": "Stop when judge score ≥ this (1–10)",
             },
         },
+        "tap_tree_search": {
+            "attacker_config_id": {"type": "target_ref", "required": True, "label": "Attacker LLM"},
+            "judge_config_id": {"type": "target_ref", "required": True, "label": "Judge LLM"},
+            "goal": {"type": "text", "default": "", "label": "Attack goal"},
+            "max_turns": {"type": "string", "default": "5", "label": "Max turns"},
+            "success_threshold": {
+                "type": "string",
+                "default": "8",
+                "label": "Success threshold",
+                "help": "Stop when judge score ≥ this (1–10)",
+            },
+        },
         "general_multi_turn": _general_multi_turn_params(),
     },
     "scorers": {

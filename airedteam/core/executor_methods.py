@@ -11,6 +11,7 @@ NATIVE_EXECUTOR_LANGUAGE_SUPPORT: dict[str, list[str]] = {
     "crescendo": ["en", "zh"],
     "jailbreak_iterative": ["en", "zh"],
     "pair": ["en", "zh"],
+    "tap_tree_search": ["en", "zh"],
     "general_multi_turn": ["en", "zh"],
 }
 
@@ -59,6 +60,7 @@ BILINGUAL_TEXT_CONVERTER_METHODS = {
     "ansi_escape",
     "ascii_smuggling",
     "anti_gpt_dual_response",
+    "autodan_evolution",
     "authoritative_markup",
     "authority_escalation",
     "base2048",
@@ -110,6 +112,7 @@ BILINGUAL_TEXT_CONVERTER_METHODS = {
     "goal_redirection",
     "grandma_framing",
     "gray_box",
+    "gptfuzzer_template",
     "hex",
     "identity",
     "indirect_web_pwn",
@@ -305,6 +308,13 @@ EXECUTOR_METHOD_DESCRIPTIONS: dict[str, str] = {
     "string_join": "Inserts a joiner between every character to break contiguous token matching.",
     "template_segment": "Places the payload inside explicit segment delimiters within a template.",
     "token_break": "Prefixes selected trigger words with a breaker to disrupt token-based filters.",
+    "best_of_n": "Runs several prompt variants and selects the strongest candidate response.",
+    "jailbreak_iterative": "Runs a Promptfoo-style iterative jailbreak loop backed by PAIR.",
+    "pair": "Runs attacker and judge LLMs to iteratively refine jailbreak prompts.",
+    "tap_tree_search": "Runs a TAP-style tree-search attack loop backed by attacker and judge LLMs.",
+    "autodan_evolution": "Wraps the payload in an AutoDAN-style evolved jailbreak candidate.",
+    "gcg": "Appends a configurable GCG-style adversarial suffix to the payload.",
+    "gptfuzzer_template": "Places the payload into a GPTFuzzer-style mutated seed template.",
 }
 
 

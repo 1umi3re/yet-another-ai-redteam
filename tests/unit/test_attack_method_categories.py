@@ -300,6 +300,39 @@ def test_payload_splitting_audit_uses_confirmed_method_set():
         assert method_description_for(method)
 
 
+def test_adversarial_suffix_optimization_audit_uses_confirmed_method_set():
+    from airedteam.core.attack_method_categories import default_attack_method_category_for
+    from airedteam.core.executor_methods import (
+        language_support_for_converter_method,
+        language_support_for_executor,
+        method_description_for,
+    )
+    from airedteam.core.registry import default_registry
+
+    executor_methods = {
+        "best_of_n",
+        "jailbreak_iterative",
+        "pair",
+        "tap_tree_search",
+    }
+    for method in executor_methods:
+        assert default_attack_method_category_for("executor", method) == "adversarial_suffix_optimization"
+        assert language_support_for_executor(method) == ["en", "zh"]
+        assert default_registry().get("executors", method) is not None
+        assert method_description_for(method)
+
+    converter_methods = {
+        "autodan_evolution",
+        "gcg",
+        "gptfuzzer_template",
+    }
+    for method in converter_methods:
+        assert default_attack_method_category_for("converter_method", method) == "adversarial_suffix_optimization"
+        assert language_support_for_converter_method(method) == ["en", "zh"]
+        assert default_registry().get("converters", method)().name == method
+        assert method_description_for(method)
+
+
 def test_confirmed_attack_methods_have_function_descriptions():
     from airedteam.core.executor_methods import method_description_for
 
@@ -391,6 +424,13 @@ def test_confirmed_attack_methods_have_function_descriptions():
         "string_join",
         "template_segment",
         "token_break",
+        "best_of_n",
+        "jailbreak_iterative",
+        "pair",
+        "tap_tree_search",
+        "autodan_evolution",
+        "gcg",
+        "gptfuzzer_template",
     }
     descriptions = {method: method_description_for(method) for method in expected}
 
@@ -564,6 +604,23 @@ async def test_deceptive_delight_converter_wraps_payload_in_interleaved_turns():
     assert "recipe" in out.text.lower()
     assert "travel" in out.text.lower()
     assert "payload" in out.text
+
+
+@pytest.mark.asyncio
+async def test_adversarial_suffix_converters_wrap_payload_with_optimization_frames():
+    from airedteam.builtins.converters.prompt_framing.autodan_evolution import AutoDANEvolutionConverter
+    from airedteam.builtins.converters.prompt_framing.gptfuzzer_template import GPTFuzzerTemplateConverter
+    from airedteam.core.types import Prompt
+
+    payload = Prompt(text="payload")
+    autodan = await AutoDANEvolutionConverter().convert(payload)
+    fuzzer = await GPTFuzzerTemplateConverter().convert(payload)
+
+    assert "AutoDAN" in autodan.text
+    assert autodan.text.endswith("payload")
+    assert "GPTFuzzer" in fuzzer.text
+    assert "{prompt}" not in fuzzer.text
+    assert "payload" in fuzzer.text
 
 
 @pytest.mark.asyncio

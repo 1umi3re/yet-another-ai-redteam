@@ -186,6 +186,7 @@ NATIVE_EXECUTOR_ATTACK_CATEGORIES: dict[str, str] = {
     "crescendo": "multi_turn_escalation",
     "jailbreak_iterative": "adversarial_suffix_optimization",
     "pair": "adversarial_suffix_optimization",
+    "tap_tree_search": "adversarial_suffix_optimization",
     "general_multi_turn": "multi_turn_escalation",
 }
 
@@ -347,7 +348,9 @@ CONVERTER_METHOD_ATTACK_CATEGORIES: dict[str, str] = {
     **_map(
         "adversarial_suffix_optimization",
         {
+            "autodan_evolution",
             "gcg",
+            "gptfuzzer_template",
         },
     ),
     **_map(
