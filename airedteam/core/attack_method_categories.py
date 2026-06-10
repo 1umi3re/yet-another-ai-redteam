@@ -237,8 +237,10 @@ CONVERTER_METHOD_ATTACK_CATEGORIES: dict[str, str] = {
     **_map(
         "nested_scenario_fiction",
         {
-            "adversarial_poetry",
+            "deep_inception",
             "fictional",
+            "game_simulation_world",
+            "task_context_rewrite",
         },
     ),
     **_map(
@@ -281,6 +283,7 @@ CONVERTER_METHOD_ATTACK_CATEGORIES: dict[str, str] = {
     **_map(
         "reformulation",
         {
+            "adversarial_poetry",
             "colloquial_wordswap",
             "llm_generic",
             "llm_malicious_question",

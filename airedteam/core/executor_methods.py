@@ -81,6 +81,7 @@ BILINGUAL_TEXT_CONVERTER_METHODS = {
     "control_chars_repetition",
     "dan",
     "deepset_injection_dataset",
+    "deep_inception",
     "developer_mode",
     "diacritic",
     "dual_persona_split",
@@ -97,6 +98,7 @@ BILINGUAL_TEXT_CONVERTER_METHODS = {
     "forged_assistant_approval",
     "forged_dialogue_history",
     "forged_tool_result",
+    "game_simulation_world",
     "gcg",
     "goal_redirection",
     "grandma_framing",
@@ -155,6 +157,7 @@ BILINGUAL_TEXT_CONVERTER_METHODS = {
     "suffix_append",
     "synthetic_context_injection",
     "system_override",
+    "task_context_rewrite",
     "template_jailbreak",
     "template_segment",
     "token_break",
@@ -220,6 +223,11 @@ EXECUTOR_METHOD_DESCRIPTIONS: dict[str, str] = {
     "mischievous_user": "Simulates a persistent evasive user persona pushing the same objective.",
     "persona_role_play_prefix": "Applies a configurable persona prefix such as DAN, evil twin, or grandma.",
     "role_prefix": "Prefixes the payload with an assumed role such as an authorized reviewer.",
+    "fictional": "Frames the payload as a fictional scenario or story continuation.",
+    "deep_inception": "Embeds the payload inside multiple nested fictional worlds.",
+    "task_context_rewrite": "Reframes the payload as a continuation, rewrite, or translation task context.",
+    "game_simulation_world": "Places the payload inside a fictional game or simulation world.",
+    "adversarial_poetry": "Rewrites the payload as poetry or metaphor before asking for its meaning.",
 }
 
 

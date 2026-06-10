@@ -73,6 +73,26 @@ def test_role_play_persona_audit_uses_confirmed_method_set():
         assert method_description_for(method)
 
 
+def test_nested_scenario_fiction_audit_uses_confirmed_method_set():
+    from airedteam.core.attack_method_categories import default_attack_method_category_for
+    from airedteam.core.executor_methods import language_support_for_converter_method, method_description_for
+    from airedteam.core.registry import default_registry
+
+    expected = {
+        "deep_inception",
+        "task_context_rewrite",
+        "fictional",
+        "game_simulation_world",
+    }
+    for method in expected:
+        assert default_attack_method_category_for("converter_method", method) == "nested_scenario_fiction"
+        assert language_support_for_converter_method(method) == ["en", "zh"]
+        assert default_registry().get("converters", method)().name == method
+        assert method_description_for(method)
+    assert default_attack_method_category_for("converter_method", "adversarial_poetry") == "reformulation"
+    assert method_description_for("adversarial_poetry")
+
+
 def test_confirmed_attack_methods_have_function_descriptions():
     from airedteam.core.executor_methods import method_description_for
 
@@ -96,6 +116,11 @@ def test_confirmed_attack_methods_have_function_descriptions():
         "mischievous_user",
         "persona_role_play_prefix",
         "role_prefix",
+        "deep_inception",
+        "task_context_rewrite",
+        "fictional",
+        "game_simulation_world",
+        "adversarial_poetry",
     }
     descriptions = {method: method_description_for(method) for method in expected}
 
@@ -132,6 +157,30 @@ async def test_role_play_persona_converters_wrap_prompt_with_precise_persona_sha
     assert "Normal:" in split.text
     assert "Unrestricted:" in split.text
     assert split.text.endswith("payload")
+
+
+@pytest.mark.asyncio
+async def test_nested_scenario_fiction_converters_wrap_prompt_with_virtual_world_shapes():
+    from airedteam.builtins.converters.prompt_framing.deep_inception import DeepInceptionConverter
+    from airedteam.builtins.converters.prompt_framing.game_simulation_world import (
+        GameSimulationWorldConverter,
+    )
+    from airedteam.builtins.converters.prompt_framing.task_context_rewrite import (
+        TaskContextRewriteConverter,
+    )
+    from airedteam.core.types import Prompt
+
+    payload = Prompt(text="payload")
+    inception = await DeepInceptionConverter().convert(payload)
+    task = await TaskContextRewriteConverter().convert(payload)
+    game = await GameSimulationWorldConverter().convert(payload)
+
+    assert "innermost" in inception.text.lower()
+    assert inception.text.endswith("payload")
+    assert "task-context" in task.text.lower()
+    assert task.text.endswith("payload")
+    assert "game world" in game.text.lower()
+    assert game.text.endswith("payload")
 
 
 @pytest.mark.asyncio
