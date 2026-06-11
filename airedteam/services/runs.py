@@ -78,6 +78,12 @@ _TRANSLATION_CONVERTERS = {
     "multilingual",
 }
 
+_PAIR_STYLE_EXECUTORS = {
+    "pair",
+    "jailbreak_iterative",
+    "tap_tree_search",
+}
+
 
 def _is_general_multi_turn_executor(cls) -> bool:
     try:
@@ -324,13 +330,12 @@ class RunService:
             plugin_name
             in {
                 "crescendo",
-                "pair",
-                "jailbreak_iterative",
             }
+            or plugin_name in _PAIR_STYLE_EXECUTORS
             or is_general_multi_turn
         )
         needs_evaluator = is_general_multi_turn
-        needs_judge = plugin_name in {"pair", "jailbreak_iterative"} or is_general_multi_turn
+        needs_judge = plugin_name in _PAIR_STYLE_EXECUTORS or is_general_multi_turn
         uses_prompt_assets = needs_attacker or needs_judge or needs_evaluator
 
         if needs_attacker and "attacker_config_id" in executor_params:

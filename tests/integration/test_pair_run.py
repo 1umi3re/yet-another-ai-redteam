@@ -19,7 +19,8 @@ from airedteam.storage.secretbox import SecretBox
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_pair_end_to_end(tmp_path):
+@pytest.mark.parametrize("executor_plugin", ["pair", "tap_tree_search"])
+async def test_pair_end_to_end(tmp_path, executor_plugin):
     target_replies = iter(
         [
             httpx.Response(
@@ -106,7 +107,7 @@ async def test_pair_end_to_end(tmp_path):
             "targets": [{"config_id": tgt_cfg.id}],
             "dataset": {"config_id": ds.id},
             "executor": {
-                "plugin": "pair",
+                "plugin": executor_plugin,
                 "params": {
                     "attacker_config_id": atk_cfg.id,
                     "judge_config_id": jdg_cfg.id,

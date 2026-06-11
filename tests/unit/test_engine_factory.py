@@ -57,6 +57,15 @@ def test_build_executor_jailbreak_iterative_requires_attacker_and_judge():
         raise AssertionError("jailbreak_iterative should require attacker and judge")
 
 
+def test_build_executor_tap_tree_search_requires_attacker_and_judge():
+    try:
+        build_executor({"plugin": "tap_tree_search", "params": {}})
+    except ValueError as exc:
+        assert "attacker" in str(exc)
+    else:
+        raise AssertionError("tap_tree_search should require attacker and judge")
+
+
 def test_build_executor_general_multi_turn_requires_role_targets():
     try:
         build_executor({"plugin": "general_multi_turn", "params": {}})

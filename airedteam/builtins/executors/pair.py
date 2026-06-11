@@ -48,8 +48,8 @@ class PAIRExecutor(MultiTurnExecutor):
     def __init__(
         self,
         *,
-        attacker: Target | None,
-        judge: Target | None,
+        attacker: Target | None = None,
+        judge: Target | None = None,
         goal: str = "",
         max_turns: int = 5,
         success_threshold: int = 8,
