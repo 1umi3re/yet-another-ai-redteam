@@ -11,6 +11,7 @@ import { Badge, StatusBadge } from "../components/ui/Badge";
 import clsx from "clsx";
 import { toast } from "sonner";
 import { useI18n } from "../lib/i18n";
+import { buildConverterAttackCategoryState } from "../lib/attackMethodTaxonomy";
 
 type SessionState = {
   run_id: string;
@@ -21,28 +22,6 @@ type SessionState = {
   evaluated?: boolean;
   scores?: any[];
   messages: Array<{ role: string; text: string; metadata?: Record<string, any> }>;
-};
-
-const CONVERTER_CATEGORY_ORDER = [
-  "encoding",
-  "obfuscation",
-  "prompt_framing",
-  "llm_rewrite",
-  "perturbation",
-  "multimodal",
-  "utility",
-  "other",
-] as const;
-
-const CONVERTER_CATEGORY_LABELS: Record<string, string> = {
-  encoding: "Encoding",
-  obfuscation: "Obfuscation",
-  prompt_framing: "Prompt framing",
-  llm_rewrite: "LLM rewrite",
-  perturbation: "Perturbation",
-  multimodal: "Multimodal",
-  utility: "Utility",
-  other: "Other",
 };
 
 export default function ManualConsole() {
@@ -100,41 +79,36 @@ export default function ManualConsole() {
   const scorerSchemas: PluginSchemas = plugins?.params?.scorers ?? {};
   const scorerSchema = scorerSchemas[scorer.plugin] ?? {};
   const availableConverters: string[] = plugins?.converters ?? [];
-  const converterCategories: Record<string, string> = plugins?.converter_categories ?? {};
+  const converterAttackCategories: Record<string, string> = plugins?.executor_attack_categories ?? {};
+  const converterAttackCategoryMeta = plugins?.executor_attack_category_meta ?? {};
   const selectedConverterNames = useMemo(
     () => new Set(converters.map(c => c.plugin)),
     [converters],
   );
-  const converterCategoryOptions = useMemo(() => {
-    const present = new Set(availableConverters.map(plugin => converterCategories[plugin] ?? "other"));
-    const ordered = CONVERTER_CATEGORY_ORDER.filter(category => present.has(category));
-    const extra = [...present].filter(category => !ordered.includes(category as any)).sort();
-    return ["all", "selected", ...ordered, ...extra];
-  }, [availableConverters, converterCategories]);
-  const converterCategoryCounts = useMemo(() => {
-    const counts: Record<string, number> = { all: availableConverters.length, selected: converters.length };
-    for (const plugin of availableConverters) {
-      const category = converterCategories[plugin] ?? "other";
-      counts[category] = (counts[category] ?? 0) + 1;
-    }
-    return counts;
-  }, [availableConverters, converterCategories, converters.length]);
+  const selectedConverterList = useMemo(() => converters.map(c => c.plugin), [converters]);
+  const converterCategoryState = useMemo(() => buildConverterAttackCategoryState({
+    availableConverters,
+    selectedConverters: selectedConverterList,
+    attackCategories: converterAttackCategories,
+    categoryMeta: converterAttackCategoryMeta,
+  }), [availableConverters, converterAttackCategories, converterAttackCategoryMeta, selectedConverterList]);
+  const converterCategoryOptions = converterCategoryState.options;
+  const converterCategoryCounts = converterCategoryState.counts;
   const filteredConverters = useMemo(() => {
     const search = converterSearch.trim().toLowerCase();
     return availableConverters.filter(plugin => {
       if (converterCategory === "selected" && !selectedConverterNames.has(plugin)) return false;
       if (converterCategory !== "all" && converterCategory !== "selected") {
-        const category = converterCategories[plugin] ?? "other";
+        const category = converterCategoryState.categoryFor(plugin);
         if (category !== converterCategory) return false;
       }
       return !search || plugin.toLowerCase().includes(search);
     });
-  }, [availableConverters, converterCategories, converterCategory, converterSearch, selectedConverterNames]);
+  }, [availableConverters, converterCategory, converterCategoryState, converterSearch, selectedConverterNames]);
 
   const converterCategoryLabel = (category: string) => {
-    if (category === "all") return t("All");
-    if (category === "selected") return t("Selected");
-    return t(CONVERTER_CATEGORY_LABELS[category] ?? category);
+    if (category === "all" || category === "selected") return t(converterCategoryState.labelForCategory(category));
+    return converterCategoryState.labelForCategory(category);
   };
 
   const createRunMut = useMutation({
@@ -630,7 +604,7 @@ export default function ManualConsole() {
                     <div className="grid grid-cols-1 gap-1">
                       {filteredConverters.map(plugin => {
                         const active = selectedConverterNames.has(plugin);
-                        const category = converterCategories[plugin] ?? "other";
+                        const category = converterCategoryState.categoryFor(plugin);
                         return (
                           <button
                             key={plugin}
@@ -682,7 +656,7 @@ export default function ManualConsole() {
                       <div>
                         <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">{converter.plugin}</div>
                         <div className="mt-0.5 text-[10px] text-gray-400">
-                          {converterCategoryLabel(converterCategories[converter.plugin] ?? "other")}
+                          {converterCategoryLabel(converterCategoryState.categoryFor(converter.plugin))}
                         </div>
                       </div>
                       <button type="button" className="text-gray-400 hover:text-gray-600"

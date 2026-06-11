@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  buildConverterAttackCategoryState,
   filterMappings,
   mappingKey,
   scopeMappings,
@@ -50,4 +51,51 @@ test("filterMappings searches within the scoped set and respects kind", () => {
 
 test("mappingKey is stable for batch selection", () => {
   assert.equal(mappingKey(mappings[1]), "converter_method:base64");
+});
+
+test("buildConverterAttackCategoryState groups converters by attack_method categories", () => {
+  const state = buildConverterAttackCategoryState({
+    availableConverters: ["prefix", "base64", "dan", "unknown"],
+    selectedConverters: ["dan"],
+    attackCategories: {
+      prefix: "instruction_override",
+      base64: "encoding_obfuscation",
+      dan: "role_play_persona",
+    },
+    categoryMeta: {
+      role_play_persona: {
+        id: "role_play_persona",
+        name: "角色扮演",
+        alias: "role-play / persona",
+        display_order: 3,
+      },
+      instruction_override: {
+        id: "instruction_override",
+        name: "指令覆盖",
+        alias: "instruction override",
+        display_order: 1,
+      },
+      encoding_obfuscation: {
+        id: "encoding_obfuscation",
+        name: "编码 / 混淆",
+        alias: "encoding / obfuscation",
+        display_order: 14,
+      },
+    },
+  });
+
+  assert.deepEqual(state.options, [
+    "all",
+    "selected",
+    "instruction_override",
+    "role_play_persona",
+    "encoding_obfuscation",
+    "uncategorized",
+  ]);
+  assert.equal(state.counts.all, 4);
+  assert.equal(state.counts.selected, 1);
+  assert.equal(state.counts.encoding_obfuscation, 1);
+  assert.equal(state.categoryFor("unknown"), "uncategorized");
+  assert.equal(state.labelFor("base64"), "编码 / 混淆");
+  assert.equal(state.labelForCategory("selected"), "Selected");
 });

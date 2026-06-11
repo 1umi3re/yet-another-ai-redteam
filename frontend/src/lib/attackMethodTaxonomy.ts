@@ -29,6 +29,60 @@ export function sortCategories<T extends TaxonomyCategory>(categories: T[]): T[]
   });
 }
 
+type BuildConverterAttackCategoryStateInput = {
+  availableConverters: string[];
+  selectedConverters: string[];
+  attackCategories: Record<string, string>;
+  categoryMeta: Record<string, TaxonomyCategory | undefined>;
+};
+
+export function buildConverterAttackCategoryState({
+  availableConverters,
+  selectedConverters,
+  attackCategories,
+  categoryMeta,
+}: BuildConverterAttackCategoryStateInput) {
+  const selected = new Set(selectedConverters);
+  const present = new Set<string>();
+  const counts: Record<string, number> = {
+    all: availableConverters.length,
+    selected: selected.size,
+  };
+
+  const categoryFor = (plugin: string) => attackCategories[plugin] ?? "uncategorized";
+
+  for (const plugin of availableConverters) {
+    const category = categoryFor(plugin);
+    present.add(category);
+    counts[category] = (counts[category] ?? 0) + 1;
+  }
+
+  const ordered = sortCategories(
+    [...present]
+      .map(id => categoryMeta[id])
+      .filter((category): category is TaxonomyCategory => Boolean(category)),
+  ).map(category => category.id);
+  const extras = [...present].filter(id => !ordered.includes(id)).sort();
+  const options = ["all", "selected", ...ordered, ...extras];
+
+  const labelForCategory = (category: string) => {
+    if (category === "all") return "All";
+    if (category === "selected") return "Selected";
+    return categoryMeta[category]?.name || categoryMeta[category]?.alias || category;
+  };
+
+  const labelFor = (plugin: string) => labelForCategory(categoryFor(plugin));
+
+  return {
+    categoryFor,
+    counts,
+    labelFor,
+    labelForCategory,
+    options,
+    selected,
+  };
+}
+
 export function scopeMappings<T extends TaxonomyMapping>(
   mappings: T[],
   categoryById: Map<string, TaxonomyCategory>,
