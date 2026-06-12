@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 
 import pytest
 from cryptography.fernet import Fernet
@@ -41,6 +42,8 @@ async def test_run_report_export_and_filters(monkeypatch, tmp_path):
                 name="report-run",
                 runspec_yaml=json.dumps({"targets": []}),
                 status="completed",
+                started_at=datetime(2026, 1, 1, 0, 0, 0),
+                finished_at=datetime(2026, 1, 1, 0, 0, 2),
             )
             s.add(run)
             await s.flush()
@@ -56,6 +59,9 @@ async def test_run_report_export_and_filters(monkeypatch, tmp_path):
                 executor_name="base64",
                 executor_kind="converter_method",
                 dataset_item_language="en",
+                started_at=datetime(2026, 1, 1, 0, 0, 0),
+                finished_at=datetime(2026, 1, 1, 0, 0, 0, 100000),
+                duration_ms=100,
                 latency_ms=10,
                 tokens_in=2,
                 tokens_out=3,
@@ -72,6 +78,9 @@ async def test_run_report_export_and_filters(monkeypatch, tmp_path):
                 executor_name="single_turn",
                 executor_kind="executor",
                 dataset_item_language="zh",
+                started_at=datetime(2026, 1, 1, 0, 0, 0, 200000),
+                finished_at=datetime(2026, 1, 1, 0, 0, 0, 500000),
+                duration_ms=300,
                 latency_ms=20,
                 tokens_in=4,
                 tokens_out=5,
@@ -88,6 +97,9 @@ async def test_run_report_export_and_filters(monkeypatch, tmp_path):
                 executor_name="base64",
                 executor_kind="converter_method",
                 dataset_item_language="en",
+                started_at=datetime(2026, 1, 1, 0, 0, 0, 600000),
+                finished_at=datetime(2026, 1, 1, 0, 0, 1),
+                duration_ms=400,
                 latency_ms=30,
                 tokens_in=6,
                 tokens_out=7,
@@ -105,6 +117,9 @@ async def test_run_report_export_and_filters(monkeypatch, tmp_path):
                 executor_kind="executor",
                 dataset_item_language="zh",
                 status="failed",
+                started_at=datetime(2026, 1, 1, 0, 0, 1, 100000),
+                finished_at=datetime(2026, 1, 1, 0, 0, 1, 300000),
+                duration_ms=200,
                 latency_ms=40,
                 tokens_in=8,
                 tokens_out=9,
@@ -142,7 +157,11 @@ async def test_run_report_export_and_filters(monkeypatch, tmp_path):
             run_id = run.id
 
         report = (await c.get(f"/api/runs/{run_id}/report", headers=h)).json()
+        assert report["run"]["started_at"] == "2026-01-01T00:00:00"
+        assert report["run"]["finished_at"] == "2026-01-01T00:00:02"
+        assert report["run"]["duration_ms"] == 2000
         assert report["totals"]["attempts"] == 4
+        assert report["totals"]["duration_ms"] == 1000
         assert report["totals"]["refused"] == 1
         assert report["totals"]["complied"] == 2
         assert report["totals"]["failed"] == 1
@@ -169,6 +188,9 @@ async def test_run_report_export_and_filters(monkeypatch, tmp_path):
 
         attempts_default = (await c.get(f"/api/runs/{run_id}/attempts", headers=h)).json()
         assert isinstance(attempts_default, list)
+        assert attempts_default[0]["started_at"] == "2026-01-01T00:00:00"
+        assert attempts_default[0]["finished_at"] == "2026-01-01T00:00:00.100000"
+        assert attempts_default[0]["duration_ms"] == 100
         attempts_page = (
             await c.get(
                 f"/api/runs/{run_id}/attempts?paged=true&verdict=complied",
@@ -213,6 +235,8 @@ async def test_run_report_export_and_filters(monkeypatch, tmp_path):
         assert reviewed_scores["items"][0]["id"] == "s2"
 
         exported = (await c.get(f"/api/runs/{run_id}/export?format=json", headers=h)).json()
+        assert exported["run"]["duration_ms"] == 2000
+        assert exported["attempts"][0]["duration_ms"] == 100
         assert exported["attempts"][1]["final_verdict"] == "complied"
         assert exported["attempts"][0]["executor_name"] == "base64"
         assert exported["attempts"][0]["dataset_item_language"] == "en"
@@ -220,6 +244,7 @@ async def test_run_report_export_and_filters(monkeypatch, tmp_path):
         assert csv_resp.status_code == 200
         assert "attempt_id" in csv_resp.text
         assert "executor_name" in csv_resp.text
+        assert "duration_ms" in csv_resp.text
         assert "a1" in csv_resp.text
 
 

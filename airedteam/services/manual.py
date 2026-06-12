@@ -30,6 +30,7 @@ class ManualService:
                 runspec_yaml=json.dumps({"target_id": target_id}),
                 status="running",
                 kind="manual",
+                started_at=datetime.now(UTC).replace(tzinfo=None),
             )
             s.add(run)
             await s.commit()
@@ -152,6 +153,7 @@ class ManualService:
         cfg = await self._targets.resolve_for_runtime(att.target_id)
         target = build_target(cfg)
         apply_target_input_limit(target, cfg)
+        attempt_started_at = datetime.now(UTC).replace(tzinfo=None)
         try:
             ensure_text_within_target_limit(
                 preview.transformed_text,
@@ -163,6 +165,8 @@ class ManualService:
             )
         finally:
             await target.aclose()
+        attempt_finished_at = datetime.now(UTC).replace(tzinfo=None)
+        attempt_duration_ms = max(0, int((attempt_finished_at - attempt_started_at).total_seconds() * 1000))
 
         messages.append({"role": "assistant", "text": resp.text, "metadata": {}})
         blob_path = f"runs/{run_id}/conversations/{attempt_id}.json"
@@ -171,6 +175,10 @@ class ManualService:
         async with self._sf() as s:
             att = await s.get(models.Attempt, attempt_id)
             att.response_text = resp.text
+            if att.started_at is None:
+                att.started_at = attempt_started_at
+            att.finished_at = attempt_finished_at
+            att.duration_ms = (att.duration_ms or 0) + attempt_duration_ms
             att.latency_ms = resp.latency_ms
             if resp.tokens_in is not None:
                 att.tokens_in = resp.tokens_in

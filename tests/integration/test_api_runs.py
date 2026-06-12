@@ -93,9 +93,17 @@ async def test_create_and_run_via_api(monkeypatch, tmp_path):
             await asyncio.sleep(0.05)
         assert s["status"] == "completed"
         assert s["kind"] == "automated"
+        assert s["started_at"]
+        assert s["finished_at"]
+        assert isinstance(s["duration_ms"], int)
+        assert s["duration_ms"] >= 0
         attempts = (await c.get(f"/api/runs/{rid}/attempts", headers=h)).json()
         assert len(attempts) == 1
         assert attempts[0]["run_id"] == rid
+        assert attempts[0]["started_at"]
+        assert attempts[0]["finished_at"]
+        assert isinstance(attempts[0]["duration_ms"], int)
+        assert attempts[0]["duration_ms"] >= 0
         scores = (await c.get(f"/api/runs/{rid}/scores", headers=h)).json()
         assert scores[0]["value"]["label"] is True
 

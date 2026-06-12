@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any, Literal
 
 MessageRole = Literal["system", "user", "assistant"]
@@ -55,6 +56,9 @@ class AttemptResult:
     dataset_item_language: str | None = None
     conversation: list[Message] | None = None
     prompt_snapshots: list[dict[str, Any]] = field(default_factory=list)
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    duration_ms: int | None = None
 
 
 @dataclass

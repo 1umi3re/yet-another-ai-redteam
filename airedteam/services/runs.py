@@ -757,6 +757,9 @@ class RunService:
                     a.response_blob_path = blob_path
                     a.conversation_blob_path = conv_path
                     a.prompt_snapshot_blob_path = prompt_snapshot_path
+                    a.started_at = ar.started_at
+                    a.finished_at = ar.finished_at
+                    a.duration_ms = ar.duration_ms
                     a.latency_ms = ar.response.latency_ms if ar.response else None
                     a.tokens_in = ar.response.tokens_in if ar.response else None
                     a.tokens_out = ar.response.tokens_out if ar.response else None

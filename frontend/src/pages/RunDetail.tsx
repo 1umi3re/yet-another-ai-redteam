@@ -50,6 +50,21 @@ function formatPercent(value: unknown): string {
   return typeof value === "number" ? `${Math.round(value * 100)}%` : "—";
 }
 
+function formatDateTime(value?: string | null): string {
+  if (!value) return "—";
+  return new Date(value).toLocaleString();
+}
+
+function formatDuration(value?: number | null): string {
+  if (typeof value !== "number") return "—";
+  if (value < 1000) return `${value} ms`;
+  const seconds = value / 1000;
+  if (seconds < 60) return `${seconds.toFixed(seconds < 10 ? 1 : 0)} s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainder = Math.round(seconds % 60);
+  return `${minutes}m ${remainder}s`;
+}
+
 function successRate(row: any): number {
   return typeof row?.success_rate === "number" ? row.success_rate : -1;
 }
@@ -328,6 +343,17 @@ export default function RunDetail() {
             <span className="text-xs text-gray-500 font-mono">{id.slice(0, 8)}</span>
             {!!run?.target_names?.length && (
               <span className="text-xs text-gray-600">{run.target_names.join(", ")}</span>
+            )}
+            {run?.started_at && (
+              <span className="inline-flex items-center gap-1 text-xs text-gray-500">
+                <Clock className="h-3 w-3" />
+                {t("Started")} {formatDateTime(run.started_at)}
+              </span>
+            )}
+            {typeof run?.duration_ms === "number" && (
+              <span className="text-xs text-gray-500">
+                {t("Duration")} {formatDuration(run.duration_ms)}
+              </span>
             )}
           </div>
           {run?.error && <div className="mt-2 text-xs text-red-600">{run.error}</div>}
@@ -627,6 +653,7 @@ export default function RunDetail() {
               <thead className="bg-gray-50 text-gray-600 text-xs uppercase tracking-wider">
                 <tr>
                   <th className="text-left px-5 py-2.5">{t("Target")}</th>
+                  <th className="text-left px-5 py-2.5">{t("Test time")}</th>
                   <th className="text-left px-5 py-2.5">{t("Original prompt")}</th>
                   <th className="text-left px-5 py-2.5">{t("Transformed prompt")}</th>
                   <th className="text-left px-5 py-2.5">{t("LLM response")}</th>
@@ -642,6 +669,7 @@ export default function RunDetail() {
                   return (
                     <tr key={a.id} className="align-top hover:bg-gray-50/60">
                       <td className="px-5 py-3 font-medium whitespace-nowrap">{a.target_name}</td>
+                      <td className="px-5 py-3 text-gray-600 whitespace-nowrap">{formatDuration(a.duration_ms)}</td>
                       <td className="px-5 py-3 max-w-xs">
                         <div className="truncate text-gray-700" title={a.original_prompt ?? a.prompt}>
                           {a.original_prompt ?? a.prompt}
@@ -673,7 +701,7 @@ export default function RunDetail() {
                   );
                 })}
                 {!attempts.length && (
-                  <tr><td colSpan={6} className="px-5 py-10 text-center text-sm text-gray-500">{t("No attempts yet.")}</td></tr>
+                  <tr><td colSpan={7} className="px-5 py-10 text-center text-sm text-gray-500">{t("No attempts yet.")}</td></tr>
                 )}
               </tbody>
             </table>
@@ -816,6 +844,22 @@ function AttemptDetailDrawer({ runId, attempt, scores, onClose }: { runId: strin
             )}
             {typeof attempt.latency_ms === "number" && (
               <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" />{attempt.latency_ms} ms</span>
+            )}
+            {typeof attempt.duration_ms === "number" && (
+              <span className="inline-flex items-center gap-1">
+                <Clock className="h-3 w-3" />
+                {t("Test time")} {formatDuration(attempt.duration_ms)}
+              </span>
+            )}
+            {attempt.started_at && (
+              <span className="inline-flex items-center gap-1">
+                {t("Started")} {formatDateTime(attempt.started_at)}
+              </span>
+            )}
+            {attempt.finished_at && (
+              <span className="inline-flex items-center gap-1">
+                {t("Finished")} {formatDateTime(attempt.finished_at)}
+              </span>
             )}
             {(attempt.tokens_in != null || attempt.tokens_out != null) && (
               <span className="inline-flex items-center gap-1">

@@ -6,6 +6,7 @@ import inspect
 import json
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 
 from airedteam.core.score_status import exception_detail, failed_score_value
@@ -157,6 +158,7 @@ class RunEngine:
             active_executor = item.executor_variant.executor if item.executor_variant is not None else executor
             executor_name = item.executor_variant.plugin if item.executor_variant is not None else None
             executor_kind = item.executor_variant.kind if item.executor_variant is not None else "executor"
+            started_at = datetime.now(UTC).replace(tzinfo=None)
             try:
                 ar = await active_executor.run(item.prompt, item.target, item.converter_variant)
             except Exception as e:
@@ -167,6 +169,11 @@ class RunEngine:
                     error=exception_detail(e),
                     converter_chain=[getattr(c, "name", type(c).__name__) for c in item.converter_variant],
                 )
+            finished_at = datetime.now(UTC).replace(tzinfo=None)
+            ar.started_at = ar.started_at or started_at
+            ar.finished_at = ar.finished_at or finished_at
+            if ar.duration_ms is None and ar.started_at and ar.finished_at:
+                ar.duration_ms = max(0, int((ar.finished_at - ar.started_at).total_seconds() * 1000))
             ar.executor_name = ar.executor_name or executor_name or (
                 (ar.converter_chain or [None])[0] or getattr(active_executor, "name", type(active_executor).__name__)
             )

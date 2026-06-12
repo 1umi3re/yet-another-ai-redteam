@@ -16,17 +16,15 @@ from airedteam.api.routers import prompt_assets as prompt_assets_router
 from airedteam.api.routers import runs as runs_router
 from airedteam.api.routers import scenarios as scenarios_router
 from airedteam.api.routers import targets as targets_router
-from airedteam.storage import models
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     state = get_state()
-    from airedteam.storage.db import make_engine
+    from airedteam.storage.db import initialize_database, make_engine
 
     eng = make_engine(state.settings.database_url)
-    async with eng.begin() as c:
-        await c.run_sync(models.Base.metadata.create_all)
+    await initialize_database(eng)
     yield
 
 

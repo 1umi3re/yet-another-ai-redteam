@@ -11,6 +11,21 @@ import { EmptyState } from "../components/ui/EmptyState";
 import { ListChecks, PlayCircle, ArrowUpRight, MessageSquare } from "lucide-react";
 import { useI18n } from "../lib/i18n";
 
+function formatDateTime(value?: string | null): string {
+  if (!value) return "-";
+  return new Date(value).toLocaleString();
+}
+
+function formatDuration(value?: number | null): string {
+  if (typeof value !== "number") return "-";
+  if (value < 1000) return `${value} ms`;
+  const seconds = value / 1000;
+  if (seconds < 60) return `${seconds.toFixed(seconds < 10 ? 1 : 0)} s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainder = Math.round(seconds % 60);
+  return `${minutes}m ${remainder}s`;
+}
+
 export default function Runs() {
   const { t } = useI18n();
   const [targetFilter, setTargetFilter] = useState("");
@@ -104,6 +119,8 @@ export default function Runs() {
                   <th className="text-left px-5 py-2.5">{t("Name")}</th>
                   <th className="text-left px-5 py-2.5">{t("Target")}</th>
                   <th className="text-left px-5 py-2.5">{t("Status")}</th>
+                  <th className="text-left px-5 py-2.5">{t("Started")}</th>
+                  <th className="text-left px-5 py-2.5">{t("Duration")}</th>
                   <th className="text-left px-5 py-2.5 w-64">{t("Progress")}</th>
                   <th className="px-5 py-2.5"></th>
                 </tr>
@@ -121,6 +138,8 @@ export default function Runs() {
                       {(r.target_names ?? []).length ? r.target_names.join(", ") : <span className="text-gray-400">-</span>}
                     </td>
                     <td className="px-5 py-3"><StatusBadge status={r.status} /></td>
+                    <td className="px-5 py-3 text-gray-600 whitespace-nowrap">{formatDateTime(r.started_at)}</td>
+                    <td className="px-5 py-3 text-gray-600 whitespace-nowrap">{formatDuration(r.duration_ms)}</td>
                     <td className="px-5 py-3"><ProgressBar done={r.progress_done ?? 0} total={r.progress_total ?? 0} /></td>
                     <td className="px-5 py-3 text-right whitespace-nowrap">
                       {r.kind === "manual" && r.status === "running" && (

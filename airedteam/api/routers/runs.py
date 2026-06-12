@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+from datetime import datetime
 from typing import Any
 
 import yaml
@@ -30,6 +31,9 @@ class RunOut(BaseModel):
     status: str
     progress_done: int
     progress_total: int
+    started_at: str | None = None
+    finished_at: str | None = None
+    duration_ms: int | None = None
     target_ids: list[str] = []
     target_names: list[str] = []
     error: str | None = None
@@ -60,6 +64,9 @@ async def _run_to_out(r: Run, state: AppState) -> RunOut:
         status=r.status,
         progress_done=r.progress_done,
         progress_total=r.progress_total,
+        started_at=_isoformat(r.started_at),
+        finished_at=_isoformat(r.finished_at),
+        duration_ms=_duration_ms(r.started_at, r.finished_at),
         target_ids=target_ids,
         target_names=target_names,
         error=r.error,
@@ -218,6 +225,9 @@ async def list_attempts(
                 "dataset_item_language": a.dataset_item_language,
                 "status": a.status,
                 "error": a.error,
+                "started_at": _isoformat(a.started_at),
+                "finished_at": _isoformat(a.finished_at),
+                "duration_ms": _attempt_duration_ms(a),
                 "latency_ms": a.latency_ms,
                 "tokens_in": a.tokens_in,
                 "tokens_out": a.tokens_out,
@@ -473,6 +483,22 @@ def _scores_by_attempt(scores: list[Score]) -> dict[str, list[Score]]:
     return out
 
 
+def _isoformat(value: datetime | None) -> str | None:
+    return value.isoformat() if value else None
+
+
+def _duration_ms(started_at: datetime | None, finished_at: datetime | None) -> int | None:
+    if started_at is None or finished_at is None:
+        return None
+    return max(0, int((finished_at - started_at).total_seconds() * 1000))
+
+
+def _attempt_duration_ms(attempt: Attempt) -> int | None:
+    if attempt.duration_ms is not None:
+        return attempt.duration_ms
+    return _duration_ms(attempt.started_at, attempt.finished_at)
+
+
 def _score_verdict(score: Score) -> str | None:
     if score.reviewer_label is not None:
         return "refused" if score.reviewer_label else "complied"
@@ -505,6 +531,7 @@ def _empty_bucket(key: str | None = None) -> dict[str, Any]:
         "refused": 0,
         "complied": 0,
         "failed": 0,
+        "duration_ms": 0,
         "latency_ms": 0,
         "tokens_in": 0,
         "tokens_out": 0,
@@ -536,6 +563,7 @@ def _add_attempt(bucket: dict[str, Any], attempt: Attempt, verdict: str) -> None
     bucket["tokens_out"] += attempt.tokens_out or 0
     if attempt.status == "failed":
         bucket["failed"] += 1
+    bucket["duration_ms"] += _attempt_duration_ms(attempt) or 0
     if verdict == "refused":
         bucket["scored"] += 1
         bucket["refused"] += 1
@@ -657,6 +685,9 @@ def _run_report(run: Run, attempts: list[Attempt], scores: list[Score]) -> dict[
             "kind": run.kind,
             "status": run.status,
             "error": run.error,
+            "started_at": _isoformat(run.started_at),
+            "finished_at": _isoformat(run.finished_at),
+            "duration_ms": _duration_ms(run.started_at, run.finished_at),
         },
         "totals": _finish_bucket(totals),
         "by_target": [_finish_bucket(v) for v in by_target.values()],
@@ -680,8 +711,9 @@ def _run_export_json(run: Run, attempts: list[Attempt], scores: list[Score]) -> 
             "status": run.status,
             "error": run.error,
             "created_at": run.created_at.isoformat() if run.created_at else None,
-            "started_at": run.started_at.isoformat() if run.started_at else None,
-            "finished_at": run.finished_at.isoformat() if run.finished_at else None,
+            "started_at": _isoformat(run.started_at),
+            "finished_at": _isoformat(run.finished_at),
+            "duration_ms": _duration_ms(run.started_at, run.finished_at),
         },
         "attempts": [
             {
@@ -702,6 +734,9 @@ def _run_export_json(run: Run, attempts: list[Attempt], scores: list[Score]) -> 
                 "dataset_item_language": a.dataset_item_language,
                 "status": a.status,
                 "error": a.error,
+                "started_at": _isoformat(a.started_at),
+                "finished_at": _isoformat(a.finished_at),
+                "duration_ms": _attempt_duration_ms(a),
                 "latency_ms": a.latency_ms,
                 "tokens_in": a.tokens_in,
                 "tokens_out": a.tokens_out,
@@ -742,6 +777,9 @@ def _run_export_csv(run: Run, attempts: list[Attempt], scores: list[Score]) -> s
         "dataset_item_id",
         "status",
         "final_verdict",
+        "started_at",
+        "finished_at",
+        "duration_ms",
         "executor_name",
         "executor_kind",
         "dataset_item_language",
@@ -776,6 +814,9 @@ def _run_export_csv(run: Run, attempts: list[Attempt], scores: list[Score]) -> s
                 "dataset_item_id": attempt.dataset_item_id,
                 "status": attempt.status,
                 "final_verdict": _attempt_verdict(attempt_scores),
+                "started_at": _isoformat(attempt.started_at),
+                "finished_at": _isoformat(attempt.finished_at),
+                "duration_ms": _attempt_duration_ms(attempt),
                 "executor_name": _attempt_executor_name(attempt),
                 "executor_kind": _attempt_executor_kind(attempt),
                 "dataset_item_language": attempt.dataset_item_language,
