@@ -751,6 +751,67 @@ async def test_run_service_resolves_attack_template_asset_for_template_jailbreak
 
 
 @pytest.mark.asyncio
+@respx.mock
+async def test_run_service_uses_active_attack_method_template_for_prompt_framing(tmp_path):
+    respx.post("https://api.example.com/v1/chat/completions").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": "target-response"}}],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+            },
+        )
+    )
+    engine_db = make_engine(f"sqlite+aiosqlite:///{tmp_path}/x.db")
+    SessionLocal = make_sessionmaker(engine_db)
+    async with engine_db.begin() as c:
+        await c.run_sync(models.Base.metadata.create_all)
+    blob = LocalBlobStore(tmp_path / "blobs")
+    box = SecretBox(Fernet.generate_key().decode())
+    targets = TargetConfigService(SessionLocal, box)
+    datasets = DatasetService(SessionLocal, blob)
+    bus = ProgressBus()
+    svc = RunService(SessionLocal, blob, box, targets, datasets, bus)
+
+    template_override = await svc._prompt_assets.create_override(
+        "attack_method.prefix.default.v1",
+        name="active prefix",
+        template="ACTIVE {prefix}|{prompt}",
+        active=True,
+    )
+    assert template_override["is_active"] is True
+
+    tcfg = await targets.create(
+        name="t1",
+        plugin="openai_compat",
+        params={"name": "t1", "base_url": "https://api.example.com/v1", "model": "m"},
+        secret={"api_key": "sk"},
+    )
+    ds = await datasets.create_json_upload(
+        name="ds", file_bytes=json.dumps({"items": [{"prompt": "objective"}]}).encode()
+    )
+
+    run = await svc.create_run(
+        name="r1",
+        runspec_dict={
+            "name": "r1",
+            "targets": [{"config_id": tcfg.id}],
+            "dataset": {"config_id": ds.id},
+            "converters": [{"plugin": "prefix", "params": {"prefix": "P:"}}],
+            "executor": {"plugin": "single_turn"},
+        },
+    )
+    await svc.execute_run(run.id)
+
+    async with SessionLocal() as s:
+        from sqlalchemy import select
+
+        attempt = (await s.execute(select(models.Attempt).where(models.Attempt.run_id == run.id))).scalar_one()
+        assert attempt.prompt_text == "ACTIVE P:|objective"
+        assert attempt.response_text == "target-response"
+
+
+@pytest.mark.asyncio
 async def test_run_service_marks_setup_failure_failed(tmp_path):
     engine_db = make_engine(f"sqlite+aiosqlite:///{tmp_path}/x.db")
     SessionLocal = make_sessionmaker(engine_db)

@@ -31,6 +31,7 @@ from airedteam.engine.orchestrator import DefaultOrchestrator
 from airedteam.engine.run_engine import ExecutorVariant, RunEngine
 from airedteam.engine.sampling import SampledDataset
 from airedteam.runspec.models import RunSpec
+from airedteam.services.converter_templates import resolve_converter_attack_template
 from airedteam.services.prompt_assets import PromptAssetService
 from airedteam.storage.models import Attempt, Run, Score
 
@@ -279,17 +280,11 @@ class RunService:
             closeables.append(params["converter"])
         if converter_plugin in _LLM_CONVERTERS or converter_plugin in _TRANSLATION_CONVERTERS:
             params["prompt_assets"] = self._prompt_assets
-        if converter_plugin == "template_jailbreak" and params.get("attack_template_asset_id"):
-            asset_id = params.pop("attack_template_asset_id")
-            asset = await self._prompt_assets.get_asset(asset_id)
-            if asset.get("purpose") != "attack_template":
-                raise ValueError(f"prompt asset is not an attack template: {asset_id}")
-            active_override = asset.get("active_override")
-            params["template"] = (
-                active_override.get("template")
-                if isinstance(active_override, dict) and active_override.get("template")
-                else asset["template"]
-            )
+        await resolve_converter_attack_template(
+            self._prompt_assets,
+            converter_plugin=converter_plugin,
+            params=params,
+        )
         return {"plugin": ref["plugin"], "params": params}
 
     async def _build_executor_variants(self, spec: RunSpec, closeables: list) -> list[ExecutorVariant]:

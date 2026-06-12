@@ -5,6 +5,7 @@ from typing import Any
 
 from airedteam.core.types import Prompt
 from airedteam.engine.factory import build_converter, build_target
+from airedteam.services.converter_templates import resolve_converter_attack_template
 
 _LLM_CONVERTERS = {
     "llm_variation",
@@ -41,20 +42,6 @@ class ConverterChainService:
         self._targets = target_configs
         self._prompt_assets = prompt_assets
 
-    async def _resolve_attack_template(self, params: dict[str, Any]) -> None:
-        if self._prompt_assets is None or not params.get("attack_template_asset_id"):
-            return
-        asset_id = params.pop("attack_template_asset_id")
-        asset = await self._prompt_assets.get_asset(asset_id)
-        if asset.get("purpose") != "attack_template":
-            raise ValueError(f"prompt asset is not an attack template: {asset_id}")
-        active_override = asset.get("active_override")
-        params["template"] = (
-            active_override.get("template")
-            if isinstance(active_override, dict) and active_override.get("template")
-            else asset["template"]
-        )
-
     async def apply(self, text: str, refs: list[dict[str, Any]] | None) -> ConverterPreview:
         refs = refs or []
         prompt = Prompt(text=text)
@@ -81,8 +68,11 @@ class ConverterChainService:
                     params["converter"] = converter_target
                 if plugin in _LLM_CONVERTERS or plugin in _TRANSLATION_CONVERTERS:
                     params["prompt_assets"] = self._prompt_assets
-                if plugin == "template_jailbreak":
-                    await self._resolve_attack_template(params)
+                await resolve_converter_attack_template(
+                    self._prompt_assets,
+                    converter_plugin=plugin,
+                    params=params,
+                )
                 converter = build_converter({"plugin": plugin, "params": params})
                 converters.append(
                     {

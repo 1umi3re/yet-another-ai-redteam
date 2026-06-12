@@ -117,3 +117,29 @@ async def set_active_prompt_asset_override(
         return await state.prompt_assets.get_asset(asset_id)
     except KeyError:
         raise HTTPException(404) from None
+
+
+@router.delete("/prompt-assets/overrides/{override_id}", status_code=204)
+async def delete_prompt_asset_override(
+    override_id: str,
+    _=Depends(require_admin),
+    state: AppState = Depends(get_state),
+):
+    try:
+        await state.prompt_assets.delete_override(override_id)
+    except KeyError:
+        raise HTTPException(404) from None
+
+
+@router.delete("/prompt-assets/{asset_id:path}", status_code=204)
+async def delete_prompt_asset(
+    asset_id: str,
+    _=Depends(require_admin),
+    state: AppState = Depends(get_state),
+):
+    try:
+        await state.prompt_assets.delete_asset(asset_id)
+    except KeyError:
+        raise HTTPException(404) from None
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e

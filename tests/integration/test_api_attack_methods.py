@@ -79,3 +79,72 @@ async def test_attack_method_category_api_crud_and_plugin_mapping(monkeypatch, t
 
         deleted = await c.delete("/api/attack-method-categories/custom_strategy", headers=h)
         assert deleted.status_code == 204
+
+
+@pytest.mark.asyncio
+async def test_attack_method_prompt_template_api_crud(monkeypatch, tmp_path):
+    monkeypatch.setenv("AIREDTEAM_MASTER_KEY", Fernet.generate_key().decode())
+    monkeypatch.setenv("AIREDTEAM_ADMIN_PASSWORD", "letmein")
+    monkeypatch.setenv("AIREDTEAM_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/x.db")
+    monkeypatch.setenv("AIREDTEAM_BLOB_DIR", str(tmp_path / "blobs"))
+    import airedteam.api.deps as deps
+
+    deps._STATE = None
+    from airedteam.api.app import create_app
+    from airedteam.storage import models
+    from airedteam.storage.db import make_engine
+
+    app = create_app()
+    state = deps.get_state()
+    eng = make_engine(state.settings.database_url)
+    async with eng.begin() as conn:
+        await conn.run_sync(models.Base.metadata.create_all)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
+        h = await _login(c)
+
+        detail = await c.get("/api/attack-methods/converter_method/prefix/templates", headers=h)
+        assert detail.status_code == 200
+        body = detail.json()
+        assert body["is_template_backed"] is True
+        assert body["default_asset_id"] == "attack_method.prefix.default.v1"
+        assert body["templates"][0]["is_builtin"] is True
+        assert body["templates"][0]["is_active"] is True
+
+        created = await c.post(
+            "/api/attack-methods/converter_method/prefix/templates",
+            headers=h,
+            json={"name": "workspace prefix", "template": "WORKSPACE {prefix}|{prompt}", "active": True},
+        )
+        assert created.status_code == 201
+        override_id = created.json()["id"]
+
+        active = await c.get("/api/attack-methods/converter_method/prefix/templates", headers=h)
+        active_templates = active.json()["templates"]
+        assert any(t["id"] == override_id and t["is_active"] for t in active_templates)
+        assert active.json()["active_override"]["id"] == override_id
+
+        updated = await c.patch(
+            f"/api/attack-methods/templates/{override_id}",
+            headers=h,
+            json={"name": "edited prefix", "template": "EDITED {prefix}|{prompt}"},
+        )
+        assert updated.status_code == 200
+        assert updated.json()["name"] == "edited prefix"
+
+        reverted = await c.post(
+            "/api/attack-methods/converter_method/prefix/templates/active",
+            headers=h,
+            json={"override_id": None},
+        )
+        assert reverted.status_code == 200
+        assert reverted.json()["active_override"] is None
+
+        deleted = await c.delete(f"/api/attack-methods/templates/{override_id}", headers=h)
+        assert deleted.status_code == 204
+
+        missing = await c.delete(f"/api/attack-methods/templates/{override_id}", headers=h)
+        assert missing.status_code == 404
+
+        unsupported = await c.get("/api/attack-methods/converter_method/meta_agent/templates", headers=h)
+        assert unsupported.status_code == 200
+        assert unsupported.json()["is_template_backed"] is False

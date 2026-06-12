@@ -8,7 +8,7 @@ from importlib import resources
 from string import Formatter
 from typing import Any
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 
 from airedteam.storage import models
 
@@ -150,6 +150,25 @@ class PromptAssetService:
             await s.commit()
             row = await s.get(models.PromptAssetOverride, override_id)
             return _override_public(row)
+
+    async def delete_override(self, override_id: str) -> None:
+        async with self._sf() as s:
+            row = await s.get(models.PromptAssetOverride, override_id)
+            if row is None:
+                raise KeyError(override_id)
+            await s.delete(row)
+            await s.commit()
+
+    async def delete_asset(self, asset_id: str) -> None:
+        if asset_id in self._builtins:
+            raise ValueError("built-in prompt assets cannot be deleted")
+        async with self._sf() as s:
+            row = await s.get(models.PromptAssetCustom, asset_id)
+            if row is None:
+                raise KeyError(asset_id)
+            await s.execute(delete(models.PromptAssetOverride).where(models.PromptAssetOverride.asset_id == asset_id))
+            await s.delete(row)
+            await s.commit()
 
     async def create_asset(
         self,
@@ -390,6 +409,8 @@ def _derive_category(item: dict[str, Any]) -> str:
         "general_multi_turn": "General Multi Turn",
     }.get(plugin)
     if purpose == "attack_template":
+        if asset_id.startswith("attack_method."):
+            return f"Attack Methods / {plugin}" if plugin else "Attack Methods"
         if asset_id.startswith("attack_template.pyrit.arth_singh."):
             return "PyRIT / Arth Singh"
         if asset_id.startswith("attack_template.pyrit.pliny."):

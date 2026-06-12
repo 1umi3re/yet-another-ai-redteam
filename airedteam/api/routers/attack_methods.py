@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from airedteam.api.deps import AppState, get_state, require_admin
 from airedteam.core.attack_method_categories import converter_technical_categories
 from airedteam.core.executor_methods import converter_method_names
+from airedteam.core.prompt_framing_templates import attack_method_template_asset_id
 from airedteam.core.registry import default_registry
 
 router = APIRouter()
@@ -31,6 +32,21 @@ class CategoryPatch(BaseModel):
 class MappingIn(BaseModel):
     category_id: str
     technical_category: str | None = None
+
+
+class TemplateIn(BaseModel):
+    name: str
+    template: str
+    active: bool = False
+
+
+class TemplatePatch(BaseModel):
+    name: str | None = None
+    template: str | None = None
+
+
+class ActiveTemplateIn(BaseModel):
+    override_id: str | None = None
 
 
 def current_attack_method_inputs() -> tuple[list[str], list[str], dict[str, str]]:
@@ -76,6 +92,183 @@ async def create_attack_method_category(
         )
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
+
+
+def _template_response(
+    *,
+    executor_kind: str,
+    executor_name: str,
+    default_asset_id: str | None,
+    asset: dict | None,
+) -> dict:
+    if asset is None or default_asset_id is None:
+        return {
+            "executor_kind": executor_kind,
+            "executor_name": executor_name,
+            "is_template_backed": False,
+            "default_asset_id": None,
+            "active_override": None,
+            "templates": [],
+        }
+    active_override = asset.get("active_override")
+    templates = [
+        {
+            "id": "builtin",
+            "asset_id": default_asset_id,
+            "name": "Built-in default",
+            "template": asset["template"],
+            "is_builtin": True,
+            "is_active": active_override is None,
+            "created_at": None,
+            "updated_at": None,
+        }
+    ]
+    for override in asset.get("overrides") or []:
+        templates.append(
+            {
+                "id": override["id"],
+                "asset_id": override["asset_id"],
+                "name": override["name"],
+                "template": override["template"],
+                "is_builtin": False,
+                "is_active": bool(override.get("is_active")),
+                "created_at": override.get("created_at"),
+                "updated_at": override.get("updated_at"),
+            }
+        )
+    return {
+        "executor_kind": executor_kind,
+        "executor_name": executor_name,
+        "is_template_backed": True,
+        "default_asset_id": default_asset_id,
+        "asset": asset,
+        "active_override": active_override,
+        "templates": templates,
+    }
+
+
+async def _attack_method_template_detail(
+    *,
+    state: AppState,
+    executor_kind: str,
+    executor_name: str,
+) -> dict:
+    default_asset_id = (
+        attack_method_template_asset_id(executor_name) if executor_kind == "converter_method" else None
+    )
+    if default_asset_id is None:
+        return _template_response(
+            executor_kind=executor_kind,
+            executor_name=executor_name,
+            default_asset_id=None,
+            asset=None,
+        )
+    try:
+        asset = await state.prompt_assets.get_asset(default_asset_id)
+    except KeyError:
+        raise HTTPException(404, f"missing attack method template asset: {default_asset_id}") from None
+    return _template_response(
+        executor_kind=executor_kind,
+        executor_name=executor_name,
+        default_asset_id=default_asset_id,
+        asset=asset,
+    )
+
+
+@router.get("/attack-methods/{executor_kind}/{executor_name}/templates")
+async def list_attack_method_templates(
+    executor_kind: str,
+    executor_name: str,
+    _=Depends(require_admin),
+    state: AppState = Depends(get_state),
+):
+    return await _attack_method_template_detail(
+        state=state,
+        executor_kind=executor_kind,
+        executor_name=executor_name,
+    )
+
+
+@router.post("/attack-methods/{executor_kind}/{executor_name}/templates", status_code=201)
+async def create_attack_method_template(
+    executor_kind: str,
+    executor_name: str,
+    body: TemplateIn,
+    _=Depends(require_admin),
+    state: AppState = Depends(get_state),
+):
+    detail = await _attack_method_template_detail(
+        state=state,
+        executor_kind=executor_kind,
+        executor_name=executor_name,
+    )
+    if not detail["is_template_backed"]:
+        raise HTTPException(400, "attack method does not support prompt templates")
+    try:
+        return await state.prompt_assets.create_override(
+            detail["default_asset_id"],
+            name=body.name,
+            template=body.template,
+            active=body.active,
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@router.patch("/attack-methods/templates/{override_id}")
+async def update_attack_method_template(
+    override_id: str,
+    body: TemplatePatch,
+    _=Depends(require_admin),
+    state: AppState = Depends(get_state),
+):
+    try:
+        return await state.prompt_assets.update_override(
+            override_id,
+            **body.model_dump(exclude_unset=True),
+        )
+    except KeyError:
+        raise HTTPException(404) from None
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@router.delete("/attack-methods/templates/{override_id}", status_code=204)
+async def delete_attack_method_template(
+    override_id: str,
+    _=Depends(require_admin),
+    state: AppState = Depends(get_state),
+):
+    try:
+        await state.prompt_assets.delete_override(override_id)
+    except KeyError:
+        raise HTTPException(404) from None
+
+
+@router.post("/attack-methods/{executor_kind}/{executor_name}/templates/active")
+async def set_active_attack_method_template(
+    executor_kind: str,
+    executor_name: str,
+    body: ActiveTemplateIn,
+    _=Depends(require_admin),
+    state: AppState = Depends(get_state),
+):
+    detail = await _attack_method_template_detail(
+        state=state,
+        executor_kind=executor_kind,
+        executor_name=executor_name,
+    )
+    if not detail["is_template_backed"]:
+        raise HTTPException(400, "attack method does not support prompt templates")
+    try:
+        await state.prompt_assets.set_active_override(detail["default_asset_id"], body.override_id)
+    except KeyError:
+        raise HTTPException(404) from None
+    return await _attack_method_template_detail(
+        state=state,
+        executor_kind=executor_kind,
+        executor_name=executor_name,
+    )
 
 
 @router.patch("/attack-method-categories/{category_id}")

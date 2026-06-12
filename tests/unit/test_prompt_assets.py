@@ -33,6 +33,13 @@ async def test_prompt_asset_builtins_and_active_override_precedence(tmp_path):
     assert pyrit_template["purpose"] == "attack_template"
     assert pyrit_template["variables"] == ["prompt"]
     assert "{prompt}" in pyrit_template["template"]
+    prefix_template = next(a for a in assets if a["id"] == "attack_method.prefix.default.v1")
+    assert prefix_template["purpose"] == "attack_template"
+    assert prefix_template["plugin"] == "prefix"
+    assert prefix_template["variables"] == ["prompt", "prefix"]
+    assert prefix_template["category"] == "Attack Methods / prefix"
+    assert "{prompt}" in prefix_template["template"]
+    assert "{prefix}" in prefix_template["template"]
 
     converter_prompt = next(a for a in assets if a["id"] == "llm_variation.rewrite.v1")
     assert converter_prompt["purpose"] == "converter_prompt"
@@ -181,3 +188,42 @@ async def test_prompt_asset_snapshot_writes_blob(tmp_path):
     raw = await blob.get(path)
     assert b'"asset_id": "pair.judge.v1"' in raw
     assert b'"rendered_text"' in raw
+
+
+@pytest.mark.asyncio
+async def test_prompt_asset_delete_custom_assets_and_overrides_only(tmp_path):
+    eng = make_engine(f"sqlite+aiosqlite:///{tmp_path}/t.db")
+    sessions = make_sessionmaker(eng)
+    async with eng.begin() as c:
+        await c.run_sync(models.Base.metadata.create_all)
+
+    svc = PromptAssetService(sessions, LocalBlobStore(tmp_path / "blobs"))
+
+    with pytest.raises(ValueError, match="built-in"):
+        await svc.delete_asset("attack_method.prefix.default.v1")
+
+    override = await svc.create_override(
+        "attack_method.prefix.default.v1",
+        name="custom prefix",
+        template="CUSTOM {prefix}{prompt}",
+        active=True,
+    )
+    await svc.delete_override(override["id"])
+    rendered = await svc.render(
+        "attack_method.prefix.default.v1",
+        {"prompt": "P", "prefix": "X "},
+    )
+    assert rendered["source"] == "builtin"
+
+    created = await svc.create_asset(
+        asset_id="attack_method.custom_prefix.v1",
+        plugin="prefix",
+        purpose="attack_template",
+        category="Attack Methods / prefix",
+        variables=["prompt"],
+        template="CUSTOM {prompt}",
+    )
+    assert created["is_custom"] is True
+    await svc.delete_asset("attack_method.custom_prefix.v1")
+    with pytest.raises(KeyError):
+        await svc.get_asset("attack_method.custom_prefix.v1")

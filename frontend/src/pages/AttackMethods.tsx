@@ -7,6 +7,7 @@ import { Button } from "../components/ui/Button";
 import { Card, CardBody } from "../components/ui/Card";
 import { Field, Input, Select, Textarea } from "../components/ui/Form";
 import { api } from "../lib/api";
+import { extractTemplateVariables } from "../lib/promptAssetHelpers";
 import {
   CategoryScope,
   filterMappings,
@@ -39,6 +40,31 @@ type Mapping = {
 type Catalog = {
   categories: Category[];
   mappings: Mapping[];
+};
+
+type AttackMethodTemplate = {
+  id: string;
+  asset_id: string;
+  name: string;
+  template: string;
+  is_builtin: boolean;
+  is_active: boolean;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+type AttackMethodTemplateDetail = {
+  executor_kind: string;
+  executor_name: string;
+  is_template_backed: boolean;
+  default_asset_id: string | null;
+  active_override?: { id: string } | null;
+  asset?: {
+    id: string;
+    variables: string[];
+    template: string;
+  };
+  templates: AttackMethodTemplate[];
 };
 
 type Draft = {
@@ -542,6 +568,7 @@ export default function AttackMethods() {
               <div className="max-h-[calc(100dvh-16rem)] overflow-y-auto p-4">
                 {selectedMapping ? (
                   <MethodDetail
+                    key={mappingKey(selectedMapping)}
                     mapping={selectedMapping}
                     currentCategory={categoryById.get(selectedMapping.category_id)}
                     description={executorMethodDescriptions[selectedMapping.executor_name] ?? ""}
@@ -898,7 +925,107 @@ function MethodDetail({
   saving: boolean;
 }) {
   const { t } = useI18n();
+  const queryClient = useQueryClient();
   const editing = mappingEditKey === mappingKey(mapping);
+  const templateQueryKey = ["attack-method-templates", mapping.executor_kind, mapping.executor_name];
+  const { data: templateDetail } = useQuery<AttackMethodTemplateDetail>({
+    queryKey: templateQueryKey,
+    queryFn: async () => (
+      await api.get(`/api/attack-methods/${mapping.executor_kind}/${mapping.executor_name}/templates`)
+    ).data,
+  });
+  const [templateEditMode, setTemplateEditMode] = useState<"none" | "create" | "edit">("none");
+  const [templateEditId, setTemplateEditId] = useState("");
+  const [templateName, setTemplateName] = useState("");
+  const [templateText, setTemplateText] = useState("");
+  const [deletingTemplateId, setDeletingTemplateId] = useState("");
+  const templatePlaceholders = useMemo(() => extractTemplateVariables(templateText), [templateText]);
+  const templateMissingPrompt = templateEditMode !== "none" && !templatePlaceholders.includes("prompt");
+  const invalidateTemplates = () => {
+    queryClient.invalidateQueries({ queryKey: templateQueryKey });
+    queryClient.invalidateQueries({ queryKey: ["prompt-assets"] });
+  };
+  const resetTemplateForm = () => {
+    setTemplateEditMode("none");
+    setTemplateEditId("");
+    setTemplateName("");
+    setTemplateText("");
+  };
+  const startCreateTemplate = () => {
+    setTemplateEditMode("create");
+    setTemplateEditId("");
+    setTemplateName(t("Workspace template"));
+    setTemplateText(templateDetail?.asset?.template ?? "{prompt}");
+  };
+  const startEditTemplate = (template: AttackMethodTemplate) => {
+    if (template.is_builtin) return;
+    setTemplateEditMode("edit");
+    setTemplateEditId(template.id);
+    setTemplateName(template.name);
+    setTemplateText(template.template);
+  };
+  const createTemplate = useMutation({
+    mutationFn: async () => (
+      await api.post(`/api/attack-methods/${mapping.executor_kind}/${mapping.executor_name}/templates`, {
+        name: templateName,
+        template: templateText,
+        active: true,
+      })
+    ).data,
+    onSuccess: () => {
+      toast.success(t("Attack template saved"));
+      resetTemplateForm();
+      invalidateTemplates();
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.detail ?? t("Failed to save attack template")),
+  });
+  const updateTemplate = useMutation({
+    mutationFn: async () => (
+      await api.patch(`/api/attack-methods/templates/${templateEditId}`, {
+        name: templateName,
+        template: templateText,
+      })
+    ).data,
+    onSuccess: () => {
+      toast.success(t("Attack template saved"));
+      resetTemplateForm();
+      invalidateTemplates();
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.detail ?? t("Failed to save attack template")),
+  });
+  const activateTemplate = useMutation({
+    mutationFn: async (overrideId: string | null) => (
+      await api.post(`/api/attack-methods/${mapping.executor_kind}/${mapping.executor_name}/templates/active`, {
+        override_id: overrideId,
+      })
+    ).data,
+    onSuccess: () => {
+      toast.success(t("Active attack template updated"));
+      resetTemplateForm();
+      invalidateTemplates();
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.detail ?? t("Failed to update active attack template")),
+  });
+  const deleteTemplate = useMutation({
+    mutationFn: async (overrideId: string) => {
+      await api.delete(`/api/attack-methods/templates/${overrideId}`);
+    },
+    onSuccess: () => {
+      toast.success(t("Attack template deleted"));
+      setDeletingTemplateId("");
+      resetTemplateForm();
+      invalidateTemplates();
+    },
+    onError: (e: any) => {
+      setDeletingTemplateId("");
+      toast.error(e?.response?.data?.detail ?? t("Failed to delete attack template"));
+    },
+  });
+  const saveTemplate = () => {
+    if (templateEditMode === "create") createTemplate.mutate();
+    if (templateEditMode === "edit") updateTemplate.mutate();
+  };
+  const templateSaving = createTemplate.isPending || updateTemplate.isPending;
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -943,6 +1070,125 @@ function MethodDetail({
               {t("Save mapping")}
             </Button>
           </div>
+        </div>
+      )}
+      {templateDetail?.is_template_backed && (
+        <div className="space-y-3 border-t border-gray-200 pt-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <div className="text-sm font-semibold text-gray-900">{t("Attack prompt templates")}</div>
+              <div className="mt-0.5 font-mono text-[11px] text-gray-500 break-all">
+                {templateDetail.default_asset_id}
+              </div>
+            </div>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<Plus className="h-3.5 w-3.5" />}
+              onClick={startCreateTemplate}
+            >
+              {t("New")}
+            </Button>
+          </div>
+
+          <div className="space-y-2">
+            {templateDetail.templates.map(template => (
+              <div
+                key={template.id}
+                className={clsx(
+                  "rounded-md border px-3 py-2",
+                  template.is_active ? "border-brand-200 bg-brand-50/70" : "border-gray-200 bg-white",
+                )}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="break-words text-sm font-medium text-gray-900">{template.name}</span>
+                      {template.is_builtin && <Badge tone="blue">{t("Built-in")}</Badge>}
+                      {template.is_active && <Badge tone="green">{t("Active")}</Badge>}
+                    </div>
+                    <div
+                      className={clsx(
+                        "mt-2 border-l-2 pl-2",
+                        template.is_active ? "border-brand-200" : "border-gray-200",
+                      )}
+                    >
+                      <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-gray-700 [overflow-wrap:anywhere]">{template.template}</pre>
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {!template.is_builtin && (
+                    <Button variant="secondary" size="sm" onClick={() => startEditTemplate(template)}>
+                      {t("Edit")}
+                    </Button>
+                  )}
+                  {!template.is_active && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      loading={activateTemplate.isPending}
+                      onClick={() => activateTemplate.mutate(template.is_builtin ? null : template.id)}
+                    >
+                      {t("Make active")}
+                    </Button>
+                  )}
+                  {!template.is_builtin && (
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      icon={<Trash2 className="h-3.5 w-3.5" />}
+                      loading={deleteTemplate.isPending && deletingTemplateId === template.id}
+                      onClick={() => {
+                        if (confirm(t("Delete attack template {{name}}?", { name: template.name }))) {
+                          setDeletingTemplateId(template.id);
+                          deleteTemplate.mutate(template.id);
+                        }
+                      }}
+                    >
+                      {t("Delete")}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {templateEditMode !== "none" && (
+            <div className="space-y-3 rounded-md border border-gray-200 bg-gray-50 p-3">
+              <div className="text-sm font-medium text-gray-900">
+                {templateEditMode === "create" ? t("Create attack template") : t("Edit attack template")}
+              </div>
+              <Field label={t("Name")}>
+                <Input value={templateName} onChange={event => setTemplateName(event.target.value)} />
+              </Field>
+              <Field label={t("Template")}>
+                <Textarea rows={8} value={templateText} onChange={event => setTemplateText(event.target.value)} />
+              </Field>
+              <div className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
+                {t("Placeholders found: {{variables}}", {
+                  variables: templatePlaceholders.length ? templatePlaceholders.map(v => `{${v}}`).join(", ") : t("none"),
+                })}
+              </div>
+              {templateMissingPrompt && (
+                <div role="alert" className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                  {t("Attack templates must include {prompt}.")}
+                </div>
+              )}
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button variant="secondary" size="sm" onClick={resetTemplateForm}>{t("Cancel")}</Button>
+                <Button
+                  size="sm"
+                  icon={<Save className="h-3.5 w-3.5" />}
+                  loading={templateSaving}
+                  disabled={!templateName.trim() || !templateText.trim() || templateMissingPrompt}
+                  onClick={saveTemplate}
+                >
+                  {t("Save")}
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

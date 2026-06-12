@@ -2,6 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from airedteam.builtins.converters.support.template_backed import PromptFramingTemplateConverter
+from airedteam.core.prompt_framing_templates import (
+    attack_method_template_asset_id,
+    attack_method_template_defaults,
+)
 from airedteam.core.registry import default_registry
 
 TARGET_RUNTIME_PARAM_KEYS = {
@@ -40,6 +45,17 @@ def build_dataset(ref: dict, *, blob_store=None):
 
 
 def build_converter(ref: dict):
+    plugin = ref.get("plugin")
+    params = dict(ref.get("params") or {})
+    if plugin and attack_method_template_asset_id(plugin) is not None and "template" in params:
+        template = params.pop("template")
+        variables = attack_method_template_defaults(plugin)
+        variables.update(params)
+        return PromptFramingTemplateConverter(
+            method_name=plugin,
+            template=template,
+            variables=variables,
+        )
     return _instantiate("converters", ref)
 
 
