@@ -240,6 +240,29 @@ async def test_run_report_export_and_filters(monkeypatch, tmp_path):
         assert exported["attempts"][1]["final_verdict"] == "complied"
         assert exported["attempts"][0]["executor_name"] == "base64"
         assert exported["attempts"][0]["dataset_item_language"] == "en"
+        filtered_export = (
+            await c.get(
+                f"/api/runs/{run_id}/export?format=json&verdict=complied&target_id=target-1&executor=single_turn",
+                headers=h,
+            )
+        ).json()
+        assert [attempt["id"] for attempt in filtered_export["attempts"]] == ["a2"]
+        assert filtered_export["attempts"][0]["scores"][0]["id"] == "s2"
+        status_export = (
+            await c.get(
+                f"/api/runs/{run_id}/export?format=json&status=failed",
+                headers=h,
+            )
+        ).json()
+        assert [attempt["id"] for attempt in status_export["attempts"]] == ["a4"]
+        filtered_csv_resp = await c.get(
+            f"/api/runs/{run_id}/export?format=csv&verdict=complied&target_id=target-1&executor=single_turn",
+            headers=h,
+        )
+        assert filtered_csv_resp.status_code == 200
+        assert "a2" in filtered_csv_resp.text
+        assert "a1" not in filtered_csv_resp.text
+        assert "a3" not in filtered_csv_resp.text
         csv_resp = await c.get(f"/api/runs/{run_id}/export?format=csv", headers=h)
         assert csv_resp.status_code == 200
         assert "attempt_id" in csv_resp.text

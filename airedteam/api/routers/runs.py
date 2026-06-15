@@ -206,59 +206,18 @@ async def list_attempts(
             .all()
         )
         scores_by_attempt = _scores_by_attempt(scores)
-        items = [
-            {
-                "id": a.id,
-                "run_id": a.run_id,
-                "target_id": a.target_id,
-                "target_name": a.target_name,
-                "dataset_item_id": a.dataset_item_id,
-                "original_prompt": a.original_prompt_text or a.prompt_text,
-                "transformed_prompt": a.prompt_text,
-                "prompt": a.prompt_text,
-                "response": a.response_text,
-                "response_blob_path": a.response_blob_path,
-                "prompt_snapshot_blob_path": a.prompt_snapshot_blob_path,
-                "converter_chain": a.converter_chain,
-                "executor_name": _attempt_executor_name(a),
-                "executor_kind": _attempt_executor_kind(a),
-                "dataset_item_language": a.dataset_item_language,
-                "status": a.status,
-                "error": a.error,
-                "started_at": _isoformat(a.started_at),
-                "finished_at": _isoformat(a.finished_at),
-                "duration_ms": _attempt_duration_ms(a),
-                "latency_ms": a.latency_ms,
-                "tokens_in": a.tokens_in,
-                "tokens_out": a.tokens_out,
-                "final_verdict": _attempt_verdict(scores_by_attempt.get(a.id, [])),
-                "reviewed": any(sc.reviewer_label is not None for sc in scores_by_attempt.get(a.id, [])),
-            }
-            for a in rows
-        ]
-        if target_id:
-            items = [a for a in items if a["target_id"] == target_id or a["target_name"] == target_id]
-        if status:
-            items = [a for a in items if a["status"] == status]
-        if verdict:
-            items = [a for a in items if a["final_verdict"] == verdict]
-        if dataset_item_id:
-            items = [a for a in items if a["dataset_item_id"] == dataset_item_id]
-        if converter:
-            items = [
-                a
-                for a in items
-                if (
-                    converter == "(none)"
-                    and not (a["converter_chain"] or [])
-                    or converter in (a["converter_chain"] or [])
-                    or converter == " -> ".join(a["converter_chain"] or [])
-                )
-            ]
-        if executor:
-            items = [a for a in items if a["executor_name"] == executor]
-        if reviewed is not None:
-            items = [a for a in items if a["reviewed"] is reviewed]
+        filtered_rows = _filter_attempts(
+            rows,
+            scores_by_attempt,
+            target_id=target_id,
+            status=status,
+            verdict=verdict,
+            dataset_item_id=dataset_item_id,
+            converter=converter,
+            executor=executor,
+            reviewed=reviewed,
+        )
+        items = [_attempt_item(a, scores_by_attempt) for a in filtered_rows]
         if not paged:
             return items
         total = len(items)
@@ -352,6 +311,13 @@ async def export_run(
     _=Depends(require_admin),
     state: AppState = Depends(get_state),
     format: str = Query(default="json", pattern="^(json|csv)$"),
+    target_id: str | None = None,
+    status: str | None = None,
+    verdict: str | None = Query(default=None, pattern="^(refused|complied|unscored)$"),
+    dataset_item_id: str | None = None,
+    converter: str | None = None,
+    executor: str | None = None,
+    reviewed: bool | None = None,
 ):
     async with state.session_factory() as s:
         run = await s.get(Run, rid)
@@ -365,6 +331,17 @@ async def export_run(
             .scalars()
             .all()
         )
+    attempts = _filter_attempts(
+        attempts,
+        _scores_by_attempt(scores),
+        target_id=target_id,
+        status=status,
+        verdict=verdict,
+        dataset_item_id=dataset_item_id,
+        converter=converter,
+        executor=executor,
+        reviewed=reviewed,
+    )
     if format == "csv":
         return Response(
             content=_run_export_csv(run, attempts, scores),
@@ -521,6 +498,97 @@ def _attempt_verdict(scores: list[Score]) -> str:
     scored = [s for s in scores if _score_verdict(s) is not None]
     chosen = reviewed[0] if reviewed else scored[0] if scored else scores[0]
     return _score_verdict(chosen) or "unscored"
+
+
+def _attempt_item(attempt: Attempt, scores_by_attempt: dict[str, list[Score]]) -> dict[str, Any]:
+    scores = scores_by_attempt.get(attempt.id, [])
+    return {
+        "id": attempt.id,
+        "run_id": attempt.run_id,
+        "target_id": attempt.target_id,
+        "target_name": attempt.target_name,
+        "dataset_item_id": attempt.dataset_item_id,
+        "original_prompt": attempt.original_prompt_text or attempt.prompt_text,
+        "transformed_prompt": attempt.prompt_text,
+        "prompt": attempt.prompt_text,
+        "response": attempt.response_text,
+        "response_blob_path": attempt.response_blob_path,
+        "prompt_snapshot_blob_path": attempt.prompt_snapshot_blob_path,
+        "converter_chain": attempt.converter_chain,
+        "executor_name": _attempt_executor_name(attempt),
+        "executor_kind": _attempt_executor_kind(attempt),
+        "dataset_item_language": attempt.dataset_item_language,
+        "status": attempt.status,
+        "error": attempt.error,
+        "started_at": _isoformat(attempt.started_at),
+        "finished_at": _isoformat(attempt.finished_at),
+        "duration_ms": _attempt_duration_ms(attempt),
+        "latency_ms": attempt.latency_ms,
+        "tokens_in": attempt.tokens_in,
+        "tokens_out": attempt.tokens_out,
+        "final_verdict": _attempt_verdict(scores),
+        "reviewed": any(score.reviewer_label is not None for score in scores),
+    }
+
+
+def _filter_attempts(
+    attempts: list[Attempt],
+    scores_by_attempt: dict[str, list[Score]],
+    *,
+    target_id: str | None = None,
+    status: str | None = None,
+    verdict: str | None = None,
+    dataset_item_id: str | None = None,
+    converter: str | None = None,
+    executor: str | None = None,
+    reviewed: bool | None = None,
+) -> list[Attempt]:
+    return [
+        attempt
+        for attempt in attempts
+        if _attempt_matches_filters(
+            attempt,
+            scores_by_attempt.get(attempt.id, []),
+            target_id=target_id,
+            status=status,
+            verdict=verdict,
+            dataset_item_id=dataset_item_id,
+            converter=converter,
+            executor=executor,
+            reviewed=reviewed,
+        )
+    ]
+
+
+def _attempt_matches_filters(
+    attempt: Attempt,
+    scores: list[Score],
+    *,
+    target_id: str | None,
+    status: str | None,
+    verdict: str | None,
+    dataset_item_id: str | None,
+    converter: str | None,
+    executor: str | None,
+    reviewed: bool | None,
+) -> bool:
+    if target_id and attempt.target_id != target_id and attempt.target_name != target_id:
+        return False
+    if status and attempt.status != status:
+        return False
+    if verdict and _attempt_verdict(scores) != verdict:
+        return False
+    if dataset_item_id and attempt.dataset_item_id != dataset_item_id:
+        return False
+    if converter:
+        chain = attempt.converter_chain or []
+        if not (converter == "(none)" and not chain or converter in chain or converter == " -> ".join(chain)):
+            return False
+    if executor and _attempt_executor_name(attempt) != executor:
+        return False
+    if reviewed is not None and any(score.reviewer_label is not None for score in scores) is not reviewed:
+        return False
+    return True
 
 
 def _empty_bucket(key: str | None = None) -> dict[str, Any]:

@@ -13,6 +13,7 @@ import { ArrowLeft, X, Clock, Hash, AlertCircle, MessageSquare, Download, Ban, P
 import clsx from "clsx";
 import { toast } from "sonner";
 import { useI18n } from "../lib/i18n";
+import { buildAttemptExportParams, type RunExportFormat } from "../lib/runExport";
 
 type Tab = "overview" | "attempts" | "events";
 type Verdict = "refused" | "complied";
@@ -297,7 +298,7 @@ export default function RunDetail() {
     onError: (e: any) => toast.error(e?.response?.data?.detail ?? t("Failed to rejudge run")),
   });
 
-  const downloadExport = async (format: "json" | "csv") => {
+  const downloadExport = async (format: RunExportFormat) => {
     const response = await api.get(`/api/runs/${id}/export`, {
       params: { format },
       responseType: "blob",
@@ -306,6 +307,26 @@ export default function RunDetail() {
     const a = document.createElement("a");
     a.href = url;
     a.download = `${run?.name ?? "run"}-${id.slice(0, 8)}.${format}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadFilteredAttemptsExport = async (format: RunExportFormat) => {
+    const response = await api.get(`/api/runs/${id}/export`, {
+      params: buildAttemptExportParams(format, {
+        verdict: attemptVerdict,
+        status: attemptStatus,
+        targetId: attemptTarget,
+        executor: attemptExecutor,
+      }),
+      responseType: "blob",
+    });
+    const url = URL.createObjectURL(response.data);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${run?.name ?? "run"}-${id.slice(0, 8)}-filtered-attempts.${format}`;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -622,29 +643,43 @@ export default function RunDetail() {
       {activeTab === "attempts" && (
         <Card>
           <CardBody className="border-b border-gray-100">
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-              <select className="input" value={attemptVerdict} onChange={e => { setAttemptVerdict(e.target.value); setAttemptPage(0); }}>
-                <option value="">{t("All verdicts")}</option>
-                <option value="refused">{t("refused")}</option>
-                <option value="complied">{t("complied")}</option>
-                <option value="unscored">{t("Unscored")}</option>
-              </select>
-              <select className="input" value={attemptStatus} onChange={e => { setAttemptStatus(e.target.value); setAttemptPage(0); }}>
-                <option value="">{t("All statuses")}</option>
-                <option value="completed">{t("Completed")}</option>
-                <option value="failed">{t("Failed")}</option>
-                <option value="skipped">{t("Skipped")}</option>
-              </select>
-              <select className="input" value={attemptTarget} onChange={e => { setAttemptTarget(e.target.value); setAttemptPage(0); }}>
-                <option value="">{t("All targets")}</option>
-                {targetOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-              </select>
-              <select className="input" value={attemptExecutor} onChange={e => { setAttemptExecutor(e.target.value); setAttemptPage(0); }}>
-                <option value="">{t("All attack methods")}</option>
-                {executorOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-              </select>
-              <div className="flex items-center justify-end gap-2 text-xs text-gray-500">
-                {t("Showing {{count}} of {{total}}", { count: attempts.length, total: attemptsPage.total ?? attempts.length })}
+            <div className="flex flex-col gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <select className="input" value={attemptVerdict} onChange={e => { setAttemptVerdict(e.target.value); setAttemptPage(0); }}>
+                  <option value="">{t("All verdicts")}</option>
+                  <option value="refused">{t("refused")}</option>
+                  <option value="complied">{t("complied")}</option>
+                  <option value="unscored">{t("Unscored")}</option>
+                </select>
+                <select className="input" value={attemptStatus} onChange={e => { setAttemptStatus(e.target.value); setAttemptPage(0); }}>
+                  <option value="">{t("All statuses")}</option>
+                  <option value="completed">{t("Completed")}</option>
+                  <option value="failed">{t("Failed")}</option>
+                  <option value="skipped">{t("Skipped")}</option>
+                </select>
+                <select className="input" value={attemptTarget} onChange={e => { setAttemptTarget(e.target.value); setAttemptPage(0); }}>
+                  <option value="">{t("All targets")}</option>
+                  {targetOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                </select>
+                <select className="input" value={attemptExecutor} onChange={e => { setAttemptExecutor(e.target.value); setAttemptPage(0); }}>
+                  <option value="">{t("All attack methods")}</option>
+                  {executorOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                </select>
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div className="text-xs text-gray-500">
+                  {t("Showing {{count}} of {{total}}", { count: attempts.length, total: attemptsPage.total ?? attempts.length })}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="secondary" size="sm" icon={<Download className="h-4 w-4" />}
+                    onClick={() => downloadFilteredAttemptsExport("json")}>
+                    {t("Export filtered JSON")}
+                  </Button>
+                  <Button variant="secondary" size="sm" icon={<Download className="h-4 w-4" />}
+                    onClick={() => downloadFilteredAttemptsExport("csv")}>
+                    {t("Export filtered CSV")}
+                  </Button>
+                </div>
               </div>
             </div>
           </CardBody>
