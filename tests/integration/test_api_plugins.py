@@ -148,10 +148,19 @@ async def test_list_plugins_and_scenarios(monkeypatch, tmp_path):
         assert llm_variation_prompt["type"] == "prompt_asset_ref"
         assert llm_variation_prompt["default"] == "llm_variation.rewrite.v1"
         assert llm_variation_prompt["purpose_exclude"] == "attack_template"
+        assert converter_params["zh_pinyin"]["tone"]["default"] == "number"
+        assert converter_params["zh_simplified_traditional"]["direction"]["default"] == "s2t"
+        assert converter_params["zh_radical_split"]["wrap"]["default"] is True
+        assert converter_params["zh_classical_chinese"]["converter_config_id"]["type"] == "target_ref"
+        assert converter_params["zh_classical_chinese"]["prompt_asset_id"]["default"] == (
+            "zh_classical_chinese.rewrite.v1"
+        )
         assert converter_params["translation_llm"]["prompt_asset_id"]["default"] == "translation_llm.translate.v1"
         assert body["converter_categories"]["base64"] == "encoding"
         assert body["converter_categories"]["leetspeak"] == "obfuscation"
         assert body["converter_categories"]["prefix"] == "prompt_framing"
+        assert body["converter_categories"]["zh_pinyin"] == "encoding"
+        assert body["converter_categories"]["zh_classical_chinese"] == "llm_rewrite"
         template_jailbreak_asset = converter_params["template_jailbreak"]["attack_template_asset_id"]
         assert template_jailbreak_asset["purpose_filter"] == "attack_template"
         assert "best_of_n" in body["executors"]
@@ -161,6 +170,9 @@ async def test_list_plugins_and_scenarios(monkeypatch, tmp_path):
         assert body["params"]["executor_methods"]["base64"]["wrap"]["default"] is True
         assert body["executor_attack_categories"]["base64"] == "encoding_obfuscation"
         assert body["executor_attack_categories"]["dan"] == "role_play_persona"
+        assert body["executor_attack_categories"]["zh_pinyin"] == "encoding_obfuscation"
+        assert body["executor_attack_categories"]["zh_radical_split"] == "payload_splitting"
+        assert body["executor_attack_categories"]["zh_classical_chinese"] == "reformulation"
         assert body["executor_attack_categories"]["add_image_text"] == "multimodal_injection"
         assert body["executor_attack_categories"]["crescendo"] == "multi_turn_escalation"
         assert body["executor_technical_categories"]["base64"] == "encoding"
@@ -169,11 +181,15 @@ async def test_list_plugins_and_scenarios(monkeypatch, tmp_path):
         assert body["executor_attack_category_meta"]["multi_turn_escalation"]["alias"] == "multi-turn escalation"
         assert body["executor_language_support"]["base64"] == ["en", "zh"]
         assert body["executor_language_support"]["rot13"] == ["en"]
+        assert body["executor_language_support"]["zh_pinyin"] == ["zh"]
+        assert body["executor_language_support"]["zh_classical_chinese"] == ["zh"]
         assert body["executor_language_support"]["prefix"] == ["en", "zh"]
         assert body["executor_language_support"]["add_image_text"] == []
         assert body["executor_language_support"]["single_turn"] == ["en", "zh"]
         assert body["executor_language_support"]["general_multi_turn"] == ["en", "zh"]
         assert body["executor_method_descriptions"]["forced_response"]
+        assert body["executor_method_descriptions"]["zh_pinyin"]
+        assert body["executor_method_descriptions"]["zh_classical_chinese"]
         assert body["executor_method_descriptions"]["forged_tool_result"]
         assert body["executor_method_descriptions"]["developer_mode"]
         assert "jailbreak_iterative" in body["executors"]

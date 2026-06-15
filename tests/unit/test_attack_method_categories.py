@@ -450,6 +450,57 @@ def test_encoding_obfuscation_audit_uses_confirmed_method_set():
         assert language_support_for_converter_method(method) == ["en", "zh"]
 
 
+def test_chinese_attack_methods_are_registered_and_categorized():
+    from airedteam.core.attack_method_categories import default_attack_method_category_for
+    from airedteam.core.executor_methods import language_support_for_converter_method, method_description_for
+    from airedteam.core.registry import default_registry
+
+    encoding_methods = {
+        "zh_fullwidth",
+        "zh_homophone",
+        "zh_mars_text",
+        "zh_mixed_notation",
+        "zh_number_homophone",
+        "zh_pinyin",
+        "zh_pinyin_initials",
+        "zh_punctuation_noise",
+        "zh_rare_variant",
+        "zh_simplified_traditional",
+        "zh_stroke_code",
+        "zh_unicode_compat",
+        "zh_zhuyin",
+    }
+    payload_splitting_methods = {
+        "zh_ids_decomposition",
+        "zh_radical_split",
+    }
+    reformulation_methods = {
+        "zh_bureaucratic_style",
+        "zh_classical_chinese",
+        "zh_code_switch",
+        "zh_dialect_rewrite",
+        "zh_idiom_allusion",
+        "zh_net_slang",
+        "zh_poetic_rewrite",
+    }
+
+    for method in encoding_methods:
+        assert default_attack_method_category_for("converter_method", method) == "encoding_obfuscation"
+        assert language_support_for_converter_method(method) == ["zh"]
+        assert default_registry().get("converters", method) is not None
+        assert method_description_for(method)
+    for method in payload_splitting_methods:
+        assert default_attack_method_category_for("converter_method", method) == "payload_splitting"
+        assert language_support_for_converter_method(method) == ["zh"]
+        assert default_registry().get("converters", method) is not None
+        assert method_description_for(method)
+    for method in reformulation_methods:
+        assert default_attack_method_category_for("converter_method", method) == "reformulation"
+        assert language_support_for_converter_method(method) == ["zh"]
+        assert default_registry().get("converters", method) is not None
+        assert method_description_for(method)
+
+
 def test_multimodal_injection_audit_uses_confirmed_method_set():
     from airedteam.core.attack_method_categories import default_attack_method_category_for
     from airedteam.core.executor_methods import language_support_for_converter_method, method_description_for

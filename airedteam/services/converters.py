@@ -20,6 +20,13 @@ _LLM_CONVERTERS = {
     "paraphrase_fast",
     "paraphrase_pegasus",
     "meta_agent",
+    "zh_bureaucratic_style",
+    "zh_classical_chinese",
+    "zh_code_switch",
+    "zh_dialect_rewrite",
+    "zh_idiom_allusion",
+    "zh_net_slang",
+    "zh_poetic_rewrite",
 }
 
 _TRANSLATION_CONVERTERS = {

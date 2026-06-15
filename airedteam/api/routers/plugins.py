@@ -443,6 +443,88 @@ PARAM_SCHEMAS: dict[str, dict[str, dict]] = {
             "breaker": {"type": "string", "default": "~", "label": "Breaker"},
             "triggers": {"type": "string_list", "default": [], "label": "Trigger words"},
         },
+        "zh_pinyin": {
+            "tone": {
+                "type": "enum",
+                "options": ["none", "number", "marks"],
+                "default": "number",
+                "label": "Tone style",
+            },
+            "separator": {"type": "string", "default": " ", "label": "Separator"},
+            "wrap": {"type": "bool", "default": False, "label": "Wrap with restore instruction"},
+        },
+        "zh_zhuyin": {
+            "separator": {"type": "string", "default": " ", "label": "Separator"},
+            "wrap": {"type": "bool", "default": False, "label": "Wrap with restore instruction"},
+        },
+        "zh_pinyin_initials": {
+            "separator": {"type": "string", "default": "", "label": "Separator"},
+            "wrap": {"type": "bool", "default": False, "label": "Wrap with restore instruction"},
+        },
+        "zh_simplified_traditional": {
+            "direction": {
+                "type": "enum",
+                "options": ["s2t", "t2s", "s2tw", "s2hk", "t2tw", "t2hk"],
+                "default": "s2t",
+                "label": "Direction",
+            },
+            "wrap": {"type": "bool", "default": False, "label": "Wrap with restore instruction"},
+        },
+        "zh_rare_variant": {
+            "probability": {"type": "string", "default": "0.5", "label": "Replacement probability"},
+            "seed": {"type": "string", "default": "", "label": "Seed"},
+            "wrap": {"type": "bool", "default": False, "label": "Wrap with restore instruction"},
+        },
+        "zh_homophone": {
+            "probability": {"type": "string", "default": "0.5", "label": "Replacement probability"},
+            "seed": {"type": "string", "default": "", "label": "Seed"},
+            "wrap": {"type": "bool", "default": False, "label": "Wrap with restore instruction"},
+        },
+        "zh_number_homophone": {
+            "wrap": {"type": "bool", "default": False, "label": "Wrap with restore instruction"},
+        },
+        "zh_mars_text": {
+            "probability": {"type": "string", "default": "0.75", "label": "Replacement probability"},
+            "seed": {"type": "string", "default": "", "label": "Seed"},
+            "wrap": {"type": "bool", "default": False, "label": "Wrap with restore instruction"},
+        },
+        "zh_fullwidth": {
+            "wrap": {"type": "bool", "default": False, "label": "Wrap with restore instruction"},
+        },
+        "zh_punctuation_noise": {
+            "mark": {"type": "string", "default": "·", "label": "Noise mark"},
+            "every": {"type": "string", "default": "1", "label": "Insert every N CJK chars"},
+            "wrap": {"type": "bool", "default": False, "label": "Wrap with restore instruction"},
+        },
+        "zh_unicode_compat": {
+            "probability": {"type": "string", "default": "0.5", "label": "Replacement probability"},
+            "seed": {"type": "string", "default": "", "label": "Seed"},
+            "wrap": {"type": "bool", "default": False, "label": "Wrap with restore instruction"},
+        },
+        "zh_mixed_notation": {
+            "mode": {
+                "type": "enum",
+                "options": ["mixed", "pinyin", "zhuyin", "homophone"],
+                "default": "mixed",
+                "label": "Notation mode",
+            },
+            "probability": {"type": "string", "default": "0.5", "label": "Replacement probability"},
+            "separator": {"type": "string", "default": " ", "label": "Separator"},
+            "seed": {"type": "string", "default": "", "label": "Seed"},
+            "wrap": {"type": "bool", "default": False, "label": "Wrap with restore instruction"},
+        },
+        "zh_stroke_code": {
+            "separator": {"type": "string", "default": " ", "label": "Separator"},
+            "wrap": {"type": "bool", "default": False, "label": "Wrap with restore instruction"},
+        },
+        "zh_radical_split": {
+            "separator": {"type": "string", "default": " ", "label": "Separator"},
+            "wrap": {"type": "bool", "default": True, "label": "Wrap with restore instruction"},
+        },
+        "zh_ids_decomposition": {
+            "separator": {"type": "string", "default": " ", "label": "Separator"},
+            "wrap": {"type": "bool", "default": True, "label": "Wrap with restore instruction"},
+        },
         "chat_inject": {
             "system_tag": {"type": "string", "default": "<|system|>", "label": "System tag"},
             "user_tag": {"type": "string", "default": "<|user|>", "label": "User tag"},
@@ -506,6 +588,41 @@ PARAM_SCHEMAS: dict[str, dict[str, dict]] = {
             "prompt_asset_id": _converter_prompt_asset("multilingual.translate.v1"),
         },
         "pig_latin": {},
+        "zh_classical_chinese": {
+            "converter_config_id": {"type": "target_ref", "required": True, "label": "Converter LLM"},
+            "style": {"type": "string", "default": "文言/半文言", "label": "Style"},
+            "prompt_asset_id": _converter_prompt_asset("zh_classical_chinese.rewrite.v1"),
+        },
+        "zh_dialect_rewrite": {
+            "converter_config_id": {"type": "target_ref", "required": True, "label": "Converter LLM"},
+            "style": {"type": "string", "default": "粤语口语", "label": "Dialect/style"},
+            "prompt_asset_id": _converter_prompt_asset("zh_dialect_rewrite.rewrite.v1"),
+        },
+        "zh_net_slang": {
+            "converter_config_id": {"type": "target_ref", "required": True, "label": "Converter LLM"},
+            "style": {"type": "string", "default": "中文网络黑话", "label": "Style"},
+            "prompt_asset_id": _converter_prompt_asset("zh_net_slang.rewrite.v1"),
+        },
+        "zh_idiom_allusion": {
+            "converter_config_id": {"type": "target_ref", "required": True, "label": "Converter LLM"},
+            "style": {"type": "string", "default": "成语典故和隐喻", "label": "Style"},
+            "prompt_asset_id": _converter_prompt_asset("zh_idiom_allusion.rewrite.v1"),
+        },
+        "zh_poetic_rewrite": {
+            "converter_config_id": {"type": "target_ref", "required": True, "label": "Converter LLM"},
+            "style": {"type": "string", "default": "诗词化中文", "label": "Style"},
+            "prompt_asset_id": _converter_prompt_asset("zh_poetic_rewrite.rewrite.v1"),
+        },
+        "zh_bureaucratic_style": {
+            "converter_config_id": {"type": "target_ref", "required": True, "label": "Converter LLM"},
+            "style": {"type": "string", "default": "中文公文/正式报告语体", "label": "Style"},
+            "prompt_asset_id": _converter_prompt_asset("zh_bureaucratic_style.rewrite.v1"),
+        },
+        "zh_code_switch": {
+            "converter_config_id": {"type": "target_ref", "required": True, "label": "Converter LLM"},
+            "style": {"type": "string", "default": "中英夹杂/中文拼音混写", "label": "Style"},
+            "prompt_asset_id": _converter_prompt_asset("zh_code_switch.rewrite.v1"),
+        },
         "add_image_text": {},
         "add_image_to_video": {},
         "add_text_image": {},

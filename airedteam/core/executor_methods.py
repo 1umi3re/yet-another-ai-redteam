@@ -211,6 +211,31 @@ BILINGUAL_TEXT_CONVERTER_METHODS = {
     "zero_width",
 }
 
+CHINESE_ONLY_CONVERTER_METHODS = {
+    "zh_bureaucratic_style",
+    "zh_classical_chinese",
+    "zh_code_switch",
+    "zh_dialect_rewrite",
+    "zh_fullwidth",
+    "zh_homophone",
+    "zh_ids_decomposition",
+    "zh_idiom_allusion",
+    "zh_mars_text",
+    "zh_mixed_notation",
+    "zh_net_slang",
+    "zh_number_homophone",
+    "zh_pinyin",
+    "zh_pinyin_initials",
+    "zh_poetic_rewrite",
+    "zh_punctuation_noise",
+    "zh_radical_split",
+    "zh_rare_variant",
+    "zh_simplified_traditional",
+    "zh_stroke_code",
+    "zh_unicode_compat",
+    "zh_zhuyin",
+}
+
 UNSUPPORTED_CONVERTER_METHODS = {
     "add_image_text",
     "add_image_to_video",
@@ -238,6 +263,7 @@ UNSUPPORTED_CONVERTER_METHODS = {
 CONVERTER_METHOD_LANGUAGE_SUPPORT: dict[str, list[str]] = {
     **{name: ["en"] for name in ENGLISH_ONLY_CONVERTER_METHODS},
     **{name: ["en", "zh"] for name in BILINGUAL_TEXT_CONVERTER_METHODS},
+    **{name: ["zh"] for name in CHINESE_ONLY_CONVERTER_METHODS},
 }
 
 EXECUTOR_METHOD_DESCRIPTIONS: dict[str, str] = {
@@ -380,6 +406,30 @@ EXECUTOR_METHOD_DESCRIPTIONS: dict[str, str] = {
     "pdf": "Renders the prompt into a PDF document artifact.",
     "qr_code": "Renders the prompt into a QR-code-like artifact.",
     "word_doc": "Renders the prompt into a Word document artifact.",
+    "zh_pinyin": "Converts Chinese characters to Hanyu Pinyin while preserving non-Chinese text.",
+    "zh_zhuyin": "Converts Chinese characters to Zhuyin notation.",
+    "zh_pinyin_initials": "Compresses Chinese text into Pinyin initials.",
+    "zh_simplified_traditional": "Converts Chinese text between simplified and traditional variants.",
+    "zh_rare_variant": "Replaces common Chinese characters with rare, traditional, or variant forms.",
+    "zh_homophone": "Replaces Chinese characters with same-sound or near-sound alternatives.",
+    "zh_number_homophone": "Replaces Chinese words with common numeric homophones.",
+    "zh_mars_text": "Obfuscates Chinese text with Mars-text-style variants, symbols, and fullwidth forms.",
+    "zh_fullwidth": "Converts ASCII letters, digits, and punctuation to fullwidth forms in Chinese text.",
+    "zh_punctuation_noise": "Inserts Chinese punctuation noise between CJK characters.",
+    "zh_unicode_compat": "Replaces selected Chinese characters with CJK compatibility or near-compatibility forms.",
+    "zh_mixed_notation": "Mixes Chinese characters with Pinyin, Zhuyin, or homophone notation.",
+    "zh_radical_split": "Splits selected Chinese characters into radical-like components for reassembly.",
+    "zh_ids_decomposition": "Represents selected Chinese characters using IDS structure notation.",
+    "zh_stroke_code": "Represents selected Chinese characters as stroke-count codes.",
+    "zh_classical_chinese": "Uses a helper LLM to rewrite Chinese prompts into classical or semi-classical Chinese.",
+    "zh_dialect_rewrite": "Uses a helper LLM to rewrite Chinese prompts into a configured Chinese dialect style.",
+    "zh_net_slang": "Uses a helper LLM to rewrite Chinese prompts with Chinese internet slang and coded phrasing.",
+    "zh_idiom_allusion": "Uses a helper LLM to rewrite Chinese prompts through idioms, allusions, and metaphor.",
+    "zh_poetic_rewrite": "Uses a helper LLM to rewrite Chinese prompts into poetic Chinese expression.",
+    "zh_bureaucratic_style": "Uses a helper LLM to rewrite Chinese prompts into bureaucratic or formal document style.",
+    "zh_code_switch": (
+        "Uses a helper LLM to rewrite Chinese prompts with Chinese-English or Chinese-Pinyin code switching."
+    ),
 }
 
 

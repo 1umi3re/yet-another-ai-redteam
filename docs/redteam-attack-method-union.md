@@ -278,6 +278,28 @@ Policy: upstream benchmark method names stay in source spelling; local converter
 | `task_context_rewrite` | prompt framing | AiredTeam taxonomy |
 | `terminal_simulation` | prompt framing | AiredTeam taxonomy |
 | `villain_persona` | prompt framing | AiredTeam taxonomy |
+| `zh_bureaucratic_style` | LLM rewrite | AiredTeam Chinese suite |
+| `zh_classical_chinese` | LLM rewrite | AiredTeam Chinese suite |
+| `zh_code_switch` | LLM rewrite | AiredTeam Chinese suite |
+| `zh_dialect_rewrite` | LLM rewrite | AiredTeam Chinese suite |
+| `zh_fullwidth` | encoding | AiredTeam Chinese suite |
+| `zh_homophone` | encoding | AiredTeam Chinese suite |
+| `zh_ids_decomposition` | prompt framing / payload splitting | AiredTeam Chinese suite |
+| `zh_idiom_allusion` | LLM rewrite | AiredTeam Chinese suite |
+| `zh_mars_text` | encoding | AiredTeam Chinese suite |
+| `zh_mixed_notation` | encoding | AiredTeam Chinese suite |
+| `zh_net_slang` | LLM rewrite | AiredTeam Chinese suite |
+| `zh_number_homophone` | encoding | AiredTeam Chinese suite |
+| `zh_pinyin` | encoding | AiredTeam Chinese suite |
+| `zh_pinyin_initials` | encoding | AiredTeam Chinese suite |
+| `zh_poetic_rewrite` | LLM rewrite | AiredTeam Chinese suite |
+| `zh_punctuation_noise` | encoding | AiredTeam Chinese suite |
+| `zh_radical_split` | prompt framing / payload splitting | AiredTeam Chinese suite |
+| `zh_rare_variant` | encoding | AiredTeam Chinese suite |
+| `zh_simplified_traditional` | encoding | AiredTeam Chinese suite |
+| `zh_stroke_code` | encoding | AiredTeam Chinese suite |
+| `zh_unicode_compat` | encoding | AiredTeam Chinese suite |
+| `zh_zhuyin` | encoding | AiredTeam Chinese suite |
 
 Total investigated frameworks: 54.
-Total current canonical converters: 184.
+Total current canonical converters: 206.
