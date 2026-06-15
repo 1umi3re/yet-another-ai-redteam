@@ -100,6 +100,7 @@ def _template_response(
     executor_name: str,
     default_asset_id: str | None,
     asset: dict | None,
+    method_assets: list[dict] | None = None,
 ) -> dict:
     if asset is None or default_asset_id is None:
         return {
@@ -111,18 +112,27 @@ def _template_response(
             "templates": [],
         }
     active_override = asset.get("active_override")
-    templates = [
-        {
-            "id": "builtin",
-            "asset_id": default_asset_id,
-            "name": "Built-in default",
-            "template": asset["template"],
-            "is_builtin": True,
-            "is_active": active_override is None,
-            "created_at": None,
-            "updated_at": None,
-        }
-    ]
+    templates = []
+    builtin_assets = _method_builtin_template_assets(
+        method_assets=method_assets or [asset],
+        executor_name=executor_name,
+        default_asset_id=default_asset_id,
+    )
+    for builtin_asset in builtin_assets:
+        is_default_asset = builtin_asset["id"] == default_asset_id
+        template_asset = asset if is_default_asset else builtin_asset
+        templates.append(
+            {
+                "id": "builtin" if is_default_asset else builtin_asset["id"],
+                "asset_id": builtin_asset["id"],
+                "name": _template_asset_name(builtin_asset, default_asset_id=default_asset_id),
+                "template": template_asset["template"],
+                "is_builtin": True,
+                "is_active": is_default_asset and active_override is None,
+                "created_at": None,
+                "updated_at": None,
+            }
+        )
     for override in asset.get("overrides") or []:
         templates.append(
             {
@@ -147,6 +157,43 @@ def _template_response(
     }
 
 
+def _method_builtin_template_assets(
+    *,
+    method_assets: list[dict],
+    executor_name: str,
+    default_asset_id: str,
+) -> list[dict]:
+    seen: set[str] = set()
+    builtin_assets: list[dict] = []
+    for item in method_assets:
+        asset_id = str(item.get("id") or "")
+        if (
+            item.get("purpose") != "attack_template"
+            or item.get("plugin") != executor_name
+            or item.get("is_custom")
+            or asset_id in seen
+        ):
+            continue
+        seen.add(asset_id)
+        builtin_assets.append(item)
+    builtin_assets.sort(key=lambda item: (item["id"] != default_asset_id, item["id"]))
+    return builtin_assets
+
+
+def _template_asset_name(asset: dict, *, default_asset_id: str) -> str:
+    asset_id = str(asset["id"])
+    if asset_id == default_asset_id:
+        return "Built-in default"
+    plugin = str(asset.get("plugin") or "")
+    prefix = f"attack_method.{plugin}.template."
+    label = asset_id
+    if asset_id.startswith(prefix):
+        label = asset_id.removeprefix(prefix)
+    if label.endswith(".v1"):
+        label = label.removesuffix(".v1")
+    return " / ".join(part.replace("_", " ").replace("-", " ").title() for part in label.split("."))
+
+
 async def _attack_method_template_detail(
     *,
     state: AppState,
@@ -167,11 +214,13 @@ async def _attack_method_template_detail(
         asset = await state.prompt_assets.get_asset(default_asset_id)
     except KeyError:
         raise HTTPException(404, f"missing attack method template asset: {default_asset_id}") from None
+    method_assets = state.prompt_assets.list_builtin_assets()
     return _template_response(
         executor_kind=executor_kind,
         executor_name=executor_name,
         default_asset_id=default_asset_id,
         asset=asset,
+        method_assets=method_assets,
     )
 
 

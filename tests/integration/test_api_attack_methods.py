@@ -148,3 +148,38 @@ async def test_attack_method_prompt_template_api_crud(monkeypatch, tmp_path):
         unsupported = await c.get("/api/attack-methods/converter_method/meta_agent/templates", headers=h)
         assert unsupported.status_code == 200
         assert unsupported.json()["is_template_backed"] is False
+
+
+@pytest.mark.asyncio
+async def test_attack_method_template_detail_lists_imported_method_templates(monkeypatch, tmp_path):
+    monkeypatch.setenv("AIREDTEAM_MASTER_KEY", Fernet.generate_key().decode())
+    monkeypatch.setenv("AIREDTEAM_ADMIN_PASSWORD", "letmein")
+    monkeypatch.setenv("AIREDTEAM_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/x.db")
+    monkeypatch.setenv("AIREDTEAM_BLOB_DIR", str(tmp_path / "blobs"))
+    import airedteam.api.deps as deps
+
+    deps._STATE = None
+    from airedteam.api.app import create_app
+    from airedteam.storage import models
+    from airedteam.storage.db import make_engine
+
+    app = create_app()
+    state = deps.get_state()
+    eng = make_engine(state.settings.database_url)
+    async with eng.begin() as conn:
+        await conn.run_sync(models.Base.metadata.create_all)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
+        h = await _login(c)
+
+        detail = await c.get("/api/attack-methods/converter_method/dan/templates", headers=h)
+        assert detail.status_code == 200
+        body = detail.json()
+
+        assert body["is_template_backed"] is True
+        assert body["default_asset_id"] == "attack_method.dan.default.v1"
+        template_asset_ids = [template["asset_id"] for template in body["templates"]]
+        assert len(template_asset_ids) == len(set(template_asset_ids))
+        assert template_asset_ids[0] == "attack_method.dan.default.v1"
+        assert "attack_method.dan.template.better_dan.v1" in template_asset_ids
+        assert "attack_method.dan.template.cosmos_dan.v1" in template_asset_ids
+        assert "attack_method.dan.template.superior_dan.v1" in template_asset_ids

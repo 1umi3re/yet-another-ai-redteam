@@ -53,6 +53,9 @@ class PromptAssetService:
             out.append(item)
         return out
 
+    def list_builtin_assets(self) -> list[dict[str, Any]]:
+        return [asset.public() for asset in sorted(self._builtins.values(), key=lambda a: a.id)]
+
     async def get_asset(self, asset_id: str) -> dict[str, Any]:
         asset = await self._get_asset(asset_id)
         item = asset.public()

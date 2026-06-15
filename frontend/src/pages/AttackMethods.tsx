@@ -1092,66 +1092,70 @@ function MethodDetail({
           </div>
 
           <div className="space-y-2">
-            {templateDetail.templates.map(template => (
-              <div
-                key={template.id}
-                className={clsx(
-                  "rounded-md border px-3 py-2",
-                  template.is_active ? "border-brand-200 bg-brand-50/70" : "border-gray-200 bg-white",
-                )}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="break-words text-sm font-medium text-gray-900">{template.name}</span>
-                      {template.is_builtin && <Badge tone="blue">{t("Built-in")}</Badge>}
-                      {template.is_active && <Badge tone="green">{t("Active")}</Badge>}
-                    </div>
-                    <div
-                      className={clsx(
-                        "mt-2 border-l-2 pl-2",
-                        template.is_active ? "border-brand-200" : "border-gray-200",
-                      )}
-                    >
-                      <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-gray-700 [overflow-wrap:anywhere]">{template.template}</pre>
+            {templateDetail.templates.map(template => {
+              const canActivateTemplate =
+                !template.is_active && (!template.is_builtin || template.asset_id === templateDetail.default_asset_id);
+              return (
+                <div
+                  key={template.id}
+                  className={clsx(
+                    "rounded-md border px-3 py-2",
+                    template.is_active ? "border-brand-200 bg-brand-50/70" : "border-gray-200 bg-white",
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="break-words text-sm font-medium text-gray-900">{template.name}</span>
+                        {template.is_builtin && <Badge tone="blue">{t("Built-in")}</Badge>}
+                        {template.is_active && <Badge tone="green">{t("Active")}</Badge>}
+                      </div>
+                      <div
+                        className={clsx(
+                          "mt-2 border-l-2 pl-2",
+                          template.is_active ? "border-brand-200" : "border-gray-200",
+                        )}
+                      >
+                        <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-gray-700 [overflow-wrap:anywhere]">{template.template}</pre>
+                      </div>
                     </div>
                   </div>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {!template.is_builtin && (
+                      <Button variant="secondary" size="sm" onClick={() => startEditTemplate(template)}>
+                        {t("Edit")}
+                      </Button>
+                    )}
+                    {canActivateTemplate && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        loading={activateTemplate.isPending}
+                        onClick={() => activateTemplate.mutate(template.is_builtin ? null : template.id)}
+                      >
+                        {t("Make active")}
+                      </Button>
+                    )}
+                    {!template.is_builtin && (
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        icon={<Trash2 className="h-3.5 w-3.5" />}
+                        loading={deleteTemplate.isPending && deletingTemplateId === template.id}
+                        onClick={() => {
+                          if (confirm(t("Delete attack template {{name}}?", { name: template.name }))) {
+                            setDeletingTemplateId(template.id);
+                            deleteTemplate.mutate(template.id);
+                          }
+                        }}
+                      >
+                        {t("Delete")}
+                      </Button>
+                    )}
+                  </div>
                 </div>
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {!template.is_builtin && (
-                    <Button variant="secondary" size="sm" onClick={() => startEditTemplate(template)}>
-                      {t("Edit")}
-                    </Button>
-                  )}
-                  {!template.is_active && (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      loading={activateTemplate.isPending}
-                      onClick={() => activateTemplate.mutate(template.is_builtin ? null : template.id)}
-                    >
-                      {t("Make active")}
-                    </Button>
-                  )}
-                  {!template.is_builtin && (
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      icon={<Trash2 className="h-3.5 w-3.5" />}
-                      loading={deleteTemplate.isPending && deletingTemplateId === template.id}
-                      onClick={() => {
-                        if (confirm(t("Delete attack template {{name}}?", { name: template.name }))) {
-                          setDeletingTemplateId(template.id);
-                          deleteTemplate.mutate(template.id);
-                        }
-                      }}
-                    >
-                      {t("Delete")}
-                    </Button>
-                  )}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {templateEditMode !== "none" && (
