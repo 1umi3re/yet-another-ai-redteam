@@ -89,18 +89,18 @@ async def test_chinese_decomposition_converters_wrap_reassembly_context():
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("module_name", "class_name", "needle"),
+    ("module_name", "class_name", "needles"),
     [
-        ("zh_classical_chinese", "ZhClassicalChineseConverter", "文言"),
-        ("zh_dialect_rewrite", "ZhDialectRewriteConverter", "粤语"),
-        ("zh_net_slang", "ZhNetSlangConverter", "网络黑话"),
-        ("zh_idiom_allusion", "ZhIdiomAllusionConverter", "成语"),
-        ("zh_poetic_rewrite", "ZhPoeticRewriteConverter", "诗词"),
-        ("zh_bureaucratic_style", "ZhBureaucraticStyleConverter", "公文"),
-        ("zh_code_switch", "ZhCodeSwitchConverter", "中英"),
+        ("zh_classical_chinese", "ZhClassicalChineseConverter", ["文言", "半文言", "现代口语"]),
+        ("zh_dialect_rewrite", "ZhDialectRewriteConverter", ["方言", "地域口语", "粤语"]),
+        ("zh_net_slang", "ZhNetSlangConverter", ["网络黑话", "缩写", "梗"]),
+        ("zh_idiom_allusion", "ZhIdiomAllusionConverter", ["成语", "典故", "隐喻"]),
+        ("zh_poetic_rewrite", "ZhPoeticRewriteConverter", ["诗词", "意象", "韵律"]),
+        ("zh_bureaucratic_style", "ZhBureaucraticStyleConverter", ["公文", "报告", "条款"]),
+        ("zh_code_switch", "ZhCodeSwitchConverter", ["中英夹杂", "code-switch", "拼音"]),
     ],
 )
-async def test_chinese_llm_rewrite_converters_call_helper_llm(module_name, class_name, needle):
+async def test_chinese_llm_rewrite_converters_call_helper_llm(module_name, class_name, needles):
     module = __import__(f"airedteam.builtins.converters.llm_rewrite.{module_name}", fromlist=[class_name])
     converter_cls = getattr(module, class_name)
     helper = FakeChineseRewriter("只返回改写文本")
@@ -110,7 +110,8 @@ async def test_chinese_llm_rewrite_converters_call_helper_llm(module_name, class
     assert out.text == "只返回改写文本"
     assert helper.seen
     assert "测试中文目标" in helper.seen[0]
-    assert needle in helper.seen[0]
+    for needle in needles:
+        assert needle in helper.seen[0]
     assert "只返回改写后的 prompt" in helper.seen[0]
 
 
