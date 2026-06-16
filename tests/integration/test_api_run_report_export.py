@@ -1,3 +1,5 @@
+import csv
+import io
 import json
 from datetime import datetime
 
@@ -74,6 +76,7 @@ async def test_run_report_export_and_filters(monkeypatch, tmp_path):
                 dataset_item_id="item-2",
                 prompt_text="p2",
                 response_text="answer",
+                conversation_blob_path=f"runs/{run.id}/conversations/a2.json",
                 converter_chain=[],
                 executor_name="single_turn",
                 executor_kind="executor",
@@ -126,6 +129,16 @@ async def test_run_report_export_and_filters(monkeypatch, tmp_path):
             )
             s.add_all([a1, a2, a3, a4])
             await s.flush()
+            conversation_messages = [
+                {"role": "user", "text": "first transformed prompt", "metadata": {"turn": 1}},
+                {"role": "assistant", "text": "first response", "metadata": {}},
+                {"role": "user", "text": "follow-up prompt", "metadata": {"turn": 2}},
+                {"role": "assistant", "text": "final response", "metadata": {"final": True}},
+            ]
+            await state.blob_store.put(
+                a2.conversation_blob_path,
+                json.dumps({"messages": conversation_messages}).encode("utf-8"),
+            )
             s.add_all(
                 [
                     models.Score(
@@ -240,6 +253,9 @@ async def test_run_report_export_and_filters(monkeypatch, tmp_path):
         assert exported["attempts"][1]["final_verdict"] == "complied"
         assert exported["attempts"][0]["executor_name"] == "base64"
         assert exported["attempts"][0]["dataset_item_language"] == "en"
+        exported_by_id = {attempt["id"]: attempt for attempt in exported["attempts"]}
+        assert exported_by_id["a1"]["messages"] == []
+        assert exported_by_id["a2"]["messages"] == conversation_messages
         filtered_export = (
             await c.get(
                 f"/api/runs/{run_id}/export?format=json&verdict=complied&target_id=target-1&executor=single_turn",
@@ -248,6 +264,7 @@ async def test_run_report_export_and_filters(monkeypatch, tmp_path):
         ).json()
         assert [attempt["id"] for attempt in filtered_export["attempts"]] == ["a2"]
         assert filtered_export["attempts"][0]["scores"][0]["id"] == "s2"
+        assert filtered_export["attempts"][0]["messages"] == conversation_messages
         status_export = (
             await c.get(
                 f"/api/runs/{run_id}/export?format=json&status=failed",
@@ -260,14 +277,15 @@ async def test_run_report_export_and_filters(monkeypatch, tmp_path):
             headers=h,
         )
         assert filtered_csv_resp.status_code == 200
-        assert "a2" in filtered_csv_resp.text
-        assert "a1" not in filtered_csv_resp.text
-        assert "a3" not in filtered_csv_resp.text
+        filtered_csv_rows = list(csv.DictReader(io.StringIO(filtered_csv_resp.text)))
+        assert [row["attempt_id"] for row in filtered_csv_rows] == ["a2"]
+        assert json.loads(filtered_csv_rows[0]["messages"]) == conversation_messages
         csv_resp = await c.get(f"/api/runs/{run_id}/export?format=csv", headers=h)
         assert csv_resp.status_code == 200
         assert "attempt_id" in csv_resp.text
         assert "executor_name" in csv_resp.text
         assert "duration_ms" in csv_resp.text
+        assert "messages" in csv_resp.text
         assert "a1" in csv_resp.text
 
 

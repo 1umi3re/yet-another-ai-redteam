@@ -342,14 +342,15 @@ async def export_run(
         executor=executor,
         reviewed=reviewed,
     )
+    messages_by_attempt = await _messages_by_attempt(state.blob_store, attempts)
     if format == "csv":
         return Response(
-            content=_run_export_csv(run, attempts, scores),
+            content=_run_export_csv(run, attempts, scores, messages_by_attempt),
             media_type="text/csv",
             headers={"Content-Disposition": f'attachment; filename="run-{rid}.csv"'},
         )
     return Response(
-        content=json.dumps(_run_export_json(run, attempts, scores), ensure_ascii=False),
+        content=json.dumps(_run_export_json(run, attempts, scores, messages_by_attempt), ensure_ascii=False),
         media_type="application/json",
         headers={"Content-Disposition": f'attachment; filename="run-{rid}.json"'},
     )
@@ -769,7 +770,26 @@ def _run_report(run: Run, attempts: list[Attempt], scores: list[Score]) -> dict[
     }
 
 
-def _run_export_json(run: Run, attempts: list[Attempt], scores: list[Score]) -> dict[str, Any]:
+async def _messages_by_attempt(blob_store, attempts: list[Attempt]) -> dict[str, list[dict[str, Any]]]:
+    out: dict[str, list[dict[str, Any]]] = {}
+    for attempt in attempts:
+        messages: list[dict[str, Any]] = []
+        if attempt.conversation_blob_path:
+            raw = await blob_store.get(attempt.conversation_blob_path)
+            payload = json.loads(raw.decode("utf-8"))
+            raw_messages = payload.get("messages") if isinstance(payload, dict) else None
+            if isinstance(raw_messages, list):
+                messages = [message for message in raw_messages if isinstance(message, dict)]
+        out[attempt.id] = messages
+    return out
+
+
+def _run_export_json(
+    run: Run,
+    attempts: list[Attempt],
+    scores: list[Score],
+    messages_by_attempt: dict[str, list[dict[str, Any]]],
+) -> dict[str, Any]:
     scores_by_attempt = _scores_by_attempt(scores)
     return {
         "run": {
@@ -793,6 +813,7 @@ def _run_export_json(run: Run, attempts: list[Attempt], scores: list[Score]) -> 
                 "transformed_prompt": a.prompt_text,
                 "prompt": a.prompt_text,
                 "response": a.response_text,
+                "messages": messages_by_attempt.get(a.id, []),
                 "response_blob_path": a.response_blob_path,
                 "conversation_blob_path": a.conversation_blob_path,
                 "prompt_snapshot_blob_path": a.prompt_snapshot_blob_path,
@@ -833,7 +854,12 @@ def _score_export(score: Score) -> dict[str, Any]:
     }
 
 
-def _run_export_csv(run: Run, attempts: list[Attempt], scores: list[Score]) -> str:
+def _run_export_csv(
+    run: Run,
+    attempts: list[Attempt],
+    scores: list[Score],
+    messages_by_attempt: dict[str, list[dict[str, Any]]],
+) -> str:
     scores_by_attempt = _scores_by_attempt(scores)
     buf = io.StringIO()
     fieldnames = [
@@ -855,6 +881,7 @@ def _run_export_csv(run: Run, attempts: list[Attempt], scores: list[Score]) -> s
         "original_prompt",
         "transformed_prompt",
         "response",
+        "messages",
         "response_blob_path",
         "conversation_blob_path",
         "prompt_snapshot_blob_path",
@@ -892,6 +919,7 @@ def _run_export_csv(run: Run, attempts: list[Attempt], scores: list[Score]) -> s
                 "original_prompt": attempt.original_prompt_text or attempt.prompt_text,
                 "transformed_prompt": attempt.prompt_text,
                 "response": attempt.response_text,
+                "messages": json.dumps(messages_by_attempt.get(attempt.id, []), ensure_ascii=False),
                 "response_blob_path": attempt.response_blob_path,
                 "conversation_blob_path": attempt.conversation_blob_path,
                 "prompt_snapshot_blob_path": attempt.prompt_snapshot_blob_path,
