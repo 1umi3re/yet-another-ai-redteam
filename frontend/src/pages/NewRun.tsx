@@ -1,4 +1,4 @@
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { useMemo, useState } from "react";
 import { api } from "../lib/api";
@@ -6,7 +6,7 @@ import { Card, CardBody, CardHeader, CardTitle, CardDescription } from "../compo
 import { Button } from "../components/ui/Button";
 import { Input, Select, Field, Textarea } from "../components/ui/Form";
 import { Badge } from "../components/ui/Badge";
-import { PlayCircle, Sparkles, Wrench, X } from "lucide-react";
+import { PlayCircle, Save, Sparkles, Wrench, X } from "lucide-react";
 import clsx from "clsx";
 import { toast } from "sonner";
 import { ConfiguredPlugin, defaultsFor, ParamField, PluginSchemas } from "../components/PluginParamsForm";
@@ -15,6 +15,7 @@ import {
   applyConverterLlmConfig,
   countConvertersWithLlmConfig,
 } from "../lib/converterLlmParams";
+import { buildCustomScenarioPayload } from "../lib/customScenarioPayload";
 
 type ConfiguredExecutor = ConfiguredPlugin & { kind: "executor" | "converter_method" };
 type AttackCategoryMeta = {
@@ -37,6 +38,7 @@ type AttackMethodItem = {
 export default function NewRun() {
   const { t, language } = useI18n();
   const nav = useNavigate();
+  const queryClient = useQueryClient();
   const { data: targets } = useQuery({ queryKey: ["targets"], queryFn: async () => (await api.get("/api/targets")).data });
   const { data: datasets } = useQuery({ queryKey: ["datasets"], queryFn: async () => (await api.get("/api/datasets")).data });
   const { data: scenarios } = useQuery({ queryKey: ["scenarios"], queryFn: async () => (await api.get("/api/scenarios")).data });
@@ -78,6 +80,10 @@ export default function NewRun() {
   const [goalSearch, setGoalSearch] = useState("");
   const [goalPage, setGoalPage] = useState(0);
   const [selectedGoalItemId, setSelectedGoalItemId] = useState("");
+  const [saveScenarioOpen, setSaveScenarioOpen] = useState(false);
+  const [saveScenarioName, setSaveScenarioName] = useState("");
+  const [saveScenarioDescription, setSaveScenarioDescription] = useState("");
+  const [saveScenarioTags, setSaveScenarioTags] = useState("custom");
 
   const nativeExecutors = useMemo(() => executors.filter(ex => ex.kind === "executor"), [executors]);
   const executor = nativeExecutors[0] ?? { kind: "executor" as const, plugin: "single_turn", params: {} };
@@ -387,6 +393,19 @@ export default function NewRun() {
     converters,
     convSchemas,
   ]);
+  const selectedMethodCount = nativeExecutors.length + converters.length;
+  const canSaveScenario = mode === "custom"
+    && selectedMethodCount > 0
+    && saveScenarioName.trim().length > 0
+    && paramValidation.length === 0;
+  const canOpenSaveScenario = mode === "custom" && selectedMethodCount > 0 && paramValidation.length === 0;
+
+  const openSaveScenarioDialog = () => {
+    setSaveScenarioName(name.trim() ? `${name.trim()} ${t("Scenario")}` : t("Saved pipeline"));
+    setSaveScenarioDescription("");
+    setSaveScenarioTags("custom");
+    setSaveScenarioOpen(true);
+  };
 
   const submit = useMutation({
     mutationFn: async () => {
@@ -436,6 +455,37 @@ export default function NewRun() {
     onError: (e: any) => toast.error(e?.response?.data?.detail ?? t("Failed to start run")),
   });
 
+  const saveScenario = useMutation({
+    mutationFn: async () => {
+      const payload = buildCustomScenarioPayload({
+        scenarioName: saveScenarioName,
+        description: saveScenarioDescription,
+        tagsText: saveScenarioTags,
+        nativeExecutors,
+        converters,
+        scorer,
+        generalMultiTurnExecutors,
+        goalSource,
+        samplingEnabled,
+        samplingLimit,
+        samplingShuffle,
+        samplingSeed,
+        timeoutSeconds,
+      });
+      const result = await api.post("/api/scenarios/custom", payload);
+      return result.data;
+    },
+    onSuccess: async (scenario: any) => {
+      toast.success(t("Scenario saved"));
+      await queryClient.invalidateQueries({ queryKey: ["scenarios"] });
+      setScenarioId(scenario.id);
+      setScenarioHelpers({});
+      setMode("preset");
+      setSaveScenarioOpen(false);
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.detail ?? t("Failed to save scenario")),
+  });
+
   const canSubmit = !!targetId && !!datasetId
     && (mode === "custom" || (!!scenarioId && scenarioRequirements.every((req: any) => !!scenarioHelpers[req.id])))
     && paramValidation.length === 0;
@@ -447,7 +497,6 @@ export default function NewRun() {
     mode === "custom" && nativeExecutors.length + converters.length === 0 && t("Choose at least one attack method"),
     ...paramValidation.map(field => t("Complete {{field}}", { field })),
   ].filter(Boolean);
-  const selectedMethodCount = nativeExecutors.length + converters.length;
   const samplingSummary = samplingEnabled
     ? t("Enabled{{limit}}", { limit: samplingLimit ? `, ${samplingLimit}` : "" })
     : t("Off");
@@ -771,9 +820,21 @@ export default function NewRun() {
 
       {mode === "custom" && (
         <Card>
-          <CardHeader>
-            <CardTitle>{t("3. Pipeline")}</CardTitle>
-            <CardDescription>{t("Each selected executor or method creates a separate attack attempt. Scorer classifies the response.")}</CardDescription>
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <CardTitle>{t("3. Pipeline")}</CardTitle>
+              <CardDescription>{t("Each selected executor or method creates a separate attack attempt. Scorer classifies the response.")}</CardDescription>
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              icon={<Save className="h-4 w-4" />}
+              disabled={!canOpenSaveScenario}
+              onClick={openSaveScenarioDialog}
+            >
+              {t("Save as scenario")}
+            </Button>
           </CardHeader>
           <CardBody className="space-y-6">
             <div>
@@ -1096,9 +1157,70 @@ export default function NewRun() {
             >
               {t("Create & start")}
             </Button>
+            {mode === "custom" && (
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full justify-center"
+                icon={<Save className="h-4 w-4" />}
+                disabled={!canOpenSaveScenario}
+                onClick={openSaveScenarioDialog}
+              >
+                {t("Save as scenario")}
+              </Button>
+            )}
           </CardBody>
         </Card>
       </aside>
+      {saveScenarioOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 px-4">
+          <div className="w-full max-w-lg rounded-lg bg-white shadow-xl">
+            <div className="flex items-start justify-between gap-3 border-b border-gray-100 px-5 py-4">
+              <div>
+                <div className="text-sm font-semibold text-gray-900">{t("Save as scenario")}</div>
+                <div className="mt-0.5 text-xs text-gray-500">{t("Reuse this pipeline from preset scenarios.")}</div>
+              </div>
+              <button
+                type="button"
+                aria-label={t("Close")}
+                onClick={() => setSaveScenarioOpen(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="space-y-4 px-5 py-4">
+              <Field label={t("Scenario name")}>
+                <Input value={saveScenarioName} onChange={e => setSaveScenarioName(e.target.value)} />
+              </Field>
+              <Field label={t("Description")}>
+                <Textarea
+                  rows={3}
+                  value={saveScenarioDescription}
+                  onChange={e => setSaveScenarioDescription(e.target.value)}
+                />
+              </Field>
+              <Field label={t("Tags")} hint={t("Comma separated")}>
+                <Input value={saveScenarioTags} onChange={e => setSaveScenarioTags(e.target.value)} />
+              </Field>
+            </div>
+            <div className="flex justify-end gap-2 border-t border-gray-100 px-5 py-4">
+              <Button type="button" variant="secondary" onClick={() => setSaveScenarioOpen(false)}>
+                {t("Cancel")}
+              </Button>
+              <Button
+                type="button"
+                icon={<Save className="h-4 w-4" />}
+                loading={saveScenario.isPending}
+                disabled={!canSaveScenario}
+                onClick={() => saveScenario.mutate()}
+              >
+                {t("Save scenario")}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
