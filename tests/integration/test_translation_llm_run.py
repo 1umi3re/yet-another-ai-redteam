@@ -102,7 +102,19 @@ async def test_translation_llm_integration(tmp_path):
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_run_service_resolves_llm_converter_config_id(tmp_path):
+@pytest.mark.parametrize(
+    ("converter_plugin", "extra_params", "expected_converter_prompt_fragment"),
+    [
+        ("llm_variation", {"instructions": "keep intent"}, "keep intent"),
+        ("zh_classical_chinese", {"style": "文言文"}, "文言文"),
+    ],
+)
+async def test_run_service_resolves_llm_converter_config_id(
+    tmp_path,
+    converter_plugin,
+    extra_params,
+    expected_converter_prompt_fragment,
+):
     converter_mock = respx.post("https://converter.example.com/v1/chat/completions").mock(
         return_value=httpx.Response(
             200,
@@ -157,8 +169,8 @@ async def test_run_service_resolves_llm_converter_config_id(tmp_path):
             "dataset": {"config_id": ds.id},
             "converters": [
                 {
-                    "plugin": "llm_variation",
-                    "params": {"converter_config_id": converter.id, "instructions": "keep intent"},
+                    "plugin": converter_plugin,
+                    "params": {"converter_config_id": converter.id, **extra_params},
                 }
             ],
             "executor": {"plugin": "single_turn"},
@@ -169,7 +181,7 @@ async def test_run_service_resolves_llm_converter_config_id(tmp_path):
     assert converter_mock.called
     converter_body = json.loads(converter_mock.calls[0].request.content)
     assert "original prompt" in str(converter_body)
-    assert "keep intent" in str(converter_body)
+    assert expected_converter_prompt_fragment in str(converter_body)
 
     assert target_mock.called
     target_body = json.loads(target_mock.calls[0].request.content)
