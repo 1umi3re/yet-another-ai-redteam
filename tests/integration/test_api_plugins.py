@@ -30,6 +30,21 @@ def test_converter_executor_method_language_support_is_fully_audited():
         assert set(languages) <= SUPPORTED_DATASET_LANGUAGES
 
 
+def test_converter_config_id_schemas_are_supported_by_runtime_resolvers():
+    from airedteam.api.routers.plugins import PARAM_SCHEMAS
+    from airedteam.services.converters import _LLM_CONVERTERS as preview_llm_converters
+    from airedteam.services.runs import _LLM_CONVERTERS as run_llm_converters
+
+    converter_config_plugins = {
+        plugin
+        for plugin, schema in PARAM_SCHEMAS["converters"].items()
+        if "converter_config_id" in schema
+    }
+
+    assert converter_config_plugins <= preview_llm_converters
+    assert converter_config_plugins <= run_llm_converters
+
+
 def test_executor_attack_method_categories_cover_current_plugins():
     from airedteam.core.attack_method_categories import (
         DEFAULT_ATTACK_METHOD_CATEGORIES,

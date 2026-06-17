@@ -5,35 +5,11 @@ from typing import Any
 
 from airedteam.core.types import Prompt
 from airedteam.engine.factory import build_converter, build_target
+from airedteam.services.converter_runtime import (
+    LLM_CONVERTERS as _LLM_CONVERTERS,
+    TRANSLATION_CONVERTERS as _TRANSLATION_CONVERTERS,
+)
 from airedteam.services.converter_templates import resolve_converter_attack_template
-
-_LLM_CONVERTERS = {
-    "llm_variation",
-    "llm_tone",
-    "llm_persuasion",
-    "llm_generic",
-    "tense",
-    "llm_malicious_question",
-    "llm_toxic_sentence",
-    "llm_random_translation",
-    "llm_scientific_translation",
-    "paraphrase_fast",
-    "paraphrase_pegasus",
-    "meta_agent",
-    "zh_bureaucratic_style",
-    "zh_classical_chinese",
-    "zh_code_switch",
-    "zh_dialect_rewrite",
-    "zh_idiom_allusion",
-    "zh_net_slang",
-    "zh_poetic_rewrite",
-}
-
-_TRANSLATION_CONVERTERS = {
-    "translation_llm",
-    "low_resource_language",
-    "multilingual",
-}
 
 
 @dataclass(frozen=True)

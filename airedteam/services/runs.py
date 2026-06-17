@@ -31,6 +31,10 @@ from airedteam.engine.orchestrator import DefaultOrchestrator
 from airedteam.engine.run_engine import ExecutorVariant, RunEngine
 from airedteam.engine.sampling import SampledDataset
 from airedteam.runspec.models import RunSpec
+from airedteam.services.converter_runtime import (
+    LLM_CONVERTERS as _LLM_CONVERTERS,
+    TRANSLATION_CONVERTERS as _TRANSLATION_CONVERTERS,
+)
 from airedteam.services.converter_templates import resolve_converter_attack_template
 from airedteam.services.prompt_assets import PromptAssetService
 from airedteam.storage.models import Attempt, Run, Score
@@ -57,27 +61,6 @@ def _message_from_payload(payload: dict) -> Message:
         metadata=dict(payload.get("metadata") or {}),
     )
 
-
-_LLM_CONVERTERS = {
-    "llm_variation",
-    "llm_tone",
-    "llm_persuasion",
-    "llm_generic",
-    "tense",
-    "llm_malicious_question",
-    "llm_toxic_sentence",
-    "llm_random_translation",
-    "llm_scientific_translation",
-    "paraphrase_fast",
-    "paraphrase_pegasus",
-    "meta_agent",
-}
-
-_TRANSLATION_CONVERTERS = {
-    "translation_llm",
-    "low_resource_language",
-    "multilingual",
-}
 
 _PAIR_STYLE_EXECUTORS = {
     "pair",
