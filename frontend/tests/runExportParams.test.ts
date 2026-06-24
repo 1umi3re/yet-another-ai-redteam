@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildAttemptExportParams } from "../src/lib/runExport.js";
+import {
+  buildAttemptExportParams,
+  buildHtmlReportExportParams,
+  buildRunReportFilename,
+} from "../src/lib/runExport.js";
 
 test("buildAttemptExportParams carries active attempt filters without pagination", () => {
   assert.deepEqual(
@@ -31,4 +35,17 @@ test("buildAttemptExportParams omits inactive filters", () => {
     }),
     { format: "json" },
   );
+});
+
+test("buildHtmlReportExportParams carries the current language", () => {
+  assert.deepEqual(buildHtmlReportExportParams("zh"), { lang: "zh" });
+  assert.deepEqual(buildHtmlReportExportParams("en"), { lang: "en" });
+});
+
+test("buildRunReportFilename creates a safe html report filename", () => {
+  assert.equal(
+    buildRunReportFilename("My Run/Unsafe", "1234567890abcdef"),
+    "My Run-Unsafe-12345678-report.html",
+  );
+  assert.equal(buildRunReportFilename("", "abcdef1234567890"), "run-abcdef12-report.html");
 });

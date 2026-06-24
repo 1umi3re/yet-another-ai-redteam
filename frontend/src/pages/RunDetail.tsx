@@ -13,7 +13,12 @@ import { ArrowLeft, X, Clock, Hash, AlertCircle, MessageSquare, Download, Ban, P
 import clsx from "clsx";
 import { toast } from "sonner";
 import { useI18n } from "../lib/i18n";
-import { buildAttemptExportParams, type RunExportFormat } from "../lib/runExport";
+import {
+  buildAttemptExportParams,
+  buildHtmlReportExportParams,
+  buildRunReportFilename,
+  type RunExportFormat,
+} from "../lib/runExport";
 
 type Tab = "overview" | "attempts" | "events";
 type Verdict = "refused" | "complied";
@@ -87,7 +92,7 @@ function heatTone(rate: number): string {
 }
 
 export default function RunDetail() {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const { id = "" } = useParams();
   const token = useAuth(s => s.token);
   const queryClient = useQueryClient();
@@ -333,6 +338,21 @@ export default function RunDetail() {
     URL.revokeObjectURL(url);
   };
 
+  const downloadHtmlReport = async () => {
+    const response = await api.get(`/api/runs/${id}/report.html`, {
+      params: buildHtmlReportExportParams(language),
+      responseType: "blob",
+    });
+    const url = URL.createObjectURL(response.data);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = buildRunReportFilename(run?.name, id);
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
   const focusTargetComplied = (targetId: string | undefined, executorValue?: string) => {
     if (!targetId) return;
     setAttemptTarget(targetId);
@@ -388,6 +408,12 @@ export default function RunDetail() {
             onClick={() => downloadExport("csv")}>
             {t("Export CSV")}
           </Button>
+          {run?.kind === "automated" && (
+            <Button variant="secondary" size="sm" icon={<Download className="h-4 w-4" />}
+              onClick={downloadHtmlReport}>
+              {t("Export HTML report")}
+            </Button>
+          )}
           {run?.kind === "automated" && run?.status === "running" && (
             <Button variant="secondary" size="sm" icon={<Pause className="h-4 w-4" />}
               loading={pauseMut.isPending}

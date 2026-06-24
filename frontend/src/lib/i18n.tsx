@@ -358,6 +358,7 @@ const zh: Record<string, string> = {
   "Run": "运行",
   "Export JSON": "导出 JSON",
   "Export CSV": "导出 CSV",
+  "Export HTML report": "导出 HTML 报告",
   "Export filtered JSON": "导出筛选 JSON",
   "Export filtered CSV": "导出筛选 CSV",
   "Pause run": "暂停测试",

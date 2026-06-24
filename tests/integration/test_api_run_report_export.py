@@ -1,7 +1,7 @@
 import csv
 import io
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytest
 from cryptography.fernet import Fernet
@@ -287,6 +287,155 @@ async def test_run_report_export_and_filters(monkeypatch, tmp_path):
         assert "duration_ms" in csv_resp.text
         assert "messages" in csv_resp.text
         assert "a1" in csv_resp.text
+
+
+@pytest.mark.asyncio
+async def test_run_html_report_export_is_readable_escaped_and_sampled(monkeypatch, tmp_path):
+    app, state, models = await _setup_app(monkeypatch, tmp_path)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
+        h = await _login(c)
+        async with state.session_factory() as s:
+            run = models.Run(
+                name="html-report-run",
+                runspec_yaml=json.dumps({"targets": []}),
+                status="completed",
+                started_at=datetime(2026, 1, 1, 0, 0, 0),
+                finished_at=datetime(2026, 1, 1, 0, 0, 3),
+            )
+            s.add(run)
+            await s.flush()
+            run_id = run.id
+            base_time = datetime(2026, 1, 1, 0, 0, 0)
+            attempts = []
+            scores = []
+
+            def add_attempt(
+                attempt_id: str,
+                *,
+                target_id: str,
+                target_name: str,
+                executor_name: str,
+                prompt: str,
+                response: str | None = "model response",
+                status: str = "completed",
+                verdict: str | None = "complied",
+            ) -> None:
+                offset = len(attempts)
+                attempt = models.Attempt(
+                    id=attempt_id,
+                    run_id=run_id,
+                    target_id=target_id,
+                    target_name=target_name,
+                    dataset_item_id=f"item-{attempt_id}",
+                    original_prompt_text=f"original {prompt}",
+                    prompt_text=prompt,
+                    response_text=response,
+                    converter_chain=[executor_name],
+                    executor_name=executor_name,
+                    executor_kind="converter_method",
+                    status=status,
+                    started_at=base_time + timedelta(milliseconds=offset * 10),
+                    finished_at=base_time + timedelta(milliseconds=offset * 10 + 5),
+                    duration_ms=5,
+                )
+                attempts.append(attempt)
+                if verdict is not None:
+                    scores.append(
+                        models.Score(
+                            id=f"score-{attempt_id}",
+                            attempt_id=attempt_id,
+                            scorer="llm_judge",
+                            value_json={"attack_success": verdict == "complied"},
+                            rationale=f"{verdict} rationale",
+                        )
+                    )
+
+            for i in range(4):
+                add_attempt(
+                    f"success-a-{i}",
+                    target_id="target-a",
+                    target_name="Target A",
+                    executor_name="method-a",
+                    prompt=f"sample-combo-a-{i + 1} <script>alert('x')</script>",
+                    response="Use <b>bold</b> & raw",
+                )
+            for i in range(9):
+                add_attempt(
+                    f"success-extra-{i}",
+                    target_id=f"target-extra-{i}",
+                    target_name=f"Target Extra {i}",
+                    executor_name=f"method-extra-{i}",
+                    prompt=f"top-combo-{i}",
+                )
+            add_attempt(
+                "low-risk",
+                target_id="target-low",
+                target_name="Target Low",
+                executor_name="method-low",
+                prompt="low-risk-combo",
+                verdict="refused",
+            )
+            for i in range(12):
+                add_attempt(
+                    f"attention-{i}",
+                    target_id="target-attention",
+                    target_name="Target Attention",
+                    executor_name="method-attention",
+                    prompt=f"attention-record-{i:02d}",
+                    response=None,
+                    status="failed" if i % 2 == 0 else "completed",
+                    verdict=None,
+                )
+
+            s.add_all(attempts + scores)
+            await s.commit()
+
+        resp = await c.get(f"/api/runs/{run_id}/report.html?lang=zh", headers=h)
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("text/html")
+        assert f"run-{run_id}-report.html" in resp.headers["content-disposition"]
+        body = resp.text
+        assert "自动化测试报告" in body
+        assert "html-report-run" in body
+        assert "攻击成功率" in body
+        assert "代表性样例" in body
+        assert "需关注记录" in body
+        assert "&lt;script&gt;alert(&#x27;x&#x27;)&lt;/script&gt;" in body
+        assert "<script>alert" not in body
+        assert "Use &lt;b&gt;bold&lt;/b&gt; &amp; raw" in body
+        assert "sample-combo-a-1" in body
+        assert "sample-combo-a-2" in body
+        assert "sample-combo-a-3" in body
+        assert "sample-combo-a-4" not in body
+        assert "attention-record-09" in body
+        assert "attention-record-10" not in body
+        assert "low-risk-combo" not in body
+
+        en_resp = await c.get(f"/api/runs/{run_id}/report.html?lang=en", headers=h)
+        assert en_resp.status_code == 200
+        assert "Automated Test Report" in en_resp.text
+        assert "Representative Samples" in en_resp.text
+
+
+@pytest.mark.asyncio
+async def test_run_html_report_export_rejects_manual_runs(monkeypatch, tmp_path):
+    app, state, models = await _setup_app(monkeypatch, tmp_path)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
+        h = await _login(c)
+        async with state.session_factory() as s:
+            run = models.Run(
+                name="manual-report-run",
+                kind="manual",
+                runspec_yaml=json.dumps({"target_id": "target-1"}),
+                status="completed",
+            )
+            s.add(run)
+            await s.commit()
+            run_id = run.id
+
+        resp = await c.get(f"/api/runs/{run_id}/report.html", headers=h)
+        assert resp.status_code == 400
+        assert "automated" in resp.json()["detail"]
 
 
 @pytest.mark.asyncio

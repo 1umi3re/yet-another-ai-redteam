@@ -4,6 +4,7 @@ import csv
 import io
 import json
 from datetime import datetime
+from html import escape as html_escape
 from typing import Any
 
 import yaml
@@ -303,6 +304,35 @@ async def get_run_report(rid: str, _=Depends(require_admin), state: AppState = D
             .all()
         )
     return _run_report(run, attempts, scores)
+
+
+@router.get("/runs/{rid}/report.html")
+async def get_run_html_report(
+    rid: str,
+    _=Depends(require_admin),
+    state: AppState = Depends(get_state),
+    lang: str = Query(default="en", pattern="^(en|zh)$"),
+):
+    async with state.session_factory() as s:
+        run = await s.get(Run, rid)
+        if run is None:
+            raise HTTPException(404)
+        if run.kind != "automated":
+            raise HTTPException(400, "HTML report export is only available for automated runs")
+        attempts = (
+            (await s.execute(select(Attempt).where(Attempt.run_id == rid).order_by(Attempt.created_at))).scalars().all()
+        )
+        scores = (
+            (await s.execute(select(Score).join(Attempt, Score.attempt_id == Attempt.id).where(Attempt.run_id == rid)))
+            .scalars()
+            .all()
+        )
+    messages_by_attempt = await _messages_by_attempt(state.blob_store, attempts)
+    return Response(
+        content=_run_report_html(run, attempts, scores, messages_by_attempt, lang=lang),
+        media_type="text/html; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="run-{rid}-report.html"'},
+    )
 
 
 @router.get("/runs/{rid}/export")
@@ -768,6 +798,493 @@ def _run_report(run: Run, attempts: list[Attempt], scores: list[Score]) -> dict[
         "by_scorer": list(by_scorer.values()),
         "filtered_by_language": list(filtered_summary.values()),
     }
+
+
+_HTML_REPORT_TEXT = {
+    "en": {
+        "title": "Automated Test Report",
+        "summary": "Summary",
+        "run": "Run",
+        "status": "Status",
+        "started": "Started",
+        "finished": "Finished",
+        "duration": "Duration",
+        "attempts": "Attempts",
+        "effective_scores": "Effective scores",
+        "attack_success_rate": "Attack success rate",
+        "attack_successes": "Attack successes",
+        "refused": "Refused",
+        "failed": "Failed",
+        "unscored": "Unscored",
+        "target_ranking": "Target Risk Ranking",
+        "method_ranking": "Attack Method Risk Ranking",
+        "combination_ranking": "Target x Attack Method Ranking",
+        "scorer_summary": "Scorer Summary",
+        "filtered_summary": "Filtered Language Summary",
+        "representative_samples": "Representative Samples",
+        "attention_records": "Records Needing Attention",
+        "target": "Target",
+        "method": "Attack method",
+        "success_rate": "Success rate",
+        "scored": "Scored",
+        "scorer": "Scorer",
+        "scores": "Scores",
+        "unknown": "Unknown",
+        "reviewer_overrides": "Reviewer overrides",
+        "language": "Language",
+        "filtered": "Filtered",
+        "attempt_id": "Attempt ID",
+        "verdict": "Verdict",
+        "original_prompt": "Original prompt",
+        "transformed_prompt": "Transformed prompt",
+        "response": "Response",
+        "conversation": "Conversation",
+        "message": "Message",
+        "rationale": "Rationale",
+        "no_data": "No data.",
+    },
+    "zh": {
+        "title": "自动化测试报告",
+        "summary": "概览",
+        "run": "任务",
+        "status": "状态",
+        "started": "开始时间",
+        "finished": "结束时间",
+        "duration": "耗时",
+        "attempts": "尝试次数",
+        "effective_scores": "有效评分",
+        "attack_success_rate": "攻击成功率",
+        "attack_successes": "攻击成功数",
+        "refused": "拒答数",
+        "failed": "失败数",
+        "unscored": "未评分数",
+        "target_ranking": "目标风险排行",
+        "method_ranking": "攻击方法风险排行",
+        "combination_ranking": "目标 x 攻击方法排行",
+        "scorer_summary": "评分器概况",
+        "filtered_summary": "语言过滤摘要",
+        "representative_samples": "代表性样例",
+        "attention_records": "需关注记录",
+        "target": "目标",
+        "method": "攻击方法",
+        "success_rate": "成功率",
+        "scored": "已评分",
+        "scorer": "评分器",
+        "scores": "评分数",
+        "unknown": "未知",
+        "reviewer_overrides": "人工复核",
+        "language": "语言",
+        "filtered": "过滤数",
+        "attempt_id": "尝试 ID",
+        "verdict": "结论",
+        "original_prompt": "原始提示词",
+        "transformed_prompt": "变换后提示词",
+        "response": "模型响应",
+        "conversation": "完整对话",
+        "message": "消息",
+        "rationale": "评分理由",
+        "no_data": "暂无数据。",
+    },
+}
+
+
+def _run_report_html(
+    run: Run,
+    attempts: list[Attempt],
+    scores: list[Score],
+    messages_by_attempt: dict[str, list[dict[str, Any]]],
+    *,
+    lang: str,
+) -> str:
+    labels = _HTML_REPORT_TEXT.get(lang, _HTML_REPORT_TEXT["en"])
+    report = _run_report(run, attempts, scores)
+    scores_by_attempt = _scores_by_attempt(scores)
+    samples = _representative_html_samples(report, attempts, scores_by_attempt)
+    attention = _attention_html_samples(attempts, scores_by_attempt)
+    lang_attr = "zh-Hans" if lang == "zh" else "en"
+    body = "\n".join(
+        [
+            _html_report_header(labels, report),
+            _html_report_summary(labels, report),
+            _html_bucket_table(
+                labels["target_ranking"],
+                report["by_target"],
+                [
+                    (labels["target"], lambda row: row.get("target_name") or row.get("key")),
+                    (labels["success_rate"], lambda row: _format_rate(row.get("success_rate"))),
+                    (labels["attack_successes"], lambda row: row.get("complied")),
+                    (labels["refused"], lambda row: row.get("refused")),
+                    (labels["failed"], lambda row: row.get("failed")),
+                    (labels["unscored"], lambda row: row.get("unscored")),
+                ],
+                labels,
+            ),
+            _html_bucket_table(
+                labels["method_ranking"],
+                report["by_executor"],
+                [
+                    (labels["method"], lambda row: row.get("executor_name") or row.get("key")),
+                    (labels["success_rate"], lambda row: _format_rate(row.get("success_rate"))),
+                    (labels["attack_successes"], lambda row: row.get("complied")),
+                    (labels["refused"], lambda row: row.get("refused")),
+                    (labels["failed"], lambda row: row.get("failed")),
+                    (labels["unscored"], lambda row: row.get("unscored")),
+                ],
+                labels,
+            ),
+            _html_bucket_table(
+                labels["combination_ranking"],
+                report["by_target_executor"],
+                [
+                    (labels["target"], lambda row: row.get("target_name") or row.get("key")),
+                    (labels["method"], lambda row: row.get("executor_name")),
+                    (labels["success_rate"], lambda row: _format_rate(row.get("success_rate"))),
+                    (labels["scored"], lambda row: row.get("scored")),
+                    (labels["attack_successes"], lambda row: row.get("complied")),
+                    (labels["failed"], lambda row: row.get("failed")),
+                    (labels["unscored"], lambda row: row.get("unscored")),
+                ],
+                labels,
+            ),
+            _html_scorer_table(labels, report["by_scorer"]),
+            _html_filtered_table(labels, report["filtered_by_language"]),
+            _html_samples_section(
+                labels["representative_samples"],
+                samples,
+                scores_by_attempt,
+                messages_by_attempt,
+                labels,
+            ),
+            _html_samples_section(
+                labels["attention_records"],
+                attention,
+                scores_by_attempt,
+                messages_by_attempt,
+                labels,
+            ),
+        ]
+    )
+    return f"""<!doctype html>
+<html lang="{lang_attr}">
+<head>
+  <meta charset="utf-8">
+  <title>{_h(labels["title"])} - {_h(run.name)}</title>
+  <style>
+    :root {{
+      color-scheme: light;
+      --text: #17202a;
+      --muted: #667085;
+      --line: #d8dee8;
+      --soft: #f6f8fb;
+      --risk: #b42318;
+      --ok: #067647;
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text);
+      background: #fff;
+    }}
+    main {{ max-width: 1180px; margin: 0 auto; padding: 32px 24px 56px; }}
+    header {{ border-bottom: 2px solid var(--text); padding-bottom: 18px; margin-bottom: 24px; }}
+    h1 {{ margin: 0 0 8px; font-size: 30px; line-height: 1.15; }}
+    h2 {{ margin: 30px 0 12px; font-size: 20px; }}
+    h3 {{ margin: 18px 0 8px; font-size: 16px; }}
+    h4 {{ margin: 0 0 8px; font-size: 14px; }}
+    .muted {{ color: var(--muted); }}
+    .grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }}
+    .metric {{ border: 1px solid var(--line); border-radius: 8px; padding: 12px; background: var(--soft); }}
+    .metric .label {{ color: var(--muted); font-size: 12px; }}
+    .metric .value {{ margin-top: 4px; font-size: 22px; font-weight: 700; }}
+    table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
+    th, td {{ border-bottom: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }}
+    th {{ background: var(--soft); color: var(--muted); font-weight: 700; }}
+    .sample {{
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      margin: 12px 0;
+      padding: 14px;
+      page-break-inside: avoid;
+    }}
+    .meta {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 14px;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 10px;
+    }}
+    .field {{ margin: 10px 0; }}
+    .field-title {{ color: var(--muted); font-size: 12px; font-weight: 700; margin-bottom: 4px; }}
+    pre {{
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      margin: 0;
+      padding: 10px;
+      border-radius: 6px;
+      background: #f2f4f7;
+      font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }}
+    .badge-risk {{ color: var(--risk); font-weight: 700; }}
+    .badge-ok {{ color: var(--ok); font-weight: 700; }}
+    @media print {{ main {{ max-width: none; padding: 18px; }} .sample {{ break-inside: avoid; }} }}
+  </style>
+</head>
+<body>
+<main>
+{body}
+</main>
+</body>
+</html>
+"""
+
+
+def _representative_html_samples(
+    report: dict[str, Any],
+    attempts: list[Attempt],
+    scores_by_attempt: dict[str, list[Score]],
+) -> list[Attempt]:
+    out: list[Attempt] = []
+    selected_groups = 0
+    rows = sorted(report["by_target_executor"], key=_risk_row_sort_key)
+    sorted_attempts = sorted(attempts, key=_attempt_time_sort_key)
+    for row in rows:
+        if (row.get("complied") or 0) <= 0:
+            continue
+        group = [
+            attempt
+            for attempt in sorted_attempts
+            if _attempt_matches_target_executor_row(attempt, row)
+            and _attempt_verdict(scores_by_attempt.get(attempt.id, [])) == "complied"
+        ][:3]
+        if not group:
+            continue
+        out.extend(group)
+        selected_groups += 1
+        if selected_groups >= 10:
+            break
+    return out
+
+
+def _attention_html_samples(attempts: list[Attempt], scores_by_attempt: dict[str, list[Score]]) -> list[Attempt]:
+    return [
+        attempt
+        for attempt in sorted(attempts, key=_attempt_time_sort_key)
+        if attempt.status == "failed" or _attempt_verdict(scores_by_attempt.get(attempt.id, [])) == "unscored"
+    ][:10]
+
+
+def _risk_row_sort_key(row: dict[str, Any]) -> tuple[float, int, int, str, str]:
+    rate = row.get("success_rate")
+    rate_key = rate if isinstance(rate, int | float) else -1
+    return (
+        -float(rate_key),
+        -(row.get("scored") or 0),
+        -(row.get("complied") or 0),
+        str(row.get("target_name") or row.get("key") or ""),
+        str(row.get("executor_name") or ""),
+    )
+
+
+def _attempt_time_sort_key(attempt: Attempt) -> tuple[datetime, str]:
+    return (attempt.started_at or attempt.created_at or datetime.min, attempt.id)
+
+
+def _attempt_matches_target_executor_row(attempt: Attempt, row: dict[str, Any]) -> bool:
+    if row.get("target_id") is not None and attempt.target_id != row.get("target_id"):
+        return False
+    if (
+        row.get("target_id") is None
+        and row.get("target_name") is not None
+        and attempt.target_name != row.get("target_name")
+    ):
+        return False
+    return _attempt_executor_name(attempt) == row.get("executor_name")
+
+
+def _html_report_header(labels: dict[str, str], report: dict[str, Any]) -> str:
+    run = report["run"]
+    return f"""<header>
+  <h1>{_h(labels["title"])}</h1>
+  <div class="muted">{_h(labels["run"])}: {_h(run["name"])} · {_h(run["id"])}</div>
+  <div class="muted">
+    {_h(labels["status"])}: {_h(run["status"])} ·
+    {_h(labels["started"])}: {_h(run["started_at"] or "-")} ·
+    {_h(labels["finished"])}: {_h(run["finished_at"] or "-")} ·
+    {_h(labels["duration"])}: {_h(_format_duration(run["duration_ms"]))}
+  </div>
+</header>"""
+
+
+def _html_report_summary(labels: dict[str, str], report: dict[str, Any]) -> str:
+    totals = report["totals"]
+    cards = [
+        (labels["attack_success_rate"], _format_rate(totals.get("success_rate"))),
+        (labels["attack_successes"], totals.get("complied")),
+        (labels["refused"], totals.get("refused")),
+        (labels["effective_scores"], f"{totals.get('scored', 0)}/{totals.get('attempts', 0)}"),
+        (labels["failed"], totals.get("failed")),
+        (labels["unscored"], totals.get("unscored")),
+    ]
+    return "<section><h2>{}</h2><div class=\"grid\">{}</div></section>".format(
+        _h(labels["summary"]),
+        "\n".join(
+            f'<div class="metric"><div class="label">{_h(label)}</div><div class="value">{_h(value)}</div></div>'
+            for label, value in cards
+        ),
+    )
+
+
+def _html_bucket_table(
+    title: str,
+    rows: list[dict[str, Any]],
+    columns: list[tuple[str, Any]],
+    labels: dict[str, str],
+) -> str:
+    sorted_rows = sorted(rows, key=_risk_row_sort_key)[:20]
+    if not sorted_rows:
+        return f'<section><h2>{_h(title)}</h2><p class="muted">{_h(labels["no_data"])}</p></section>'
+    head = "".join(f"<th>{_h(label)}</th>" for label, _getter in columns)
+    body = "\n".join(
+        "<tr>{}</tr>".format("".join(f"<td>{_h(getter(row))}</td>" for _label, getter in columns))
+        for row in sorted_rows
+    )
+    return f"<section><h2>{_h(title)}</h2><table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table></section>"
+
+
+def _html_scorer_table(labels: dict[str, str], rows: list[dict[str, Any]]) -> str:
+    if not rows:
+        return f'<section><h2>{_h(labels["scorer_summary"])}</h2><p class="muted">{_h(labels["no_data"])}</p></section>'
+    columns = [
+        (labels["scorer"], lambda row: row.get("scorer")),
+        (labels["scores"], lambda row: row.get("scores")),
+        (labels["refused"], lambda row: row.get("refused")),
+        (labels["attack_successes"], lambda row: row.get("complied")),
+        (labels["failed"], lambda row: row.get("failed")),
+        (labels["unknown"], lambda row: row.get("unknown")),
+        (labels["reviewer_overrides"], lambda row: row.get("reviewer_overrides")),
+    ]
+    head = "".join(f"<th>{_h(label)}</th>" for label, _getter in columns)
+    body = "\n".join(
+        "<tr>{}</tr>".format("".join(f"<td>{_h(getter(row))}</td>" for _label, getter in columns))
+        for row in sorted(rows, key=lambda item: str(item.get("scorer") or ""))
+    )
+    return (
+        f'<section><h2>{_h(labels["scorer_summary"])}</h2>'
+        f"<table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table></section>"
+    )
+
+
+def _html_filtered_table(labels: dict[str, str], rows: list[dict[str, Any]]) -> str:
+    if not rows:
+        return ""
+    columns = [
+        (labels["target"], lambda row: row.get("target_name")),
+        (labels["method"], lambda row: row.get("executor_name")),
+        (labels["language"], lambda row: row.get("language")),
+        (labels["filtered"], lambda row: row.get("filtered")),
+    ]
+    head = "".join(f"<th>{_h(label)}</th>" for label, _getter in columns)
+    body = "\n".join(
+        "<tr>{}</tr>".format("".join(f"<td>{_h(getter(row))}</td>" for _label, getter in columns))
+        for row in rows
+    )
+    return (
+        f'<section><h2>{_h(labels["filtered_summary"])}</h2>'
+        f"<table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table></section>"
+    )
+
+
+def _html_samples_section(
+    title: str,
+    attempts: list[Attempt],
+    scores_by_attempt: dict[str, list[Score]],
+    messages_by_attempt: dict[str, list[dict[str, Any]]],
+    labels: dict[str, str],
+) -> str:
+    if not attempts:
+        return f'<section><h2>{_h(title)}</h2><p class="muted">{_h(labels["no_data"])}</p></section>'
+    items = "\n".join(
+        _html_attempt_sample(
+            attempt,
+            scores_by_attempt.get(attempt.id, []),
+            messages_by_attempt.get(attempt.id, []),
+            labels,
+        )
+        for attempt in attempts
+    )
+    return f"<section><h2>{_h(title)}</h2>{items}</section>"
+
+
+def _html_attempt_sample(
+    attempt: Attempt,
+    scores: list[Score],
+    messages: list[dict[str, Any]],
+    labels: dict[str, str],
+) -> str:
+    verdict = _attempt_verdict(scores)
+    verdict_class = "badge-risk" if verdict == "complied" else "badge-ok" if verdict == "refused" else ""
+    score = next((item for item in scores if item.reviewer_label is not None), None) or (scores[0] if scores else None)
+    score_html = ""
+    if score is not None:
+        score_html = _html_text_block(
+            f'{labels["scorer"]}: {score.scorer} · {labels["rationale"]}',
+            score.rationale or json.dumps(score.value_json, ensure_ascii=False),
+        )
+    if messages:
+        body = "\n".join(
+            _html_text_block(
+                f'{labels["message"]}: {message.get("role", "")}',
+                str(message.get("text", "")),
+            )
+            for message in messages
+            if isinstance(message, dict)
+        )
+    else:
+        body = "\n".join(
+            [
+                _html_text_block(labels["original_prompt"], attempt.original_prompt_text or attempt.prompt_text),
+                _html_text_block(labels["transformed_prompt"], attempt.prompt_text),
+                _html_text_block(labels["response"], attempt.response_text or ""),
+            ]
+        )
+    return f"""<article class="sample">
+  <h3>{_h(attempt.target_name or attempt.target_id)} · {_h(_attempt_executor_name(attempt))}</h3>
+  <div class="meta">
+    <span>{_h(labels["attempt_id"])}: {_h(attempt.id)}</span>
+    <span>{_h(labels["status"])}: {_h(attempt.status)}</span>
+    <span>{_h(labels["verdict"])}: <strong class="{verdict_class}">{_h(verdict)}</strong></span>
+  </div>
+  {body}
+  {score_html}
+</article>"""
+
+
+def _html_text_block(title: str, text: str) -> str:
+    return f'<div class="field"><div class="field-title">{_h(title)}</div><pre>{_h(text)}</pre></div>'
+
+
+def _format_rate(value: Any) -> str:
+    if not isinstance(value, int | float):
+        return "-"
+    return f"{round(float(value) * 100)}%"
+
+
+def _format_duration(value: Any) -> str:
+    if not isinstance(value, int | float):
+        return "-"
+    if value < 1000:
+        return f"{int(value)} ms"
+    seconds = float(value) / 1000
+    if seconds < 60:
+        return f"{seconds:.1f} s" if seconds < 10 else f"{seconds:.0f} s"
+    minutes = int(seconds // 60)
+    return f"{minutes}m {round(seconds % 60)}s"
+
+
+def _h(value: Any) -> str:
+    return html_escape("" if value is None else str(value), quote=True)
 
 
 async def _messages_by_attempt(blob_store, attempts: list[Attempt]) -> dict[str, list[dict[str, Any]]]:
