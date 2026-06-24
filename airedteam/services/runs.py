@@ -33,6 +33,8 @@ from airedteam.engine.sampling import SampledDataset
 from airedteam.runspec.models import RunSpec
 from airedteam.services.converter_runtime import (
     LLM_CONVERTERS as _LLM_CONVERTERS,
+)
+from airedteam.services.converter_runtime import (
     TRANSLATION_CONVERTERS as _TRANSLATION_CONVERTERS,
 )
 from airedteam.services.converter_templates import resolve_converter_attack_template
@@ -471,6 +473,9 @@ class RunService:
             failed = 0
             skipped = 0
             for attempt, score in candidates:
+                if attempt.status != "completed":
+                    skipped += 1
+                    continue
                 scorer = scorer_by_name.get(score.scorer)
                 if scorer is None:
                     skipped += 1
@@ -518,6 +523,7 @@ class RunService:
                 query = select(Attempt).where(Attempt.run_id == run_id).order_by(Attempt.created_at)
                 if attempt_filter:
                     query = query.where(Attempt.id.in_(attempt_filter))
+                query = query.where(Attempt.status == "completed")
                 attempts = list((await s.execute(query)).scalars().all())
                 attempt_ids_to_replace = [attempt.id for attempt in attempts]
                 if attempt_ids_to_replace:
@@ -567,6 +573,38 @@ class RunService:
                 except Exception:
                     pass
 
+    async def retry_attempt(self, run_id: str, attempt_id: str) -> dict[str, int]:
+        async with self._sf() as s:
+            run = await s.get(Run, run_id)
+            if run is None:
+                raise KeyError(run_id)
+            if run.kind != "automated":
+                raise ValueError("attempt retry is only available for automated runs")
+            if run.status in {"running", "pausing"}:
+                raise ValueError(f"run cannot retry attempts while {run.status}")
+            attempt = await s.get(Attempt, attempt_id)
+            if attempt is None or attempt.run_id != run_id:
+                raise KeyError(attempt_id)
+            if attempt.status != "failed":
+                raise ValueError("only failed attempts can be retried")
+            if not attempt.work_key:
+                raise ValueError("attempt cannot be retried because it has no work key")
+            work_key = attempt.work_key
+
+        await self.execute_run(run_id, retry_failed=True, retry_work_keys={work_key})
+
+        async with self._sf() as s:
+            attempt = await s.get(Attempt, attempt_id)
+            if attempt is None:
+                raise KeyError(attempt_id)
+            return {
+                "matched": 1,
+                "retried": 1,
+                "completed": 1 if attempt.status == "completed" else 0,
+                "failed": 1 if attempt.status == "failed" else 0,
+                "skipped": 0,
+            }
+
     async def _is_cancelled(self, run_id: str) -> bool:
         async with self._sf() as s:
             run = await s.get(Run, run_id)
@@ -610,7 +648,13 @@ class RunService:
         except asyncio.CancelledError:
             pass
 
-    async def execute_run(self, run_id: str, *, retry_failed: bool = False) -> None:
+    async def execute_run(
+        self,
+        run_id: str,
+        *,
+        retry_failed: bool = False,
+        retry_work_keys: set[str] | None = None,
+    ) -> None:
         closeables = []
         async with self._sf() as s:
             run = await s.get(Run, run_id)
@@ -677,6 +721,8 @@ class RunService:
             existing_work_statuses = await self._existing_work_statuses(run_id)
 
             async def should_skip_work(work_key: str) -> bool:
+                if retry_work_keys is not None and work_key not in retry_work_keys:
+                    return True
                 status = existing_work_statuses.get(work_key)
                 if status is None:
                     return False

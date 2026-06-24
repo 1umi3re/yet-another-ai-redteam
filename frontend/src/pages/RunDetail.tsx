@@ -9,7 +9,23 @@ import { ProgressBar } from "../components/ui/ProgressBar";
 import { Button } from "../components/ui/Button";
 import { Field, Select, Textarea } from "../components/ui/Form";
 import { Tabs, TabItem } from "../components/ui/Tabs";
-import { ArrowLeft, X, Clock, Hash, AlertCircle, MessageSquare, Download, Ban, Pause, Play, RotateCcw } from "lucide-react";
+import {
+  ArrowLeft,
+  X,
+  Clock,
+  Hash,
+  AlertCircle,
+  MessageSquare,
+  Download,
+  Ban,
+  Pause,
+  Play,
+  RotateCcw,
+  ChevronsLeft,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsRight,
+} from "lucide-react";
 import clsx from "clsx";
 import { toast } from "sonner";
 import { useI18n } from "../lib/i18n";
@@ -19,6 +35,7 @@ import {
   buildRunReportFilename,
   type RunExportFormat,
 } from "../lib/runExport";
+import { buildPageWindow, formatPaginationRange } from "../lib/pagination";
 
 type Tab = "overview" | "attempts" | "events";
 type Verdict = "refused" | "complied";
@@ -104,6 +121,7 @@ export default function RunDetail() {
   const [attemptTarget, setAttemptTarget] = useState("");
   const [attemptExecutor, setAttemptExecutor] = useState("");
   const [attemptPage, setAttemptPage] = useState(0);
+  const [attemptLimit, setAttemptLimit] = useState(50);
   const [judgeTargetId, setJudgeTargetId] = useState("");
 
   const { data: run } = useQuery({
@@ -112,9 +130,8 @@ export default function RunDetail() {
     refetchInterval: (q) => isTerminalStatus(q.state.data?.status) ? false : 2000,
   });
   const pollInterval: number | false = isTerminalStatus(run?.status) ? false : 2000;
-  const attemptLimit = 50;
   const { data: attemptsPage = { items: [], total: 0, offset: 0, limit: attemptLimit } } = useQuery({
-    queryKey: ["run-attempts", id, attemptVerdict, attemptStatus, attemptTarget, attemptExecutor, attemptPage],
+    queryKey: ["run-attempts", id, attemptVerdict, attemptStatus, attemptTarget, attemptExecutor, attemptPage, attemptLimit],
     queryFn: async () => (await api.get(`/api/runs/${id}/attempts`, {
       params: {
         paged: true,
@@ -129,6 +146,13 @@ export default function RunDetail() {
     refetchInterval: pollInterval,
   });
   const attempts = attemptsPage.items ?? [];
+  const attemptTotal = attemptsPage.total ?? attempts.length;
+  const attemptOffset = attemptsPage.offset ?? attemptPage * attemptLimit;
+  const attemptPageCount = Math.max(1, Math.ceil(attemptTotal / attemptLimit));
+  const attemptPageNumbers = useMemo(
+    () => buildPageWindow({ page: attemptPage, pageCount: attemptPageCount }),
+    [attemptPage, attemptPageCount],
+  );
   const { data: scoresRaw = [] } = useQuery({
     queryKey: ["run-scores", id],
     queryFn: async () => (await api.get(`/api/runs/${id}/scores`)).data,
@@ -154,6 +178,11 @@ export default function RunDetail() {
     // network errors. The cleanup below closes the stream on unmount.
     return () => es.close();
   }, [id, token, run?.status]);
+
+  useEffect(() => {
+    const maxPage = Math.max(0, Math.ceil(attemptTotal / attemptLimit) - 1);
+    if (attemptPage > maxPage) setAttemptPage(maxPage);
+  }, [attemptLimit, attemptPage, attemptTotal]);
 
   const scoreByAttempt = useMemo(() => {
     const m = new Map<string, any>();
@@ -301,6 +330,17 @@ export default function RunDetail() {
       toast.success(t("Rejudged {{count}} attempts", { count: data?.retried ?? 0 }));
     },
     onError: (e: any) => toast.error(e?.response?.data?.detail ?? t("Failed to rejudge run")),
+  });
+  const retryAttemptMut = useMutation({
+    mutationFn: async (attemptId: string) => (await api.post(`/api/runs/${id}/attempts/${attemptId}/retry`)).data,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["run", id] });
+      queryClient.invalidateQueries({ queryKey: ["run-report", id] });
+      queryClient.invalidateQueries({ queryKey: ["run-attempts", id] });
+      queryClient.invalidateQueries({ queryKey: ["run-scores", id] });
+      toast.success(t("Retried failed attempt"));
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.detail ?? t("Failed to retry attempt")),
   });
 
   const downloadExport = async (format: RunExportFormat) => {
@@ -694,7 +734,9 @@ export default function RunDetail() {
               </div>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div className="text-xs text-gray-500">
-                  {t("Showing {{count}} of {{total}}", { count: attempts.length, total: attemptsPage.total ?? attempts.length })}
+                  {t("Showing {{range}}", {
+                    range: formatPaginationRange({ total: attemptTotal, offset: attemptOffset, limit: attemptLimit }),
+                  })}
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Button variant="secondary" size="sm" icon={<Download className="h-4 w-4" />}
@@ -714,6 +756,7 @@ export default function RunDetail() {
               <thead className="bg-gray-50 text-gray-600 text-xs uppercase tracking-wider">
                 <tr>
                   <th className="text-left px-5 py-2.5">{t("Target")}</th>
+                  <th className="text-left px-5 py-2.5">{t("Status")}</th>
                   <th className="text-left px-5 py-2.5">{t("Test time")}</th>
                   <th className="text-left px-5 py-2.5">{t("Original prompt")}</th>
                   <th className="text-left px-5 py-2.5">{t("Transformed prompt")}</th>
@@ -730,6 +773,7 @@ export default function RunDetail() {
                   return (
                     <tr key={a.id} className="align-top hover:bg-gray-50/60">
                       <td className="px-5 py-3 font-medium whitespace-nowrap">{a.target_name}</td>
+                      <td className="px-5 py-3 whitespace-nowrap"><StatusBadge status={a.status} /></td>
                       <td className="px-5 py-3 text-gray-600 whitespace-nowrap">{formatDuration(a.duration_ms)}</td>
                       <td className="px-5 py-3 max-w-xs">
                         <div className="truncate text-gray-700" title={a.original_prompt ?? a.prompt}>
@@ -749,34 +793,103 @@ export default function RunDetail() {
                           : <Badge>-</Badge>}
                       </td>
                       <td className="px-5 py-3 text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          aria-label={t("Inspect attempt {{id}}", { id: a.id.slice(0, 8) })}
-                          onClick={() => setDetailAttemptId(a.id)}
-                        >
-                          {t("Inspect")}
-                        </Button>
+                        <div className="flex justify-end gap-2">
+                          {run?.kind === "automated" && a.status === "failed" && (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              icon={<RotateCcw className="h-3.5 w-3.5" />}
+                              loading={retryAttemptMut.isPending && retryAttemptMut.variables === a.id}
+                              onClick={() => retryAttemptMut.mutate(a.id)}
+                            >
+                              {t("Retry attempt")}
+                            </Button>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            aria-label={t("Inspect attempt {{id}}", { id: a.id.slice(0, 8) })}
+                            onClick={() => setDetailAttemptId(a.id)}
+                          >
+                            {t("Inspect")}
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   );
                 })}
                 {!attempts.length && (
-                  <tr><td colSpan={7} className="px-5 py-10 text-center text-sm text-gray-500">{t("No attempts yet.")}</td></tr>
+                  <tr><td colSpan={8} className="px-5 py-10 text-center text-sm text-gray-500">{t("No attempts yet.")}</td></tr>
                 )}
               </tbody>
             </table>
           </div>
-          <CardBody className="flex items-center justify-end gap-2 border-t border-gray-100">
-            <Button variant="secondary" size="sm" disabled={attemptPage === 0}
-              onClick={() => setAttemptPage(p => Math.max(0, p - 1))}>
-              {t("Previous")}
-            </Button>
-            <Button variant="secondary" size="sm"
-              disabled={(attemptPage + 1) * attemptLimit >= (attemptsPage.total ?? 0)}
-              onClick={() => setAttemptPage(p => p + 1)}>
-              {t("Next")}
-            </Button>
+          <CardBody className="flex flex-col gap-3 border-t border-gray-100 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
+              <span>{t("Showing {{range}}", {
+                range: formatPaginationRange({ total: attemptTotal, offset: attemptOffset, limit: attemptLimit }),
+              })}</span>
+              <label className="inline-flex items-center gap-2">
+                <span>{t("Page size")}</span>
+                <select
+                  className="input h-8 w-20 text-xs"
+                  value={attemptLimit}
+                  onChange={e => {
+                    setAttemptLimit(Number(e.target.value));
+                    setAttemptPage(0);
+                  }}
+                >
+                  {[25, 50, 100, 200].map(value => (
+                    <option key={value} value={value}>{value}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="flex flex-wrap items-center justify-end gap-1">
+              <Button
+                variant="secondary"
+                size="sm"
+                aria-label={t("First page")}
+                icon={<ChevronsLeft className="h-4 w-4" />}
+                disabled={attemptPage === 0}
+                onClick={() => setAttemptPage(0)}
+              />
+              <Button
+                variant="secondary"
+                size="sm"
+                aria-label={t("Previous")}
+                icon={<ChevronLeft className="h-4 w-4" />}
+                disabled={attemptPage === 0}
+                onClick={() => setAttemptPage(p => Math.max(0, p - 1))}
+              />
+              {attemptPageNumbers.map(pageNumber => (
+                <Button
+                  key={pageNumber}
+                  variant={pageNumber - 1 === attemptPage ? "primary" : "secondary"}
+                  size="sm"
+                  aria-label={t("Page {{page}}", { page: pageNumber })}
+                  onClick={() => setAttemptPage(pageNumber - 1)}
+                >
+                  {pageNumber}
+                </Button>
+              ))}
+              <Button
+                variant="secondary"
+                size="sm"
+                aria-label={t("Next")}
+                icon={<ChevronRight className="h-4 w-4" />}
+                disabled={attemptPage >= attemptPageCount - 1}
+                onClick={() => setAttemptPage(p => Math.min(attemptPageCount - 1, p + 1))}
+              />
+              <Button
+                variant="secondary"
+                size="sm"
+                aria-label={t("Last page")}
+                icon={<ChevronsRight className="h-4 w-4" />}
+                disabled={attemptPage >= attemptPageCount - 1}
+                onClick={() => setAttemptPage(attemptPageCount - 1)}
+              />
+            </div>
           </CardBody>
         </Card>
       )}

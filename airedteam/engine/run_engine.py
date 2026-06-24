@@ -187,6 +187,8 @@ class RunEngine:
                 run_id,
                 {"type": "attempt.completed", "status": ar.status, "work_key": item.work_key},
             )
+            if ar.status != "completed":
+                return
             for sc in scorers:
                 try:
                     sr = await sc.score(ar)

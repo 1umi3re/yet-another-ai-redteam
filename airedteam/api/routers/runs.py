@@ -159,6 +159,16 @@ async def retry_scores(rid: str, req: RetryScores, _=Depends(require_admin), sta
         raise HTTPException(400, str(e)) from e
 
 
+@router.post("/runs/{rid}/attempts/{aid}/retry", status_code=202)
+async def retry_attempt(rid: str, aid: str, _=Depends(require_admin), state: AppState = Depends(get_state)):
+    try:
+        return await state.runs.retry_attempt(rid, aid)
+    except KeyError:
+        raise HTTPException(404) from None
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
 @router.get("/runs", response_model=list[RunOut])
 async def list_runs(
     _=Depends(require_admin),

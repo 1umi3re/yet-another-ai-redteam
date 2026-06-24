@@ -309,6 +309,124 @@ async def test_retry_failed_llm_judge_scores_via_api(monkeypatch, tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_retry_failed_attempt_via_api_reruns_only_that_attempt_and_then_scores(monkeypatch, tmp_path):
+    calls: list[str] = []
+
+    class FailOnceTarget:
+        failed_once = False
+
+        def __init__(self, *, name: str) -> None:
+            self.name = name
+
+        async def generate(self, prompt):
+            calls.append(prompt.text)
+            if prompt.text == "bad" and not type(self).failed_once:
+                type(self).failed_once = True
+                raise RuntimeError("temporary target failure")
+            return Response(text=f"ok:{prompt.text}", raw={}, latency_ms=1)
+
+        async def aclose(self):
+            pass
+
+    FailOnceTarget.failed_once = False
+    default_registry().register("targets", "api_retry_failed_attempt_target", FailOnceTarget)
+
+    monkeypatch.setenv("AIREDTEAM_MASTER_KEY", Fernet.generate_key().decode())
+    monkeypatch.setenv("AIREDTEAM_ADMIN_PASSWORD", "letmein")
+    monkeypatch.setenv("AIREDTEAM_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/x.db")
+    monkeypatch.setenv("AIREDTEAM_BLOB_DIR", str(tmp_path / "blobs"))
+    import airedteam.api.deps as deps
+
+    deps._STATE = None
+    from airedteam.api.app import create_app
+
+    app = create_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
+        state = deps.get_state()
+        from airedteam.storage import models
+        from airedteam.storage.db import make_engine
+
+        eng = make_engine(state.settings.database_url)
+        async with eng.begin() as conn:
+            await conn.run_sync(models.Base.metadata.create_all)
+
+        h = await _login(c)
+        target = await c.post(
+            "/api/targets",
+            headers=h,
+            json={"name": "t1", "plugin": "api_retry_failed_attempt_target", "params": {"name": "t1"}},
+        )
+        dataset = await c.post(
+            "/api/datasets/upload",
+            headers=h,
+            files={
+                "file": (
+                    "a.json",
+                    json.dumps({"items": [{"prompt": "good"}, {"prompt": "bad"}]}).encode(),
+                    "application/json",
+                )
+            },
+            data={"name": "d1"},
+        )
+        run = await c.post(
+            "/api/runs",
+            headers=h,
+            json={
+                "name": "r1",
+                "runspec": {
+                    "name": "r1",
+                    "targets": [{"config_id": target.json()["id"]}],
+                    "dataset": {"config_id": dataset.json()["id"]},
+                    "executor": {"plugin": "single_turn"},
+                    "scorers": [{"plugin": "refusal"}],
+                    "concurrency": 1,
+                },
+            },
+        )
+        rid = run.json()["id"]
+        assert (await c.post(f"/api/runs/{rid}/start", headers=h)).status_code == 202
+        for _ in range(50):
+            status = (await c.get(f"/api/runs/{rid}", headers=h)).json()
+            if status["status"] in ("completed", "failed"):
+                break
+            await asyncio.sleep(0.05)
+        assert status["status"] == "completed"
+
+        attempts = (await c.get(f"/api/runs/{rid}/attempts?paged=true", headers=h)).json()["items"]
+        failed_attempt = next(item for item in attempts if item["status"] == "failed")
+        completed_attempt = next(item for item in attempts if item["status"] == "completed")
+        scores = (await c.get(f"/api/runs/{rid}/scores", headers=h)).json()
+        assert {score["attempt_id"] for score in scores} == {completed_attempt["id"]}
+
+        rejudge = await c.post(
+            f"/api/runs/{rid}/scores/retry",
+            headers=h,
+            json={"failed_only": False, "scorer_ref": {"plugin": "refusal"}},
+        )
+        assert rejudge.status_code == 202
+        assert rejudge.json()["retried"] == 1
+        scores = (await c.get(f"/api/runs/{rid}/scores", headers=h)).json()
+        assert {score["attempt_id"] for score in scores} == {completed_attempt["id"]}
+
+        retry = await c.post(f"/api/runs/{rid}/attempts/{failed_attempt['id']}/retry", headers=h)
+        assert retry.status_code == 202
+        assert retry.json()["retried"] == 1
+        assert retry.json()["completed"] == 1
+        for _ in range(50):
+            status = (await c.get(f"/api/runs/{rid}", headers=h)).json()
+            if status["status"] in ("completed", "failed"):
+                break
+            await asyncio.sleep(0.05)
+        assert status["status"] == "completed"
+
+        attempts_after = (await c.get(f"/api/runs/{rid}/attempts?paged=true", headers=h)).json()["items"]
+        assert {item["status"] for item in attempts_after} == {"completed"}
+        assert calls == ["good", "bad", "bad"]
+        scores_after = (await c.get(f"/api/runs/{rid}/scores", headers=h)).json()
+        assert {score["attempt_id"] for score in scores_after} == {item["id"] for item in attempts_after}
+
+
+@pytest.mark.asyncio
 @respx.mock
 async def test_completed_run_can_be_rejudged_with_another_judge_via_api(monkeypatch, tmp_path):
     respx.post("https://target.example.com/v1/chat/completions").mock(

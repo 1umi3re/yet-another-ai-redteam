@@ -50,6 +50,13 @@ class FakeExec:
         return AttemptResult(prompt=prompt, response=r, status="completed", converter_chain=[])
 
 
+class FailedExec:
+    name = "failed_exec"
+
+    async def run(self, prompt, target, converters):
+        return AttemptResult(prompt=prompt, response=None, status="failed", error="target failed")
+
+
 class FakeScorer:
     name = "fake_scorer"
 
@@ -132,6 +139,35 @@ async def test_run_engine_records_scorer_exceptions_as_retryable_score_failures(
     assert first_score.value["retryable"] is True
     assert first_score.value["error_type"] == "RuntimeError"
     assert "judge HTTP 500" in first_score.value["error"]
+
+
+@pytest.mark.asyncio
+async def test_run_engine_does_not_score_failed_attempts():
+    bus = ProgressBus()
+    attempts: list = []
+    scores: list = []
+
+    async def on_attempt(ar, tname, item_id, work_key, original_prompt):
+        attempts.append(ar)
+
+    async def on_score(idx, sr):
+        scores.append((idx, sr))
+
+    engine = RunEngine(progress_bus=bus, on_attempt=on_attempt, on_score=on_score)
+    await engine.run(
+        run_id="r",
+        dataset=FakeDataset(),
+        targets=[FakeTarget("t1")],
+        converters=[],
+        executor=FailedExec(),
+        scorers=[FakeScorer()],
+        concurrency=1,
+        orchestrator=DefaultOrchestrator(),
+    )
+
+    assert len(attempts) == 3
+    assert all(attempt.status == "failed" for attempt in attempts)
+    assert scores == []
 
 
 @pytest.mark.asyncio
