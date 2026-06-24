@@ -474,6 +474,74 @@ async def test_run_service_resume_failed_work_retry_option(
 
 
 @pytest.mark.asyncio
+async def test_run_service_retries_all_failed_attempts(tmp_path):
+    calls: list[str] = []
+    failed_prompts: set[str] = set()
+
+    class FailOncePerPromptTarget:
+        def __init__(self, *, name: str) -> None:
+            self.name = name
+
+        async def generate(self, prompt):
+            calls.append(prompt.text)
+            if prompt.text in {"b", "c"} and prompt.text not in failed_prompts:
+                failed_prompts.add(prompt.text)
+                raise RuntimeError(f"temporary failure for {prompt.text}")
+            return Response(text=f"ok:{prompt.text}", raw={}, latency_ms=1)
+
+        async def aclose(self):
+            pass
+
+    default_registry().register("targets", "retry_all_failed_target", FailOncePerPromptTarget)
+
+    engine_db = make_engine(f"sqlite+aiosqlite:///{tmp_path}/x.db")
+    SessionLocal = make_sessionmaker(engine_db)
+    async with engine_db.begin() as c:
+        await c.run_sync(models.Base.metadata.create_all)
+    blob = LocalBlobStore(tmp_path / "blobs")
+    box = SecretBox(Fernet.generate_key().decode())
+    targets = TargetConfigService(SessionLocal, box)
+    datasets = DatasetService(SessionLocal, blob)
+    bus = ProgressBus()
+    svc = RunService(SessionLocal, blob, box, targets, datasets, bus, max_concurrency=1)
+
+    tcfg = await targets.create(name="t1", plugin="retry_all_failed_target", params={"name": "t1"})
+    ds = await datasets.create_json_upload(
+        name="ds",
+        file_bytes=json.dumps({"items": [{"prompt": "a"}, {"prompt": "b"}, {"prompt": "c"}]}).encode(),
+    )
+    run = await svc.create_run(
+        name="r1",
+        runspec_dict={
+            "name": "r1",
+            "targets": [{"config_id": tcfg.id}],
+            "dataset": {"config_id": ds.id},
+            "executor": {"plugin": "single_turn"},
+            "concurrency": 1,
+        },
+    )
+
+    await svc.execute_run(run.id)
+
+    result = await svc.retry_failed_attempts(run.id)
+
+    async with SessionLocal() as s:
+        attempts = (
+            (
+                await s.execute(
+                    select(models.Attempt).where(models.Attempt.run_id == run.id).order_by(models.Attempt.prompt_text)
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+    assert result == {"matched": 2, "retried": 2, "completed": 2, "failed": 0, "skipped": 0}
+    assert [a.status for a in attempts] == ["completed", "completed", "completed"]
+    assert calls == ["a", "b", "c", "b", "c"]
+
+
+@pytest.mark.asyncio
 async def test_run_service_resumes_remaining_work_after_failed_run(tmp_path):
     calls: list[str] = []
 
@@ -520,8 +588,7 @@ async def test_run_service_resumes_remaining_work_after_failed_run(tmp_path):
         },
     )
 
-    with pytest.raises(TimeoutError):
-        await svc.execute_run(run.id)
+    await svc.execute_run(run.id)
 
     async with SessionLocal() as s:
         run_row = await s.get(models.Run, run.id)
@@ -535,7 +602,7 @@ async def test_run_service_resumes_remaining_work_after_failed_run(tmp_path):
             .all()
         )
     assert run_row.status == "failed"
-    assert [a.prompt_text for a in attempts] == ["a"]
+    assert [a.prompt_text for a in attempts] == ["a", "b"]
 
     await svc.resume_run(run.id, retry_failed=False)
     for _ in range(50):
@@ -560,11 +627,11 @@ async def test_run_service_resumes_remaining_work_after_failed_run(tmp_path):
     assert run_row.error is None
     assert run_row.progress_done == 3
     assert [a.prompt_text for a in attempts] == ["a", "b", "c"]
-    assert calls == ["a", "b", "b", "c"]
+    assert calls == ["a", "b", "c"]
 
 
 @pytest.mark.asyncio
-async def test_run_timeout_cancels_in_flight_attempt_writes(tmp_path):
+async def test_run_timeout_waits_for_in_flight_attempt_writes(tmp_path):
     calls: list[str] = []
 
     class SlowTarget:
@@ -590,7 +657,7 @@ async def test_run_timeout_cancels_in_flight_attempt_writes(tmp_path):
     targets = TargetConfigService(SessionLocal, box)
     datasets = DatasetService(SessionLocal, blob)
     bus = ProgressBus()
-    svc = RunService(SessionLocal, blob, box, targets, datasets, bus, max_concurrency=2)
+    svc = RunService(SessionLocal, blob, box, targets, datasets, bus, max_concurrency=1)
 
     tcfg = await targets.create(name="t1", plugin="timeout_cancel_target", params={"name": "t1"})
     ds = await datasets.create_json_upload(
@@ -604,23 +671,88 @@ async def test_run_timeout_cancels_in_flight_attempt_writes(tmp_path):
             "targets": [{"config_id": tcfg.id}],
             "dataset": {"config_id": ds.id},
             "executor": {"plugin": "single_turn"},
-            "concurrency": 2,
+            "concurrency": 1,
             "timeout_seconds": 0.05,
         },
     )
 
-    with pytest.raises(TimeoutError):
-        await svc.execute_run(run.id)
-    await asyncio.sleep(0.25)
+    await svc.execute_run(run.id)
+
+    async with SessionLocal() as s:
+        run_row = await s.get(models.Run, run.id)
+        attempts = (
+            (
+                await s.execute(
+                    select(models.Attempt).where(models.Attempt.run_id == run.id).order_by(models.Attempt.prompt_text)
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+    assert run_row.status == "failed"
+    assert run_row.progress_done == 1
+    assert [a.prompt_text for a in attempts] == ["a"]
+    assert attempts[0].status == "completed"
+    assert calls == ["a"]
+
+
+@pytest.mark.asyncio
+async def test_run_timeout_allows_single_long_attempt_to_complete(tmp_path):
+    calls: list[str] = []
+
+    class SlowTarget:
+        def __init__(self, *, name: str) -> None:
+            self.name = name
+
+        async def generate(self, prompt):
+            calls.append(prompt.text)
+            await asyncio.sleep(0.2)
+            return Response(text=f"late:{prompt.text}", raw={}, latency_ms=1)
+
+        async def aclose(self):
+            pass
+
+    default_registry().register("targets", "timeout_long_single_target", SlowTarget)
+
+    engine_db = make_engine(f"sqlite+aiosqlite:///{tmp_path}/x.db")
+    SessionLocal = make_sessionmaker(engine_db)
+    async with engine_db.begin() as c:
+        await c.run_sync(models.Base.metadata.create_all)
+    blob = LocalBlobStore(tmp_path / "blobs")
+    box = SecretBox(Fernet.generate_key().decode())
+    targets = TargetConfigService(SessionLocal, box)
+    datasets = DatasetService(SessionLocal, blob)
+    bus = ProgressBus()
+    svc = RunService(SessionLocal, blob, box, targets, datasets, bus, max_concurrency=1)
+
+    tcfg = await targets.create(name="t1", plugin="timeout_long_single_target", params={"name": "t1"})
+    ds = await datasets.create_json_upload(name="ds", file_bytes=json.dumps({"items": [{"prompt": "a"}]}).encode())
+    run = await svc.create_run(
+        name="r1",
+        runspec_dict={
+            "name": "r1",
+            "targets": [{"config_id": tcfg.id}],
+            "dataset": {"config_id": ds.id},
+            "executor": {"plugin": "single_turn"},
+            "concurrency": 1,
+            "timeout_seconds": 0.05,
+        },
+    )
+
+    await svc.execute_run(run.id)
 
     async with SessionLocal() as s:
         run_row = await s.get(models.Run, run.id)
         attempts = (await s.execute(select(models.Attempt).where(models.Attempt.run_id == run.id))).scalars().all()
 
-    assert run_row.status == "failed"
-    assert run_row.progress_done == 0
-    assert attempts == []
-    assert sorted(calls) == ["a", "b"]
+    assert run_row.status == "completed"
+    assert run_row.error is None
+    assert run_row.progress_done == 1
+    assert run_row.progress_total == 1
+    assert len(attempts) == 1
+    assert attempts[0].status == "completed"
+    assert calls == ["a"]
 
 
 @pytest.mark.asyncio

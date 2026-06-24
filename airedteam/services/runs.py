@@ -605,6 +605,52 @@ class RunService:
                 "skipped": 0,
             }
 
+    async def retry_failed_attempts(self, run_id: str) -> dict[str, int]:
+        async with self._sf() as s:
+            run = await s.get(Run, run_id)
+            if run is None:
+                raise KeyError(run_id)
+            if run.kind != "automated":
+                raise ValueError("attempt retry is only available for automated runs")
+            if run.status in {"running", "pausing"}:
+                raise ValueError(f"run cannot retry attempts while {run.status}")
+            attempts = (
+                (
+                    await s.execute(
+                        select(Attempt)
+                        .where(Attempt.run_id == run_id, Attempt.status == "failed")
+                        .order_by(Attempt.started_at, Attempt.created_at, Attempt.id)
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            work_keys = {attempt.work_key for attempt in attempts if attempt.work_key}
+            skipped = len(attempts) - len(work_keys)
+
+        if work_keys:
+            await self.execute_run(run_id, retry_failed=True, retry_work_keys=work_keys)
+
+        async with self._sf() as s:
+            retried_attempts = []
+            if work_keys:
+                retried_attempts = (
+                    (
+                        await s.execute(
+                            select(Attempt).where(Attempt.run_id == run_id, Attempt.work_key.in_(work_keys))
+                        )
+                    )
+                    .scalars()
+                    .all()
+                )
+            return {
+                "matched": len(attempts),
+                "retried": len(retried_attempts),
+                "completed": sum(1 for attempt in retried_attempts if attempt.status == "completed"),
+                "failed": sum(1 for attempt in retried_attempts if attempt.status == "failed"),
+                "skipped": skipped,
+            }
+
     async def _is_cancelled(self, run_id: str) -> bool:
         async with self._sf() as s:
             run = await s.get(Run, run_id)
@@ -845,6 +891,20 @@ class RunService:
                 )
                 await s.commit()
 
+            timeout_deadline = None
+            run_timed_out = False
+            if spec.timeout_seconds is not None and spec.timeout_seconds > 0:
+                timeout_deadline = asyncio.get_running_loop().time() + spec.timeout_seconds
+
+            async def should_stop_run() -> bool:
+                nonlocal run_timed_out
+                if await self._should_stop_run(run_id):
+                    return True
+                if timeout_deadline is not None and asyncio.get_running_loop().time() >= timeout_deadline:
+                    run_timed_out = True
+                    return True
+                return False
+
             engine = RunEngine(progress_bus=self._bus, on_attempt=on_attempt, on_score=on_score)
             run_coro = engine.run(
                 run_id=run_id,
@@ -856,13 +916,10 @@ class RunService:
                 scorers=scorers,
                 concurrency=min(spec.concurrency, self._max_conc),
                 orchestrator=DefaultOrchestrator(),
-                should_stop=lambda: self._should_stop_run(run_id),
+                should_stop=should_stop_run,
                 should_skip_work=should_skip_work,
             )
-            if spec.timeout_seconds is not None and spec.timeout_seconds > 0:
-                engine_result = await asyncio.wait_for(run_coro, timeout=spec.timeout_seconds)
-            else:
-                engine_result = await run_coro
+            engine_result = await run_coro
             if await self._is_cancelled(run_id):
                 return
             current_status = await self._run_status(run_id)
@@ -875,6 +932,30 @@ class RunService:
                     )
                     await s.commit()
                 await self._bus.publish(run_id, {"event": "run.paused", "status": "paused"})
+                return
+            if run_timed_out:
+                timed_out_with_remaining_work = True
+                if engine_result.stopped:
+                    async with self._sf() as s:
+                        run_row = await s.get(Run, run_id)
+                        timed_out_with_remaining_work = bool(
+                            run_row is not None and run_row.progress_done < run_row.progress_total
+                        )
+                if not timed_out_with_remaining_work:
+                    run_timed_out = False
+            if run_timed_out:
+                async with self._sf() as s:
+                    await s.execute(
+                        update(Run)
+                        .where(Run.id == run_id)
+                        .values(
+                            status="failed",
+                            finished_at=datetime.now(UTC).replace(tzinfo=None),
+                            error=f"run timed out after {spec.timeout_seconds} seconds",
+                        )
+                    )
+                    await s.commit()
+                await self._bus.publish(run_id, {"event": "run.failed", "status": "failed"})
                 return
             async with self._sf() as s:
                 await s.execute(
@@ -894,20 +975,6 @@ class RunService:
                 await s.commit()
             await self._bus.publish(run_id, {"event": "run.cancelled", "status": "cancelled"})
             return
-        except TimeoutError:
-            async with self._sf() as s:
-                await s.execute(
-                    update(Run)
-                    .where(Run.id == run_id)
-                    .values(
-                        status="failed",
-                        finished_at=datetime.now(UTC).replace(tzinfo=None),
-                        error=f"run timed out after {spec.timeout_seconds} seconds",
-                    )
-                )
-                await s.commit()
-            await self._bus.publish(run_id, {"event": "run.failed", "status": "failed"})
-            raise
         except Exception as e:
             async with self._sf() as s:
                 await s.execute(

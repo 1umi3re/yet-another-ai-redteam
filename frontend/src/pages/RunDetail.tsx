@@ -227,6 +227,8 @@ export default function RunDetail() {
       successRate: scored ? complied / scored : null,
     };
   }, [attempts.length, scores, report]);
+  const failedAttemptCount = attackMetrics.failed ?? 0;
+  const retryFailedAttemptsDisabled = failedAttemptCount === 0 || run?.status === "running" || run?.status === "pausing";
 
   const targetRiskRows = useMemo(
     () => [...(report?.by_target ?? [])].sort((a: any, b: any) => successRate(b) - successRate(a)),
@@ -330,6 +332,17 @@ export default function RunDetail() {
       toast.success(t("Rejudged {{count}} attempts", { count: data?.retried ?? 0 }));
     },
     onError: (e: any) => toast.error(e?.response?.data?.detail ?? t("Failed to rejudge run")),
+  });
+  const retryFailedAttemptsMut = useMutation({
+    mutationFn: async () => (await api.post(`/api/runs/${id}/attempts/retry-failed`)).data,
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["run", id] });
+      queryClient.invalidateQueries({ queryKey: ["run-report", id] });
+      queryClient.invalidateQueries({ queryKey: ["run-attempts", id] });
+      queryClient.invalidateQueries({ queryKey: ["run-scores", id] });
+      toast.success(t("Retried {{count}} failed attempts", { count: data?.retried ?? 0 }));
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.detail ?? t("Failed to retry failed attempts")),
   });
   const retryAttemptMut = useMutation({
     mutationFn: async (attemptId: string) => (await api.post(`/api/runs/${id}/attempts/${attemptId}/retry`)).data,
@@ -739,6 +752,18 @@ export default function RunDetail() {
                   })}
                 </div>
                 <div className="flex flex-wrap gap-2">
+                  {run?.kind === "automated" && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      icon={<RotateCcw className="h-4 w-4" />}
+                      loading={retryFailedAttemptsMut.isPending}
+                      disabled={retryFailedAttemptsDisabled}
+                      onClick={() => retryFailedAttemptsMut.mutate()}
+                    >
+                      {t("Retry failed attempts ({{count}})", { count: failedAttemptCount })}
+                    </Button>
+                  )}
                   <Button variant="secondary" size="sm" icon={<Download className="h-4 w-4" />}
                     onClick={() => downloadFilteredAttemptsExport("json")}>
                     {t("Export filtered JSON")}
