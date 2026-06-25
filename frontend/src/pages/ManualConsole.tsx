@@ -11,7 +11,11 @@ import { Badge, StatusBadge } from "../components/ui/Badge";
 import clsx from "clsx";
 import { toast } from "sonner";
 import { useI18n } from "../lib/i18n";
-import { buildConverterAttackCategoryState } from "../lib/attackMethodTaxonomy";
+import {
+  attackMethodSearchText,
+  buildConverterAttackCategoryState,
+  formatAttackMethodName,
+} from "../lib/attackMethodTaxonomy";
 
 type SessionState = {
   run_id: string;
@@ -25,7 +29,7 @@ type SessionState = {
 };
 
 export default function ManualConsole() {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const nav = useNavigate();
   const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
@@ -102,14 +106,15 @@ export default function ManualConsole() {
         const category = converterCategoryState.categoryFor(plugin);
         if (category !== converterCategory) return false;
       }
-      return !search || plugin.toLowerCase().includes(search);
+      return !search || attackMethodSearchText(plugin, language).toLowerCase().includes(search);
     });
-  }, [availableConverters, converterCategory, converterCategoryState, converterSearch, selectedConverterNames]);
+  }, [availableConverters, converterCategory, converterCategoryState, converterSearch, language, selectedConverterNames]);
 
   const converterCategoryLabel = (category: string) => {
     if (category === "all" || category === "selected") return t(converterCategoryState.labelForCategory(category));
     return converterCategoryState.labelForCategory(category);
   };
+  const converterName = (plugin: string) => formatAttackMethodName(plugin, language);
 
   const createRunMut = useMutation({
     mutationFn: async (body: { name: string; target_id: string }) =>
@@ -618,7 +623,7 @@ export default function ManualConsole() {
                                 : "border-transparent text-gray-700 hover:border-gray-200 hover:bg-gray-50",
                             )}
                           >
-                            <span className="font-mono">{plugin}</span>
+                            <span className="font-medium">{converterName(plugin)}</span>
                             <span className="shrink-0 text-[10px] uppercase tracking-wide text-gray-400">
                               {converterCategoryLabel(category)}
                             </span>
@@ -654,7 +659,7 @@ export default function ManualConsole() {
                   <div key={converter.plugin} className="rounded-lg border border-gray-200 bg-white p-3 space-y-3">
                     <div className="flex items-center justify-between">
                       <div>
-                        <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">{converter.plugin}</div>
+                        <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">{converterName(converter.plugin)}</div>
                         <div className="mt-0.5 text-[10px] text-gray-400">
                           {converterCategoryLabel(converterCategoryState.categoryFor(converter.plugin))}
                         </div>
@@ -700,7 +705,7 @@ export default function ManualConsole() {
 {preview.transformed_text}
                   </pre>
                   <div className="mt-2 text-[11px] text-gray-500">
-                    {t("Chain")}: {preview.converter_chain.join(" -> ") || t("none")}
+                    {t("Chain")}: {preview.converter_chain.map((name: string) => converterName(name)).join(" -> ") || t("none")}
                   </div>
                 </div>
               )}

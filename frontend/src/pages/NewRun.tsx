@@ -12,6 +12,10 @@ import { toast } from "sonner";
 import { ConfiguredPlugin, defaultsFor, ParamField, PluginSchemas } from "../components/PluginParamsForm";
 import { useI18n } from "../lib/i18n";
 import {
+  attackMethodSearchText,
+  formatAttackMethodName,
+} from "../lib/attackMethodTaxonomy";
+import {
   applyConverterLlmConfig,
   countConvertersWithLlmConfig,
 } from "../lib/converterLlmParams";
@@ -201,7 +205,7 @@ export default function NewRun() {
       }
       if (!search) return true;
       const label = attackCategoryLabel(method.category).toLowerCase();
-      return method.plugin.toLowerCase().includes(search)
+      return attackMethodSearchText(method.plugin, language).toLowerCase().includes(search)
         || method.kind.toLowerCase().includes(search)
         || method.technicalCategory.toLowerCase().includes(search)
         || label.includes(search);
@@ -230,7 +234,7 @@ export default function NewRun() {
       category,
       methods: (groups.get(category) ?? []).sort((a, b) => {
         if (a.kind !== b.kind) return a.kind === "executor" ? -1 : 1;
-        return a.plugin.localeCompare(b.plugin);
+        return attackMethodName(a.plugin).localeCompare(attackMethodName(b.plugin));
       }),
     }));
   }, [attackCategoryMeta, filteredAttackMethods, language]);
@@ -244,6 +248,7 @@ export default function NewRun() {
     return languages.length ? languages.join(", ") : t("No compatible language support");
   };
   const executorSupportsDatasetLanguage = (plugin: string) => (executorLanguageSupport[plugin] ?? []).length > 0;
+  const attackMethodName = (plugin: string) => formatAttackMethodName(plugin, language);
 
   const toggleConverter = (c: string) => {
     if (!executorSupportsDatasetLanguage(c)) return;
@@ -887,7 +892,7 @@ export default function NewRun() {
                     <span>{t("Selected methods")}: {converters.length}</span>
                     {nativeExecutors.map(ex => (
                       <Badge key={ex.plugin} tone="blue">
-                        {ex.plugin} · {executorLanguageLabel(ex.plugin)}
+                        {attackMethodName(ex.plugin)} · {executorLanguageLabel(ex.plugin)}
                       </Badge>
                     ))}
                   </div>
@@ -949,6 +954,7 @@ export default function NewRun() {
                               {group.methods.map(method => {
                                 const on = selectedAttackMethodKeys.has(method.key);
                                 const disabled = !executorSupportsDatasetLanguage(method.plugin);
+                                const methodName = attackMethodName(method.plugin);
                                 return (
                                   <button
                                     key={method.key}
@@ -956,7 +962,7 @@ export default function NewRun() {
                                     disabled={disabled}
                                     aria-disabled={disabled || undefined}
                                     aria-pressed={on}
-                                    aria-label={t("Toggle attack method {{name}}", { name: method.plugin })}
+                                    aria-label={t("Toggle attack method {{name}}", { name: methodName })}
                                     title={executorLanguageLabel(method.plugin)}
                                     onClick={() => toggleAttackMethod(method)}
                                     className={clsx(
@@ -969,7 +975,7 @@ export default function NewRun() {
                                     )}
                                   >
                                     <div className="flex items-start justify-between gap-2">
-                                      <span className="break-all font-medium">{method.plugin}</span>
+                                      <span className="break-all font-medium">{methodName}</span>
                                       <span className={clsx(
                                         "shrink-0 rounded px-1.5 py-0.5 text-[10px]",
                                         on ? "bg-white/15 text-white" : "bg-gray-100 text-gray-500",
@@ -1005,7 +1011,7 @@ export default function NewRun() {
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div>
                             <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                              {ex.plugin} {t("params")}
+                              {attackMethodName(ex.plugin)} {t("params")}
                             </div>
                             <div className="mt-0.5 text-[11px] text-gray-400">
                               {t("Languages: {{languages}}", { languages: executorLanguageLabel(ex.plugin) })}
@@ -1062,7 +1068,7 @@ export default function NewRun() {
                     return (
                       <div key={c.plugin} className="rounded-lg border border-gray-200 bg-gray-50/50 p-4 space-y-3">
                         <div className="flex items-center justify-between">
-                          <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">{c.plugin} {t("params")}</div>
+                          <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">{attackMethodName(c.plugin)} {t("params")}</div>
                           <button type="button" onClick={() => toggleConverter(c.plugin)}
                             className="text-gray-400 hover:text-gray-600"><X className="h-4 w-4" /></button>
                         </div>

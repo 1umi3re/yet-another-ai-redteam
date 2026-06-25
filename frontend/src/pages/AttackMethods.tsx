@@ -11,6 +11,7 @@ import { extractTemplateVariables } from "../lib/promptAssetHelpers";
 import {
   CategoryScope,
   filterMappings,
+  formatAttackMethodName,
   mappingKey,
   scopeMappings,
   sortCategories,
@@ -135,8 +136,8 @@ export default function AttackMethods() {
     [categoryById, mappings, scope],
   );
   const filteredMappings = useMemo(
-    () => filterMappings(scopedMappings, categoryById, search, kindFilter),
-    [categoryById, kindFilter, scopedMappings, search],
+    () => filterMappings(scopedMappings, categoryById, search, kindFilter, language),
+    [categoryById, kindFilter, language, scopedMappings, search],
   );
   const selectedBatchMappings = useMemo(
     () => mappings.filter(mapping => selectedMappingKeys.has(mappingKey(mapping))),
@@ -475,6 +476,7 @@ export default function AttackMethods() {
                       const checked = selectedMappingKeys.has(key);
                       const rowCategory = categoryById.get(mapping.category_id);
                       const showCheckbox = selectedMappingKeys.size > 0;
+                      const methodName = formatAttackMethodName(mapping.executor_name, language);
                       return (
                         <tr
                           key={key}
@@ -500,7 +502,7 @@ export default function AttackMethods() {
                             <div className="flex items-start gap-2">
                               <input
                                 type="checkbox"
-                                aria-label={t("Select attack method {{name}}", { name: mapping.executor_name })}
+                                aria-label={t("Select attack method {{name}}", { name: methodName })}
                                 checked={checked}
                                 onClick={event => event.stopPropagation()}
                                 onChange={() => toggleMappingSelection(key)}
@@ -512,7 +514,7 @@ export default function AttackMethods() {
                               <div className="min-w-0">
                                 <div className="flex items-center gap-2">
                                   <Tags className="h-4 w-4 shrink-0 text-gray-400" />
-                                  <span className="font-medium text-gray-900 break-all">{mapping.executor_name}</span>
+                                  <span className="font-medium text-gray-900 break-all">{methodName}</span>
                                 </div>
                                 <div className="mt-0.5 text-xs text-gray-500">{methodKindLabel(mapping)}</div>
                               </div>
@@ -547,7 +549,7 @@ export default function AttackMethods() {
                 <div>
                   <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">{t("Detail")}</div>
                   <div className="text-sm font-medium text-gray-900">
-                    {selectedMapping ? mappingName(selectedMapping) : scopeTitle()}
+                    {selectedMapping ? mappingName(selectedMapping, language) : scopeTitle()}
                   </div>
                 </div>
                 {selectedMapping && (
@@ -572,6 +574,7 @@ export default function AttackMethods() {
                     mapping={selectedMapping}
                     currentCategory={categoryById.get(selectedMapping.category_id)}
                     description={executorMethodDescriptions[selectedMapping.executor_name] ?? ""}
+                    methodName={mappingName(selectedMapping, language)}
                     categories={sortedCategories}
                     categoryLabel={categoryLabel}
                     languageLabel={languageLabel}
@@ -639,8 +642,8 @@ export default function AttackMethods() {
   );
 }
 
-function mappingName(mapping: Mapping): string {
-  return mapping.executor_name;
+function mappingName(mapping: Mapping, language: "en" | "zh"): string {
+  return formatAttackMethodName(mapping.executor_name, language);
 }
 
 function ScopeButton({
@@ -897,6 +900,7 @@ function MethodDetail({
   mapping,
   currentCategory,
   description,
+  methodName,
   categories,
   categoryLabel,
   languageLabel,
@@ -912,6 +916,7 @@ function MethodDetail({
   mapping: Mapping;
   currentCategory: Category | undefined;
   description: string;
+  methodName: string;
   categories: Category[];
   categoryLabel: (category: Category | undefined) => string;
   languageLabel: (name: string) => string;
@@ -1030,7 +1035,7 @@ function MethodDetail({
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
-          <div className="break-all text-base font-semibold text-gray-900">{mapping.executor_name}</div>
+          <div className="break-all text-base font-semibold text-gray-900">{methodName}</div>
           <div className="mt-1 text-xs text-gray-500">{methodKindLabel(mapping)}</div>
         </div>
         {mapping.is_builtin && <Badge tone="blue">{t("Built-in")}</Badge>}

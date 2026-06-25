@@ -36,6 +36,7 @@ import {
   type RunExportFormat,
 } from "../lib/runExport";
 import { buildPageWindow, formatPaginationRange } from "../lib/pagination";
+import { formatAttackMethodName } from "../lib/attackMethodTaxonomy";
 
 type Tab = "overview" | "attempts" | "events";
 type Verdict = "refused" | "complied";
@@ -92,8 +93,9 @@ function successRate(row: any): number {
   return typeof row?.success_rate === "number" ? row.success_rate : -1;
 }
 
-function executorText(row: any, emptyLabel: string): string {
-  return row?.executor_name || row?.key || emptyLabel;
+function executorText(row: any, emptyLabel: string, language: "en" | "zh"): string {
+  const name = row?.executor_name || row?.key;
+  return name ? formatAttackMethodName(name, language) : emptyLabel;
 }
 
 function executorKey(row: any): string {
@@ -253,10 +255,10 @@ export default function RunDetail() {
   const heatExecutors = useMemo(() => {
     const seen = new Map<string, string>();
     for (const row of targetExecutorRows) {
-      seen.set(executorKey(row), executorText(row, t("No executor")));
+      seen.set(executorKey(row), executorText(row, t("No executor"), language));
     }
     return [...seen.entries()];
-  }, [targetExecutorRows, t]);
+  }, [language, targetExecutorRows, t]);
   const targetExecutorByKey = useMemo(() => {
     const out = new Map<string, any>();
     for (const row of targetExecutorRows) {
@@ -278,8 +280,8 @@ export default function RunDetail() {
   }, [report]);
   const executorOptions = useMemo<[string, string][]>(() => {
     const rows = report?.by_executor ?? [];
-    return rows.map((row: any) => [executorKey(row), executorText(row, t("No executor"))]);
-  }, [report, t]);
+    return rows.map((row: any) => [executorKey(row), executorText(row, t("No executor"), language)]);
+  }, [language, report, t]);
 
   const cancelMut = useMutation({
     mutationFn: async () => (await api.post(`/api/runs/${id}/cancel`)).data,
@@ -569,7 +571,7 @@ export default function RunDetail() {
                     <ActionSuggestion
                       key={`${row.target_id ?? row.target_name ?? row.key}|${executorKey(row)}`}
                       target={row.target_name ?? row.key}
-                      method={executorText(row, t("No executor"))}
+                      method={executorText(row, t("No executor"), language)}
                       rate={row.success_rate}
                       complied={row.complied ?? 0}
                       scored={row.scored ?? 0}
@@ -599,14 +601,14 @@ export default function RunDetail() {
             />
             <RiskSummaryCard
               label={t("Highest-risk attack method")}
-              title={highestRiskExecutor ? executorText(highestRiskExecutor, t("No executor")) : "—"}
+              title={highestRiskExecutor ? executorText(highestRiskExecutor, t("No executor"), language) : "—"}
               rate={highestRiskExecutor?.success_rate}
               detail={highestRiskExecutor ? t("{{count}} scored", { count: highestRiskExecutor.scored ?? 0 }) : t("No scored attempts yet.")}
             />
             <RiskSummaryCard
               label={t("Highest-risk combination")}
               title={highestRiskTargetExecutor
-                ? `${highestRiskTargetExecutor.target_name ?? highestRiskTargetExecutor.key} · ${executorText(highestRiskTargetExecutor, t("No executor"))}`
+                ? `${highestRiskTargetExecutor.target_name ?? highestRiskTargetExecutor.key} · ${executorText(highestRiskTargetExecutor, t("No executor"), language)}`
                 : "—"}
               rate={highestRiskTargetExecutor?.success_rate}
               detail={highestRiskTargetExecutor ? t("{{count}} scored", { count: highestRiskTargetExecutor.scored ?? 0 }) : t("No scored attempts yet.")}
@@ -700,7 +702,7 @@ export default function RunDetail() {
                           )}
                         >
                           <td className="px-4 py-2 font-medium text-gray-800">{row.target_name ?? row.key}</td>
-                          <td className="px-4 py-2 text-gray-600">{executorText(row, t("No executor"))}</td>
+                          <td className="px-4 py-2 text-gray-600">{executorText(row, t("No executor"), language)}</td>
                           <td className="px-4 py-2 font-semibold tabular-nums text-red-600">{formatPercent(row.success_rate)}</td>
                           <td className="px-4 py-2 tabular-nums">{row.complied ?? 0}</td>
                           <td className="px-4 py-2 tabular-nums">{row.refused ?? 0}</td>
@@ -955,7 +957,7 @@ export default function RunDetail() {
 }
 
 function AttemptDetailDrawer({ runId, attempt, scores, onClose }: { runId: string; attempt: any | null; scores: any[]; onClose: () => void }) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const nav = useNavigate();
   const { data: conversation } = useQuery({
     queryKey: ["attempt-conversation", runId, attempt?.id],
@@ -1032,7 +1034,7 @@ function AttemptDetailDrawer({ runId, attempt, scores, onClose }: { runId: strin
             {attempt.executor_name && (
               <span className="inline-flex items-center gap-1">
                 {t("executor")}:
-                <Badge>{attempt.executor_name}</Badge>
+                <Badge>{formatAttackMethodName(attempt.executor_name, language)}</Badge>
               </span>
             )}
             {attempt.dataset_item_language && (
@@ -1069,7 +1071,7 @@ function AttemptDetailDrawer({ runId, attempt, scores, onClose }: { runId: strin
             {chain.length > 0 && (
               <span className="inline-flex items-center gap-1">
                 {t("converters")}:
-                {chain.map((c: string, i: number) => <Badge key={i}>{c}</Badge>)}
+                {chain.map((c: string, i: number) => <Badge key={i}>{formatAttackMethodName(c, language)}</Badge>)}
               </span>
             )}
           </div>

@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   buildConverterAttackCategoryState,
   filterMappings,
+  formatAttackMethodName,
   mappingKey,
   scopeMappings,
   sortCategories,
@@ -51,6 +52,15 @@ test("filterMappings searches within the scoped set and respects kind", () => {
 
 test("mappingKey is stable for batch selection", () => {
   assert.equal(mappingKey(mappings[1]), "converter_method:base64");
+});
+
+test("formatAttackMethodName localizes known method names and preserves proper nouns", () => {
+  assert.equal(formatAttackMethodName("single_turn", "zh"), "单轮攻击");
+  assert.equal(formatAttackMethodName("base64", "zh"), "Base64 编码");
+  assert.equal(formatAttackMethodName("dan", "zh"), "DAN");
+  assert.equal(formatAttackMethodName("crescendo", "zh"), "Crescendo");
+  assert.equal(formatAttackMethodName("single_turn", "en"), "single_turn");
+  assert.equal(formatAttackMethodName("unknown_plugin", "zh"), "unknown_plugin");
 });
 
 test("buildConverterAttackCategoryState groups converters by attack_method categories", () => {
