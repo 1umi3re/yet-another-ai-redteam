@@ -176,6 +176,7 @@ export default function NewRun() {
     if (!meta) return category;
     return language === "zh" ? meta.name : (meta.alias || meta.name || category);
   };
+  const attackMethodName = (plugin: string) => formatAttackMethodName(plugin, language);
   const attackCategoryOptions = useMemo(() => {
     const present = [...new Set(attackMethods.map(method => method.category))];
     present.sort((a, b) => {
@@ -248,7 +249,6 @@ export default function NewRun() {
     return languages.length ? languages.join(", ") : t("No compatible language support");
   };
   const executorSupportsDatasetLanguage = (plugin: string) => (executorLanguageSupport[plugin] ?? []).length > 0;
-  const attackMethodName = (plugin: string) => formatAttackMethodName(plugin, language);
 
   const toggleConverter = (c: string) => {
     if (!executorSupportsDatasetLanguage(c)) return;

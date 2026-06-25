@@ -765,6 +765,13 @@ class RunService:
             closeables.extend(scorer_closeables)
 
             existing_work_statuses = await self._existing_work_statuses(run_id)
+            retry_pending_work_keys = {
+                work_key
+                for work_key, status in existing_work_statuses.items()
+                if retry_failed
+                and status == "failed"
+                and (retry_work_keys is None or work_key in retry_work_keys)
+            }
 
             async def should_skip_work(work_key: str) -> bool:
                 if retry_work_keys is not None and work_key not in retry_work_keys:
@@ -840,9 +847,10 @@ class RunService:
                     a.tokens_out = ar.response.tokens_out if ar.response else None
                     a.status = ar.status
                     a.error = ar.error
-                    if created:
+                    if created or work_key in retry_pending_work_keys:
                         await s.execute(update(Run).where(Run.id == run_id).values(progress_done=Run.progress_done + 1))
                     await s.commit()
+                    retry_pending_work_keys.discard(work_key)
                     existing_work_statuses[work_key] = ar.status
                     idx = len(attempt_id_by_index)
                     attempt_id_by_index[idx] = attempt_id
@@ -885,7 +893,7 @@ class RunService:
                     .where(Run.id == run_id)
                     .values(
                         progress_total=progress_total,
-                        progress_done=existing_work_count,
+                        progress_done=max(0, existing_work_count - len(retry_pending_work_keys)),
                         filtered_json=filtered_json,
                     )
                 )

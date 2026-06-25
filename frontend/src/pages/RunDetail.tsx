@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
@@ -145,6 +145,7 @@ export default function RunDetail() {
         executor: attemptExecutor || undefined,
       },
     })).data,
+    placeholderData: keepPreviousData,
     refetchInterval: pollInterval,
   });
   const attempts = attemptsPage.items ?? [];
@@ -543,10 +544,11 @@ export default function RunDetail() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-4">
         <StatCard label={t("Attack success rate")} value={formatPercent(attackMetrics.successRate)} tone="red" />
         <StatCard label={t("Attack successes")} value={attackMetrics.complied} tone="red" />
         <StatCard label={t("Refused")} value={attackMetrics.refused} tone="green" />
+        <StatCard label={t("Failed attempts")} value={attackMetrics.failed} tone="amber" />
         <StatCard label={t("Effective scores")} value={`${attackMetrics.scored}/${attackMetrics.attempts}`} tone="brand" />
         <Card><CardBody>
           <div className="text-xs text-gray-500 mb-1">{t("Progress")}</div>
@@ -1435,8 +1437,14 @@ function ScoreCard({ score }: { score: any }) {
   );
 }
 
-function StatCard({ label, value, tone }: { label: string; value: string | number; tone?: "green" | "red" | "brand" }) {
-  const color = tone === "green" ? "text-emerald-600" : tone === "red" ? "text-red-600" : "text-brand-600";
+function StatCard({ label, value, tone }: { label: string; value: string | number; tone?: "green" | "red" | "amber" | "brand" }) {
+  const color = tone === "green"
+    ? "text-emerald-600"
+    : tone === "red"
+      ? "text-red-600"
+      : tone === "amber"
+        ? "text-amber-600"
+        : "text-brand-600";
   return (
     <Card>
       <CardBody>

@@ -395,6 +395,7 @@ const zh: Record<string, string> = {
   "Attack success rate": "攻击成功率",
   "Attack successes": "攻击成功",
   "Effective scores": "有效评分",
+  "Failed attempts": "失败用例",
   "Highest-risk target": "最高风险目标",
   "Highest-risk attack method": "最高风险攻击方法",
   "Highest-risk combination": "最高风险组合",

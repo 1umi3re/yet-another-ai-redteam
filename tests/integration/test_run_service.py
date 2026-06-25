@@ -542,6 +542,91 @@ async def test_run_service_retries_all_failed_attempts(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_run_service_rolls_back_progress_while_retrying_failed_attempts(tmp_path):
+    calls: list[str] = []
+    failed_once = False
+    retry_started = asyncio.Event()
+    release_retry = asyncio.Event()
+
+    class SlowRetryTarget:
+        def __init__(self, *, name: str) -> None:
+            self.name = name
+
+        async def generate(self, prompt):
+            nonlocal failed_once
+            calls.append(prompt.text)
+            if prompt.text == "b" and not failed_once:
+                failed_once = True
+                raise RuntimeError("temporary failure")
+            if prompt.text == "b":
+                retry_started.set()
+                await release_retry.wait()
+            return Response(text=f"ok:{prompt.text}", raw={}, latency_ms=1)
+
+        async def aclose(self):
+            pass
+
+    default_registry().register("targets", "retry_progress_target", SlowRetryTarget)
+
+    engine_db = make_engine(f"sqlite+aiosqlite:///{tmp_path}/x.db")
+    SessionLocal = make_sessionmaker(engine_db)
+    async with engine_db.begin() as c:
+        await c.run_sync(models.Base.metadata.create_all)
+    blob = LocalBlobStore(tmp_path / "blobs")
+    box = SecretBox(Fernet.generate_key().decode())
+    targets = TargetConfigService(SessionLocal, box)
+    datasets = DatasetService(SessionLocal, blob)
+    bus = ProgressBus()
+    svc = RunService(SessionLocal, blob, box, targets, datasets, bus, max_concurrency=1)
+
+    tcfg = await targets.create(name="t1", plugin="retry_progress_target", params={"name": "t1"})
+    ds = await datasets.create_json_upload(
+        name="ds",
+        file_bytes=json.dumps({"items": [{"prompt": "a"}, {"prompt": "b"}]}).encode(),
+    )
+    run = await svc.create_run(
+        name="r1",
+        runspec_dict={
+            "name": "r1",
+            "targets": [{"config_id": tcfg.id}],
+            "dataset": {"config_id": ds.id},
+            "executor": {"plugin": "single_turn"},
+            "concurrency": 1,
+        },
+    )
+
+    await svc.execute_run(run.id)
+    async with SessionLocal() as s:
+        run_row = await s.get(models.Run, run.id)
+        failed_attempt = (
+            await s.execute(select(models.Attempt).where(models.Attempt.run_id == run.id, models.Attempt.status == "failed"))
+        ).scalar_one()
+        assert run_row.progress_done == 2
+        assert run_row.progress_total == 2
+
+    retry_task = asyncio.create_task(svc.retry_attempt(run.id, failed_attempt.id))
+    await asyncio.wait_for(retry_started.wait(), timeout=2)
+
+    async with SessionLocal() as s:
+        run_row = await s.get(models.Run, run.id)
+        assert run_row.status == "running"
+        assert run_row.progress_done == 1
+        assert run_row.progress_total == 2
+
+    release_retry.set()
+    result = await retry_task
+
+    async with SessionLocal() as s:
+        run_row = await s.get(models.Run, run.id)
+        assert run_row.status == "completed"
+        assert run_row.progress_done == 2
+        assert run_row.progress_total == 2
+
+    assert result == {"matched": 1, "retried": 1, "completed": 1, "failed": 0, "skipped": 0}
+    assert calls == ["a", "b", "b"]
+
+
+@pytest.mark.asyncio
 async def test_run_service_resumes_remaining_work_after_failed_run(tmp_path):
     calls: list[str] = []
 
