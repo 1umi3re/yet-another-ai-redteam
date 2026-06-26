@@ -20,7 +20,10 @@ import {
   countConvertersWithLlmConfig,
 } from "../lib/converterLlmParams";
 import { buildCustomScenarioPayload } from "../lib/customScenarioPayload";
-import { expandConverterWithAttackTemplates } from "../lib/attackMethodTemplates";
+import {
+  expandConverterWithAttackTemplates,
+  expandRunSpecAttackTemplates,
+} from "../lib/attackMethodTemplates";
 
 type ConfiguredExecutor = ConfiguredPlugin & { kind: "executor" | "converter_method" };
 type AttackCategoryMeta = {
@@ -72,6 +75,7 @@ export default function NewRun() {
     { kind: "executor", plugin: "single_turn", params: {} },
   ]);
   const [scorer, setScorer] = useState<ConfiguredPlugin>({ plugin: "refusal", params: {} });
+  const [presetScorerOverride, setPresetScorerOverride] = useState(false);
   const [converters, setConverters] = useState<ConfiguredPlugin[]>([]);
   const [attackCategory, setAttackCategory] = useState("all");
   const [attackSearch, setAttackSearch] = useState("");
@@ -353,21 +357,35 @@ export default function NewRun() {
     setScorer(prev => ({ ...prev, params: { ...prev.params, [key]: v } }));
   };
 
+  const loadAttackMethodTemplateDetail = async (plugin: string) => (
+    await api.get(`/api/attack-methods/converter_method/${encodeURIComponent(plugin)}/templates`)
+  ).data;
+
   const resolveConvertersForRun = async () => {
     if (!useAllAttackTemplates) {
       return converters.map(converter => ({ plugin: converter.plugin, params: { ...converter.params } }));
     }
     const expanded = await Promise.all(converters.map(async converter => {
-      const detail = (
-        await api.get(`/api/attack-methods/converter_method/${encodeURIComponent(converter.plugin)}/templates`)
-      ).data;
+      const detail = await loadAttackMethodTemplateDetail(converter.plugin);
       return expandConverterWithAttackTemplates(converter, detail);
     }));
     return expanded.flat();
   };
 
+  const applyPresetRunOptions = async (runspec: any) => {
+    let next = { ...runspec };
+    if (useAllAttackTemplates) {
+      next = await expandRunSpecAttackTemplates(next, loadAttackMethodTemplateDetail);
+    }
+    if (presetScorerOverride) {
+      next.scorers = [{ plugin: scorer.plugin, params: { ...scorer.params } }];
+    }
+    return next;
+  };
+
   const paramValidation = useMemo(() => {
     const missing: string[] = [];
+    const validateScorer = mode === "custom" || (mode === "preset" && presetScorerOverride);
     if (mode === "custom") {
       if (nativeExecutors.length + converters.length === 0) missing.push("executors");
       for (const ex of nativeExecutors) {
@@ -383,13 +401,6 @@ export default function NewRun() {
           }
         }
       }
-      for (const [k, s] of Object.entries(scorerSchema ?? {})) {
-        if (s.required) {
-          const v = scorer.params[k];
-          const empty = v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0);
-          if (empty) missing.push(`scorer.${k}`);
-        }
-      }
       for (const [i, c] of converters.entries()) {
         const cs = convSchemas[c.plugin] ?? {};
         for (const [k, s] of Object.entries(cs)) {
@@ -401,9 +412,19 @@ export default function NewRun() {
         }
       }
     }
+    if (validateScorer) {
+      for (const [k, s] of Object.entries(scorerSchema ?? {})) {
+        if (s.required) {
+          const v = scorer.params[k];
+          const empty = v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0);
+          if (empty) missing.push(`scorer.${k}`);
+        }
+      }
+    }
     return missing;
   }, [
     mode,
+    presetScorerOverride,
     nativeExecutors,
     executorSchemas,
     generalMultiTurnExecutors,
@@ -436,7 +457,7 @@ export default function NewRun() {
           dataset_config_id: datasetId,
           helper_config_ids: scenarioHelpers,
         });
-        base = { ...rendered.data, name };
+        base = await applyPresetRunOptions({ ...rendered.data, name });
       } else {
         const expandedConverters = await resolveConvertersForRun();
         const executorRefs = [
@@ -522,6 +543,25 @@ export default function NewRun() {
   const samplingSummary = samplingEnabled
     ? t("Enabled{{limit}}", { limit: samplingLimit ? `, ${samplingLimit}` : "" })
     : t("Off");
+  const renderScorerFields = () => (
+    <>
+      <Field label={t("Scorer")}>
+        <Select value={scorer.plugin} onChange={e => setScorerPlugin(e.target.value)}>
+          {plugins?.scorers?.map((s: string) => <option key={s} value={s}>{s}</option>)}
+        </Select>
+      </Field>
+      {scorerSchema && Object.keys(scorerSchema).length > 0 && (
+        <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50/50 p-4 space-y-3">
+          <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">{t("Scorer params")}</div>
+          {Object.entries(scorerSchema).map(([k, s]) => (
+            <ParamField key={k} name={k} schema={s} targets={targets ?? []}
+              promptAssets={promptAssets ?? []}
+              value={scorer.params[k]} onChange={v => updateScorerParam(k, v)} />
+          ))}
+        </div>
+      )}
+    </>
+  );
 
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -657,6 +697,49 @@ export default function NewRun() {
                 ))}
               </div>
             )}
+            <div className="rounded-lg border border-gray-200 bg-gray-50/50 p-4 space-y-4">
+              <div>
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                  {t("Preset configuration")}
+                </div>
+                <div className="mt-1 text-xs text-gray-500">
+                  {t("Adjust how this scenario is expanded at run time.")}
+                </div>
+              </div>
+              <label className="inline-flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={useAllAttackTemplates}
+                  onChange={e => setUseAllAttackTemplates(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-gray-300 text-brand-600"
+                />
+                <span>
+                  <span className="block text-gray-700">{t("Use all templates for selected methods")}</span>
+                  <span className="block text-xs text-gray-500">{t("Template-backed methods run once per template.")}</span>
+                </span>
+              </label>
+              <div className="border-t border-gray-200 pt-4">
+                <label className="inline-flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={presetScorerOverride}
+                    onChange={e => setPresetScorerOverride(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-gray-300 text-brand-600"
+                  />
+                  <span>
+                    <span className="block text-gray-700">{t("Override scenario scorer")}</span>
+                    <span className="block text-xs text-gray-500">
+                      {t("Use this scorer instead of the scorer bundled with the scenario.")}
+                    </span>
+                  </span>
+                </label>
+                {presetScorerOverride && (
+                  <div className="mt-4">
+                    {renderScorerFields()}
+                  </div>
+                )}
+              </div>
+            </div>
           </CardBody>
         </Card>
       )}
@@ -1112,21 +1195,7 @@ export default function NewRun() {
             </div>
 
             <div>
-              <Field label={t("Scorer")}>
-                <Select value={scorer.plugin} onChange={e => setScorerPlugin(e.target.value)}>
-                  {plugins?.scorers?.map((s: string) => <option key={s} value={s}>{s}</option>)}
-                </Select>
-              </Field>
-              {scorerSchema && Object.keys(scorerSchema).length > 0 && (
-                <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50/50 p-4 space-y-3">
-                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">{t("Scorer params")}</div>
-                  {Object.entries(scorerSchema).map(([k, s]) => (
-                    <ParamField key={k} name={k} schema={s} targets={targets ?? []}
-                      promptAssets={promptAssets ?? []}
-                      value={scorer.params[k]} onChange={v => updateScorerParam(k, v)} />
-                  ))}
-                </div>
-              )}
+              {renderScorerFields()}
             </div>
           </CardBody>
         </Card>
@@ -1166,14 +1235,17 @@ export default function NewRun() {
                   ? (selectedScenario?.title ?? t("Not selected"))
                   : t("{{count}} selected", { count: selectedMethodCount })}
               />
-              <SummaryRow label={t("Scorer")} value={scorer.plugin} />
+              <SummaryRow
+                label={t("Scorer")}
+                value={mode === "preset" && !presetScorerOverride ? t("Scenario default") : scorer.plugin}
+              />
               <SummaryRow label={t("Sampling")} value={samplingSummary} />
-              {mode === "custom" && (
-                <SummaryRow
-                  label={t("Templates")}
-                  value={useAllAttackTemplates ? t("All method templates") : t("Active template")}
-                />
-              )}
+              <SummaryRow
+                label={t("Templates")}
+                value={useAllAttackTemplates
+                  ? t("All method templates")
+                  : mode === "preset" ? t("Scenario default") : t("Active template")}
+              />
             </div>
             {missingRunRequirements.length > 0 ? (
               <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
