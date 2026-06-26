@@ -18,6 +18,8 @@ async def test_prompt_asset_builtins_and_active_override_precedence(tmp_path):
     assets = await svc.list_assets()
     ids = {a["id"] for a in assets}
     assert "llm_judge.single.v1" in ids
+    assert "llm_judge.single.v2" in ids
+    assert "llm_judge.transcript.v2" in ids
     assert "crescendo.attacker.v1" in ids
     assert "pair.judge.v1" in ids
     assert "general_multi_turn.attacker.v1" in ids
@@ -68,6 +70,15 @@ async def test_prompt_asset_builtins_and_active_override_precedence(tmp_path):
     assert "Rubric: R" in rendered["rendered_text"]
     assert "<<<P>>>" in rendered["rendered_text"]
     assert rendered["sha256"]
+
+    rendered_v2 = await svc.render(
+        "llm_judge.single.v2",
+        {"rubric": "R", "original_prompt": "O", "prompt": "P", "response": "A"},
+    )
+    assert rendered_v2["asset_id"] == "llm_judge.single.v2"
+    assert "<original_prompt>\nO\n</original_prompt>" in rendered_v2["rendered_text"]
+    assert "<prompt>\nP\n</prompt>" in rendered_v2["rendered_text"]
+    assert '"score"' in rendered_v2["rendered_text"]
 
     override = await svc.create_override(
         "llm_judge.single.v1",

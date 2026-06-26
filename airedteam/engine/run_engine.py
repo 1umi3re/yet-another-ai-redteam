@@ -12,6 +12,8 @@ from typing import Any
 from airedteam.core.score_status import exception_detail, failed_score_value
 from airedteam.core.types import AttemptResult, Prompt, ScoreResult
 
+ORIGINAL_PROMPT_METADATA_KEY = "original_prompt_text"
+
 
 @dataclass(frozen=True)
 class WorkItem:
@@ -179,6 +181,7 @@ class RunEngine:
             )
             ar.executor_kind = ar.executor_kind or executor_kind
             ar.dataset_item_language = ar.dataset_item_language or item.dataset_item_language
+            ar.prompt = _prompt_with_original_prompt(ar.prompt, item.prompt)
             async with self._lock:
                 await self._on_attempt(ar, item.target_name, item.dataset_item_id, item.work_key, item.prompt)
                 idx = self._counter
@@ -307,3 +310,9 @@ class RunEngine:
         if not stopped and await stop_requested():
             stopped = True
         return RunEngineResult(stopped=stopped)
+
+
+def _prompt_with_original_prompt(prompt: Prompt, original_prompt: Prompt) -> Prompt:
+    metadata = dict(prompt.metadata or {})
+    metadata.setdefault(ORIGINAL_PROMPT_METADATA_KEY, original_prompt.text)
+    return Prompt(text=prompt.text, metadata=metadata, artifacts=prompt.artifacts)

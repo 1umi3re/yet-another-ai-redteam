@@ -286,7 +286,10 @@ class ManualService:
                 response_text = msg.text
                 break
         return AttemptResult(
-            prompt=Prompt(text=att.prompt_text),
+            prompt=Prompt(
+                text=att.prompt_text,
+                metadata={"original_prompt_text": att.original_prompt_text} if att.original_prompt_text else {},
+            ),
             response=Response(text=response_text, raw={}, latency_ms=att.latency_ms or 0),
             conversation=messages or None,
             converter_chain=att.converter_chain or [],

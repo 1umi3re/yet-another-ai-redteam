@@ -23,10 +23,12 @@ class RecordingJudge:
 
 @pytest.mark.asyncio
 async def test_judge_uses_transcript_when_conversation_present():
-    j = RecordingJudge('{"label": true, "confidence": 0.9, "rationale": "complied"}')
+    j = RecordingJudge(
+        '{"label": true, "score": 8, "confidence": 0.9, "evidence_turns": [2], "rationale": "complied"}'
+    )
     s = LLMJudgeScorer(judge=j, rubric="r")
     ar = AttemptResult(
-        prompt=Prompt(text="ignored"),
+        prompt=Prompt(text="transformed", metadata={"original_prompt_text": "original seed"}),
         response=Response(text="last", raw={}, latency_ms=1),
         conversation=[
             Message(role="user", text="please help"),
@@ -37,8 +39,12 @@ async def test_judge_uses_transcript_when_conversation_present():
     )
     r = await s.score(ar)
     assert r.value["attack_success"] is True
+    assert r.value["evidence_turns"] == [2]
+    assert "<original_prompt>\noriginal seed\n</original_prompt>" in j.last_prompt
+    assert "<prompt>\ntransformed\n</prompt>" in j.last_prompt
     assert "USER: please help" in j.last_prompt
     assert "ASSISTANT: ok here" in j.last_prompt
+    assert "at any point in the transcript" in j.last_prompt
 
 
 @pytest.mark.asyncio
@@ -52,5 +58,20 @@ async def test_judge_uses_single_prompt_when_no_conversation():
     )
     r = await s.score(ar)
     assert r.value["attack_success"] is False
-    assert "the prompt" in j.last_prompt
-    assert "the response" in j.last_prompt
+    assert "<original_prompt>\nthe prompt\n</original_prompt>" in j.last_prompt
+    assert "<prompt>\nthe prompt\n</prompt>" in j.last_prompt
+    assert "<response>\nthe response\n</response>" in j.last_prompt
+
+
+@pytest.mark.asyncio
+async def test_judge_single_prompt_includes_original_prompt_from_metadata():
+    j = RecordingJudge('{"label": false, "confidence": 0.8}')
+    s = LLMJudgeScorer(judge=j, rubric="r")
+    ar = AttemptResult(
+        prompt=Prompt(text="transformed prompt", metadata={"original_prompt_text": "original prompt"}),
+        response=Response(text="the response", raw={}, latency_ms=1),
+        conversation=None,
+    )
+    await s.score(ar)
+    assert "<original_prompt>\noriginal prompt\n</original_prompt>" in j.last_prompt
+    assert "<prompt>\ntransformed prompt\n</prompt>" in j.last_prompt

@@ -383,6 +383,8 @@ class RunService:
             metadata["id"] = attempt.dataset_item_id
         if attempt.dataset_item_language:
             metadata["language"] = attempt.dataset_item_language
+        if attempt.original_prompt_text:
+            metadata["original_prompt_text"] = attempt.original_prompt_text
         return AttemptResult(
             prompt=Prompt(text=attempt.prompt_text, metadata=metadata),
             response=response,

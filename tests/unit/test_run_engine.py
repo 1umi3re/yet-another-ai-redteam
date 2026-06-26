@@ -50,6 +50,19 @@ class FakeExec:
         return AttemptResult(prompt=prompt, response=r, status="completed", converter_chain=[])
 
 
+class ConverterAwareExec:
+    name = "converter_aware_exec"
+
+    async def run(self, prompt, target, converters):
+        cur = prompt
+        chain = []
+        for converter in converters:
+            cur = await converter.convert(cur)
+            chain.append(converter.name)
+        response = await target.generate(cur)
+        return AttemptResult(prompt=cur, response=response, status="completed", converter_chain=chain)
+
+
 class FailedExec:
     name = "failed_exec"
 
@@ -61,6 +74,19 @@ class FakeScorer:
     name = "fake_scorer"
 
     async def score(self, ar):
+        return ScoreResult(scorer=self.name, value={"label": True})
+
+
+class RecordingScorer:
+    name = "recording_scorer"
+
+    def __init__(self):
+        self.original_prompts: list[str | None] = []
+        self.transformed_prompts: list[str] = []
+
+    async def score(self, ar):
+        self.original_prompts.append(ar.prompt.metadata.get("original_prompt_text"))
+        self.transformed_prompts.append(ar.prompt.text)
         return ScoreResult(scorer=self.name, value={"label": True})
 
 
@@ -139,6 +165,35 @@ async def test_run_engine_records_scorer_exceptions_as_retryable_score_failures(
     assert first_score.value["retryable"] is True
     assert first_score.value["error_type"] == "RuntimeError"
     assert "judge HTTP 500" in first_score.value["error"]
+
+
+@pytest.mark.asyncio
+async def test_run_engine_adds_original_prompt_metadata_before_scoring():
+    bus = ProgressBus()
+    scores: list = []
+    scorer = RecordingScorer()
+
+    async def on_attempt(ar, tname, item_id, work_key, original_prompt):
+        pass
+
+    async def on_score(idx, sr):
+        scores.append((idx, sr.value))
+
+    engine = RunEngine(progress_bus=bus, on_attempt=on_attempt, on_score=on_score)
+    await engine.run(
+        run_id="r",
+        dataset=FakeDataset(),
+        targets=[FakeTarget("t1")],
+        converters=[FakeConverter("c1")],
+        executor=ConverterAwareExec(),
+        scorers=[scorer],
+        concurrency=1,
+        orchestrator=DefaultOrchestrator(),
+    )
+
+    assert scorer.original_prompts == ["p0", "p1", "p2"]
+    assert scorer.transformed_prompts == ["p0:c1", "p1:c1", "p2:c1"]
+    assert len(scores) == 3
 
 
 @pytest.mark.asyncio

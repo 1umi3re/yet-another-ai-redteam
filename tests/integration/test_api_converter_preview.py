@@ -316,6 +316,7 @@ async def test_converter_preview_uses_active_attack_method_template(monkeypatch,
             json={"name": "active prefix", "template": "ACTIVE {prefix}|{prompt}", "active": True},
         )
         assert created.status_code == 201
+        override_id = created.json()["id"]
 
         resp = await c.post(
             "/api/converters/preview",
@@ -329,6 +330,48 @@ async def test_converter_preview_uses_active_attack_method_template(monkeypatch,
         assert resp.status_code == 200
         assert resp.json()["transformed_text"] == "ACTIVE P:|objective"
         assert resp.json()["converter_chain"] == ["prefix"]
+
+        builtin_resp = await c.post(
+            "/api/converters/preview",
+            headers=h,
+            json={
+                "text": "objective",
+                "converters": [
+                    {
+                        "plugin": "prefix",
+                        "params": {
+                            "prefix": "P:",
+                            "attack_template_asset_id": "attack_method.prefix.default.v1",
+                            "attack_template_use_builtin": True,
+                        },
+                    }
+                ],
+            },
+        )
+
+        assert builtin_resp.status_code == 200
+        assert builtin_resp.json()["transformed_text"] == "P:objective"
+
+        override_resp = await c.post(
+            "/api/converters/preview",
+            headers=h,
+            json={
+                "text": "objective",
+                "converters": [
+                    {
+                        "plugin": "prefix",
+                        "params": {
+                            "prefix": "P:",
+                            "attack_template_asset_id": "attack_method.prefix.default.v1",
+                            "attack_template_override_id": override_id,
+                        },
+                    }
+                ],
+            },
+        )
+
+        assert override_resp.status_code == 200
+        assert override_resp.json()["transformed_text"] == "ACTIVE P:|objective"
 
 
 @pytest.mark.asyncio

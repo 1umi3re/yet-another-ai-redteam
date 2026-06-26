@@ -20,6 +20,7 @@ import {
   countConvertersWithLlmConfig,
 } from "../lib/converterLlmParams";
 import { buildCustomScenarioPayload } from "../lib/customScenarioPayload";
+import { expandConverterWithAttackTemplates } from "../lib/attackMethodTemplates";
 
 type ConfiguredExecutor = ConfiguredPlugin & { kind: "executor" | "converter_method" };
 type AttackCategoryMeta = {
@@ -74,6 +75,7 @@ export default function NewRun() {
   const [converters, setConverters] = useState<ConfiguredPlugin[]>([]);
   const [attackCategory, setAttackCategory] = useState("all");
   const [attackSearch, setAttackSearch] = useState("");
+  const [useAllAttackTemplates, setUseAllAttackTemplates] = useState(false);
   const [sharedConverterLlmConfigId, setSharedConverterLlmConfigId] = useState("");
   const [samplingEnabled, setSamplingEnabled] = useState(false);
   const [samplingLimit, setSamplingLimit] = useState<string>("");
@@ -351,6 +353,19 @@ export default function NewRun() {
     setScorer(prev => ({ ...prev, params: { ...prev.params, [key]: v } }));
   };
 
+  const resolveConvertersForRun = async () => {
+    if (!useAllAttackTemplates) {
+      return converters.map(converter => ({ plugin: converter.plugin, params: { ...converter.params } }));
+    }
+    const expanded = await Promise.all(converters.map(async converter => {
+      const detail = (
+        await api.get(`/api/attack-methods/converter_method/${encodeURIComponent(converter.plugin)}/templates`)
+      ).data;
+      return expandConverterWithAttackTemplates(converter, detail);
+    }));
+    return expanded.flat();
+  };
+
   const paramValidation = useMemo(() => {
     const missing: string[] = [];
     if (mode === "custom") {
@@ -423,6 +438,7 @@ export default function NewRun() {
         });
         base = { ...rendered.data, name };
       } else {
+        const expandedConverters = await resolveConvertersForRun();
         const executorRefs = [
           ...nativeExecutors.map(ex => {
             const params = { ...ex.params };
@@ -431,7 +447,7 @@ export default function NewRun() {
             }
             return { kind: "executor", plugin: ex.plugin, params };
           }),
-          ...converters.map(c => ({ kind: "converter_method", plugin: c.plugin, params: c.params })),
+          ...expandedConverters.map(c => ({ kind: "converter_method", plugin: c.plugin, params: c.params })),
         ];
         base = {
           version: 2,
@@ -462,12 +478,13 @@ export default function NewRun() {
 
   const saveScenario = useMutation({
     mutationFn: async () => {
+      const expandedConverters = await resolveConvertersForRun();
       const payload = buildCustomScenarioPayload({
         scenarioName: saveScenarioName,
         description: saveScenarioDescription,
         tagsText: saveScenarioTags,
         nativeExecutors,
-        converters,
+        converters: expandedConverters,
         scorer,
         generalMultiTurnExecutors,
         goalSource,
@@ -896,6 +913,16 @@ export default function NewRun() {
                       </Badge>
                     ))}
                   </div>
+                  <label className="inline-flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={useAllAttackTemplates}
+                      onChange={e => setUseAllAttackTemplates(e.target.checked)}
+                      className="h-4 w-4 rounded border-gray-300 text-brand-600"
+                    />
+                    <span className="text-gray-700">{t("Use all templates for selected methods")}</span>
+                    <span className="text-xs text-gray-500">{t("Template-backed methods run once per template.")}</span>
+                  </label>
                   {attackMethods.length === 0 ? (
                     <Badge>{t("No attack methods available")}</Badge>
                   ) : groupedAttackMethods.length === 0 ? (
@@ -1141,6 +1168,12 @@ export default function NewRun() {
               />
               <SummaryRow label={t("Scorer")} value={scorer.plugin} />
               <SummaryRow label={t("Sampling")} value={samplingSummary} />
+              {mode === "custom" && (
+                <SummaryRow
+                  label={t("Templates")}
+                  value={useAllAttackTemplates ? t("All method templates") : t("Active template")}
+                />
+              )}
             </div>
             {missingRunRequirements.length > 0 ? (
               <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">

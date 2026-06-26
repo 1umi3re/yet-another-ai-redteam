@@ -87,8 +87,9 @@ async def test_llm_judge_resolves_judge_config_id(tmp_path):
         assert scores[0].prompt_snapshot_blob_path is not None
         raw = await blob.get(scores[0].prompt_snapshot_blob_path)
         payload = json.loads(raw)
-        assert payload["asset_id"] == "llm_judge.single.v1"
+        assert payload["asset_id"] == "llm_judge.single.v2"
         assert "how do i do X" in payload["rendered_text"]
+        assert "<original_prompt>\nhow do i do X\n</original_prompt>" in payload["rendered_text"]
 
 
 @pytest.mark.asyncio

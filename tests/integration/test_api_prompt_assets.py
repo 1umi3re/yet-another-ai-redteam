@@ -33,6 +33,7 @@ async def test_prompt_asset_api_override_flow(monkeypatch, tmp_path):
         listed = await c.get("/api/prompt-assets", headers=h)
         assert listed.status_code == 200
         assert any(a["id"] == "llm_judge.single.v1" for a in listed.json())
+        assert any(a["id"] == "llm_judge.single.v2" for a in listed.json())
 
         custom = await c.post(
             "/api/prompt-assets",
