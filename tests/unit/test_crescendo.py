@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import json
+
+import httpx
 import pytest
+import respx
 
 from airedteam.builtins.executors.crescendo import CrescendoExecutor
+from airedteam.builtins.targets.openai_compat import OpenAICompatNewSessionTarget
 from airedteam.core.plugins import BaseTarget
 from airedteam.core.types import Message, Prompt, Response
 
@@ -54,3 +59,33 @@ async def test_crescendo_uses_attacker_for_followups_only():
 async def test_crescendo_requires_attacker():
     with pytest.raises(ValueError, match="attacker"):
         CrescendoExecutor(attacker=None, goal="x")
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_crescendo_new_session_target_only_resets_first_turn():
+    route = respx.post("https://oai.example.com/v1/chat/completions").mock(
+        side_effect=[
+            httpx.Response(200, json={"choices": [{"message": {"content": "t1"}}]}),
+            httpx.Response(200, json={"choices": [{"message": {"content": "t2"}}]}),
+        ]
+    )
+    target = OpenAICompatNewSessionTarget(
+        name="target",
+        base_url="https://oai.example.com/v1",
+        model="m",
+        api_key="k",
+    )
+    attacker = ScriptedAttacker(["escalate"])
+    executor = CrescendoExecutor(attacker=attacker, max_turns=2, goal="goal")
+
+    result = await executor.run(Prompt(text="seed"), target, [])
+
+    assert result.status == "completed"
+    assert route.call_count == 2
+    first = json.loads(route.calls[0].request.content)
+    second = json.loads(route.calls[1].request.content)
+    assert first["new_session"] is True
+    assert "new_session" not in second
+    assert [message["role"] for message in second["messages"]] == ["user", "assistant", "user"]
+    await target.aclose()

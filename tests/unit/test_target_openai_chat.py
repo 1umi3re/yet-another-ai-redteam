@@ -120,3 +120,38 @@ async def test_new_session_target_chat_adds_new_session_flag():
     assert body["new_session"] is True
     assert body["messages"] == [{"role": "user", "content": "hi"}]
     await t.aclose()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_new_session_target_chat_does_not_reset_existing_transcript():
+    route = respx.post("https://oai.example.com/v1/chat/completions").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": "ok"}}],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+            },
+        )
+    )
+    t = OpenAICompatNewSessionTarget(
+        name="t",
+        base_url="https://oai.example.com/v1",
+        model="m",
+        api_key="k",
+    )
+    await t.chat(
+        [
+            Message(role="user", text="seed"),
+            Message(role="assistant", text="first response"),
+            Message(role="user", text="follow up"),
+        ]
+    )
+    body = json.loads(route.calls.last.request.content)
+    assert "new_session" not in body
+    assert body["messages"] == [
+        {"role": "user", "content": "seed"},
+        {"role": "assistant", "content": "first response"},
+        {"role": "user", "content": "follow up"},
+    ]
+    await t.aclose()

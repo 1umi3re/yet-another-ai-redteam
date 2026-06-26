@@ -33,6 +33,15 @@ class OpenAICompatTarget(BaseTarget):
             headers.update(extra_headers)
         self._client = httpx.AsyncClient(timeout=httpx.Timeout(timeout, connect=30.0), headers=headers)
 
+    def _prepare_chat_completions_payload(
+        self,
+        payload: dict,
+        *,
+        request_kind: str,
+        messages: list[Message] | None = None,
+    ) -> dict:
+        return payload
+
     async def _post_chat_completions(self, payload: dict) -> Response:
         t0 = time.perf_counter()
         r = await self._client.post(f"{self.base_url}/chat/completions", json=payload)
@@ -57,6 +66,7 @@ class OpenAICompatTarget(BaseTarget):
         body: dict = {"model": self.model, "messages": msgs}
         if self.temperature is not None:
             body["temperature"] = self.temperature
+        body = self._prepare_chat_completions_payload(body, request_kind="generate")
         return await self._post_chat_completions(body)
 
     async def check_stream_support(self, prompt: Prompt) -> tuple[bool, str | None]:
@@ -67,6 +77,7 @@ class OpenAICompatTarget(BaseTarget):
         body: dict = {"model": self.model, "messages": msgs, "stream": True}
         if self.temperature is not None:
             body["temperature"] = self.temperature
+        body = self._prepare_chat_completions_payload(body, request_kind="stream_check")
         try:
             async with self._client.stream(
                 "POST",
@@ -98,6 +109,7 @@ class OpenAICompatTarget(BaseTarget):
         body: dict = {"model": self.model, "messages": msgs}
         if self.temperature is not None:
             body["temperature"] = self.temperature
+        body = self._prepare_chat_completions_payload(body, request_kind="chat", messages=messages)
         return await self._post_chat_completions(body)
 
     async def aclose(self) -> None:
@@ -105,7 +117,15 @@ class OpenAICompatTarget(BaseTarget):
 
 
 class OpenAICompatNewSessionTarget(OpenAICompatTarget):
-    async def _post_chat_completions(self, payload: dict) -> Response:
+    def _prepare_chat_completions_payload(
+        self,
+        payload: dict,
+        *,
+        request_kind: str,
+        messages: list[Message] | None = None,
+    ) -> dict:
+        if request_kind == "chat" and any(message.role == "assistant" for message in messages or []):
+            return payload
         payload = dict(payload)
         payload["new_session"] = True
-        return await super()._post_chat_completions(payload)
+        return payload
