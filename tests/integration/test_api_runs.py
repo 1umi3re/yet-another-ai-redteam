@@ -773,7 +773,7 @@ async def test_resume_failed_run_continues_remaining_work_via_api(monkeypatch, t
         async def generate(self, prompt):
             calls.append(prompt.text)
             if prompt.text == "b" and calls.count("b") == 1:
-                await asyncio.sleep(0.2)
+                await asyncio.sleep(0.7)
             return Response(text=f"ok:{prompt.text}", raw={}, latency_ms=1)
 
         async def aclose(self):
@@ -829,7 +829,7 @@ async def test_resume_failed_run_continues_remaining_work_via_api(monkeypatch, t
                     "dataset": {"config_id": dataset.json()["id"]},
                     "executor": {"plugin": "single_turn"},
                     "concurrency": 1,
-                    "timeout_seconds": 0.05,
+                    "timeout_seconds": 0.5,
                 },
             },
         )

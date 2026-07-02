@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import uuid
 from dataclasses import asdict
 from datetime import UTC, datetime
@@ -39,10 +40,12 @@ from airedteam.services.converter_runtime import (
 )
 from airedteam.services.converter_templates import resolve_converter_attack_template
 from airedteam.services.prompt_assets import PromptAssetService
+from airedteam.services.run_monitor import RunSpecSummary
 from airedteam.storage.models import Attempt, Run, Score
 
 TERMINAL_RUN_STATUSES = {"completed", "failed", "cancelled"}
 STOP_REQUEST_STATUSES = {"pausing", "paused", "cancelled"}
+logger = logging.getLogger(__name__)
 
 
 def _message_payload(message) -> dict:
@@ -117,6 +120,7 @@ class RunService:
         prompt_assets=None,
         response_inline_max_bytes: int = 8192,
         max_concurrency: int = 8,
+        monitor=None,
     ) -> None:
         self._sf = session_factory
         self._blob = blob_store
@@ -127,6 +131,7 @@ class RunService:
         self._prompt_assets = prompt_assets or PromptAssetService(session_factory, blob_store)
         self._inline_max = response_inline_max_bytes
         self._max_conc = max_concurrency
+        self._monitor = monitor
         self._tasks: dict[str, asyncio.Task] = {}
 
     async def create_run(self, *, name: str, runspec_dict: dict) -> Run:
@@ -138,6 +143,7 @@ class RunService:
             s.add(row)
             await s.commit()
             await s.refresh(row)
+            await self._notify_run_created(row, spec)
             return row
 
     async def start_run(self, run_id: str) -> None:
@@ -357,6 +363,98 @@ class RunService:
             metadata["judge_name"] = judge_cfg.name if judge_cfg is not None else judge_cfg_id
         scorer = build_scorer({"plugin": ref["plugin"], "params": params})
         return scorer, closeables, metadata
+
+    async def _monitor_summary(self, spec: RunSpec) -> RunSpecSummary:
+        targets = []
+        for ref in spec.targets:
+            if ref.config_id:
+                try:
+                    target = await self._targets.get(ref.config_id)
+                except Exception:
+                    target = None
+                targets.append(target.name if target is not None else ref.config_id)
+            else:
+                targets.append(ref.plugin or "(target)")
+
+        dataset_label = spec.dataset.plugin or spec.dataset.config_id or "(dataset)"
+        dataset_count = None
+        if spec.dataset.config_id:
+            try:
+                dataset = await self._datasets.get(spec.dataset.config_id)
+            except Exception:
+                dataset = None
+            if dataset is not None:
+                dataset_label = dataset.name
+                dataset_count = dataset.item_count
+
+        methods = []
+        if spec.executors:
+            methods = [ref.plugin or ref.config_id or "(executor)" for ref in spec.executors]
+        elif spec.converters:
+            methods = [ref.plugin or ref.config_id or "(converter)" for ref in spec.converters]
+        elif spec.executor is not None:
+            methods = [spec.executor.plugin or spec.executor.config_id or "(executor)"]
+
+        scorers = [ref.plugin or ref.config_id or "(scorer)" for ref in spec.scorers]
+        estimated_items = dataset_count
+        if spec.sampling is not None and spec.sampling.limit is not None:
+            estimated_items = (
+                min(dataset_count, spec.sampling.limit) if dataset_count is not None else spec.sampling.limit
+            )
+        variant_count = len(spec.executors) if spec.executors else max(1, len(spec.converters))
+        estimated_total = None if estimated_items is None else estimated_items * len(spec.targets) * variant_count
+        return RunSpecSummary(
+            targets=targets,
+            methods=methods,
+            scorers=scorers,
+            dataset=dataset_label,
+            estimated_total=estimated_total,
+        )
+
+    async def _notify_run_created(self, run: Run, spec: RunSpec) -> None:
+        if self._monitor is None:
+            return
+        try:
+            await self._monitor.notify_created(run, spec, await self._monitor_summary(spec))
+        except Exception:
+            logger.exception("run monitor failed during create notification")
+
+    async def _notify_run_started(
+        self,
+        run_id: str,
+        *,
+        spec: RunSpec,
+        progress_total: int,
+        filtered_count: int,
+    ) -> None:
+        if self._monitor is None:
+            return
+        try:
+            await self._monitor.notify_started(
+                run_id,
+                spec=spec,
+                summary=await self._monitor_summary(spec),
+                progress_total=progress_total,
+                filtered_count=filtered_count,
+            )
+        except Exception:
+            logger.exception("run monitor failed during start notification")
+
+    async def _notify_run_finished(self, run_id: str) -> None:
+        if self._monitor is None:
+            return
+        try:
+            await self._monitor.notify_finished(run_id)
+        except Exception:
+            logger.exception("run monitor failed during finish notification")
+
+    async def _evaluate_run_monitor(self, run_id: str) -> None:
+        if self._monitor is None or not self._monitor.enabled:
+            return
+        try:
+            await self._monitor.evaluate_running(run_id)
+        except Exception:
+            logger.exception("run monitor failed during running evaluation")
 
     async def _attempt_result_from_row(self, attempt: Attempt) -> AttemptResult:
         response_text = attempt.response_text
@@ -704,6 +802,7 @@ class RunService:
         retry_work_keys: set[str] | None = None,
     ) -> None:
         closeables = []
+        monitor_watch_task: asyncio.Task | None = None
         async with self._sf() as s:
             run = await s.get(Run, run_id)
             if run is None:
@@ -784,6 +883,7 @@ class RunService:
                 return not (retry_failed and status == "failed")
 
             attempt_id_by_index: dict[int, str] = {}
+            run_monitor_enabled = self._monitor is not None and self._monitor.enabled
 
             async def on_attempt(ar, target_name, dataset_item_id, work_key, original_prompt):
                 text = ar.response.text if ar.response else None
@@ -856,17 +956,22 @@ class RunService:
                     existing_work_statuses[work_key] = ar.status
                     idx = len(attempt_id_by_index)
                     attempt_id_by_index[idx] = attempt_id
+                if run_monitor_enabled:
+                    await self._evaluate_run_monitor(run_id)
 
             async def on_score(idx, sr):
                 attempt_id = attempt_id_by_index.get(idx)
                 if attempt_id is None:
                     return
                 await self._write_score(run_id, attempt_id, sr)
+                if run_monitor_enabled:
+                    await self._evaluate_run_monitor(run_id)
 
             if executor_variants is None:
                 total = len(prompts)
                 progress_total = total * len(targets) * max(1, len(converters))
                 filtered_json = {}
+                filtered_count = 0
             else:
                 filtered_items = []
                 progress_total = 0
@@ -888,6 +993,7 @@ class RunService:
                                     }
                                 )
                 filtered_json = {"by_language": filtered_items}
+                filtered_count = len(filtered_items)
             existing_work_count = await self._existing_work_count(run_id)
             async with self._sf() as s:
                 await s.execute(
@@ -900,6 +1006,14 @@ class RunService:
                     )
                 )
                 await s.commit()
+            await self._notify_run_started(
+                run_id,
+                spec=spec,
+                progress_total=progress_total,
+                filtered_count=filtered_count,
+            )
+            if self._monitor is not None and self._monitor.enabled:
+                monitor_watch_task = asyncio.create_task(self._monitor.watch_run(run_id))
 
             timeout_deadline = None
             run_timed_out = False
@@ -931,6 +1045,7 @@ class RunService:
             )
             engine_result = await run_coro
             if await self._is_cancelled(run_id):
+                await self._notify_run_finished(run_id)
                 return
             current_status = await self._run_status(run_id)
             if engine_result.stopped and current_status in {"pausing", "paused"}:
@@ -942,6 +1057,7 @@ class RunService:
                     )
                     await s.commit()
                 await self._bus.publish(run_id, {"event": "run.paused", "status": "paused"})
+                await self._notify_run_finished(run_id)
                 return
             if run_timed_out:
                 timed_out_with_remaining_work = True
@@ -966,6 +1082,7 @@ class RunService:
                     )
                     await s.commit()
                 await self._bus.publish(run_id, {"event": "run.failed", "status": "failed"})
+                await self._notify_run_finished(run_id)
                 return
             async with self._sf() as s:
                 await s.execute(
@@ -975,6 +1092,7 @@ class RunService:
                 )
                 await s.commit()
             await self._bus.publish(run_id, {"event": "run.finished", "status": "completed"})
+            await self._notify_run_finished(run_id)
         except asyncio.CancelledError:
             async with self._sf() as s:
                 await s.execute(
@@ -984,6 +1102,7 @@ class RunService:
                 )
                 await s.commit()
             await self._bus.publish(run_id, {"event": "run.cancelled", "status": "cancelled"})
+            await self._notify_run_finished(run_id)
             return
         except Exception as e:
             async with self._sf() as s:
@@ -994,8 +1113,12 @@ class RunService:
                 )
                 await s.commit()
             await self._bus.publish(run_id, {"event": "run.failed", "status": "failed"})
+            await self._notify_run_finished(run_id)
             raise
         finally:
+            if monitor_watch_task is not None:
+                monitor_watch_task.cancel()
+                await asyncio.gather(monitor_watch_task, return_exceptions=True)
             for obj in closeables:
                 try:
                     await obj.aclose()

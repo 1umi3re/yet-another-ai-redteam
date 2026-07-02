@@ -12,6 +12,7 @@ const Runs = lazy(() => import("./pages/Runs"));
 const RunDetail = lazy(() => import("./pages/RunDetail"));
 const NewRun = lazy(() => import("./pages/NewRun"));
 const ManualConsole = lazy(() => import("./pages/ManualConsole"));
+const Settings = lazy(() => import("./pages/Settings"));
 
 function Protected({ children }: { children: JSX.Element }) {
   const t = useAuth(s => s.token);
@@ -34,6 +35,7 @@ export default function App() {
           <Route path="/runs/new" element={<NewRun />} />
           <Route path="/runs/:id" element={<RunDetail />} />
           <Route path="/manual" element={<ManualConsole />} />
+          <Route path="/settings" element={<Settings />} />
           <Route path="/prompt-assets" element={<Navigate to="/assets?tab=prompt-templates" replace />} />
         </Route>
       </Routes>

@@ -13,6 +13,9 @@ def test_settings_defaults(monkeypatch, tmp_path):
     assert s.max_concurrency >= 1
     assert s.jwt_ttl_minutes == 60 * 24 * 7
     assert s.blob_dir == tmp_path
+    assert s.monitor_enabled is True
+    assert s.dingtalk_webhook_url is None
+    assert s.monitor_failure_rate_threshold == 0.2
 
 
 def test_settings_requires_master_key(monkeypatch):

@@ -12,6 +12,7 @@ from airedteam.services.custom_scenarios import CustomScenarioService
 from airedteam.services.datasets import DatasetService
 from airedteam.services.manual import ManualService
 from airedteam.services.prompt_assets import PromptAssetService
+from airedteam.services.run_monitor import DingTalkNotifier, MonitoringConfigStore, RunMonitorService
 from airedteam.services.runs import RunService
 from airedteam.services.target_configs import TargetConfigService
 from airedteam.storage.blobs import LocalBlobStore
@@ -32,6 +33,8 @@ class AppState:
     datasets: DatasetService
     converters: ConverterChainService
     prompt_assets: PromptAssetService
+    monitor: RunMonitorService
+    monitor_config: MonitoringConfigStore
     runs: RunService
     manual: ManualService
     attack_methods: AttackMethodCategoryService
@@ -49,6 +52,24 @@ def build_state(settings: Settings | None = None) -> AppState:
     datasets = DatasetService(SessionLocal, blob)
     prompt_assets = PromptAssetService(SessionLocal, blob)
     converters = ConverterChainService(targets, prompt_assets)
+    notifier = DingTalkNotifier(
+        webhook_url=s.dingtalk_webhook_url,
+        secret=s.dingtalk_secret,
+        timeout_seconds=s.dingtalk_timeout_seconds,
+        enabled=s.monitor_enabled,
+    )
+    monitor = RunMonitorService(
+        SessionLocal,
+        notifier,
+        enabled=s.monitor_enabled,
+        failure_rate_threshold=s.monitor_failure_rate_threshold,
+        empty_response_rate_threshold=s.monitor_empty_response_rate_threshold,
+        score_failure_rate_threshold=s.monitor_score_failure_rate_threshold,
+        min_samples=s.monitor_min_samples,
+        no_progress_seconds=s.monitor_no_progress_seconds,
+        alert_cooldown_seconds=s.monitor_alert_cooldown_seconds,
+    )
+    monitor_config = MonitoringConfigStore(settings=s, monitor=monitor, root=s.blob_dir)
     runs = RunService(
         SessionLocal,
         blob,
@@ -59,6 +80,7 @@ def build_state(settings: Settings | None = None) -> AppState:
         prompt_assets=prompt_assets,
         response_inline_max_bytes=s.response_inline_max_bytes,
         max_concurrency=s.max_concurrency,
+        monitor=monitor,
     )
     manual = ManualService(SessionLocal, blob, targets, converters, prompt_assets)
     attack_methods = AttackMethodCategoryService(SessionLocal)
@@ -73,6 +95,8 @@ def build_state(settings: Settings | None = None) -> AppState:
         datasets,
         converters,
         prompt_assets,
+        monitor,
+        monitor_config,
         runs,
         manual,
         attack_methods,

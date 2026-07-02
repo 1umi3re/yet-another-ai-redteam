@@ -1,6 +1,17 @@
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/auth";
-import { Shield, Target, Database, PlayCircle, ListChecks, LogOut, Sparkles, MessageSquare, Tags } from "lucide-react";
+import {
+  Shield,
+  Target,
+  Database,
+  PlayCircle,
+  ListChecks,
+  LogOut,
+  Sparkles,
+  MessageSquare,
+  Tags,
+  Settings as SettingsIcon,
+} from "lucide-react";
 import clsx from "clsx";
 import { useI18n } from "../lib/i18n";
 import { LanguageSwitch } from "./LanguageSwitch";
@@ -13,6 +24,7 @@ const nav = [
   { to: "/runs/new",  labelKey: "New run",   icon: PlayCircle },
   { to: "/runs",      labelKey: "Runs",      icon: ListChecks },
   { to: "/manual",    labelKey: "Manual Console", icon: MessageSquare },
+  { to: "/settings",  labelKey: "Settings", icon: SettingsIcon },
 ];
 
 const assetSubnav = [
