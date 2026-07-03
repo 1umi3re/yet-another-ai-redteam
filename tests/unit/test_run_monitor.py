@@ -1,5 +1,5 @@
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
@@ -173,3 +173,97 @@ async def test_monitor_alerts_on_empty_responses_and_score_failures(session_fact
     titles = {item["title"] for item in notifier.sent}
     assert "自动化测试空响应率过高" in titles
     assert "自动化测试评分失败率过高" in titles
+
+
+@pytest.mark.asyncio
+async def test_monitor_alerts_on_recent_empty_response_and_score_failure_rates(session_factory):
+    now = datetime.now(UTC).replace(tzinfo=None)
+    old = now - timedelta(minutes=10)
+    recent = now - timedelta(seconds=10)
+    async with session_factory() as s:
+        s.add(
+            Run(
+                id="run-3",
+                name="run",
+                runspec_yaml="name: run",
+                status="running",
+                progress_total=6,
+                progress_done=6,
+                started_at=old,
+            )
+        )
+        attempts = []
+        scores = []
+        for idx in range(4):
+            attempt_id = f"old-attempt-{idx}"
+            attempts.append(
+                Attempt(
+                    id=attempt_id,
+                    run_id="run-3",
+                    target_id="target",
+                    target_name="target",
+                    prompt_text=f"old-{idx}",
+                    response_text="ok",
+                    converter_chain=[],
+                    status="completed",
+                    created_at=old,
+                )
+            )
+            scores.append(
+                Score(
+                    id=f"old-score-{idx}",
+                    attempt_id=attempt_id,
+                    scorer="llm_judge",
+                    value_json={"label": False},
+                    created_at=old,
+                )
+            )
+        for idx in range(2):
+            attempt_id = f"recent-attempt-{idx}"
+            attempts.append(
+                Attempt(
+                    id=attempt_id,
+                    run_id="run-3",
+                    target_id="target",
+                    target_name="target",
+                    prompt_text=f"recent-{idx}",
+                    response_text="",
+                    converter_chain=[],
+                    status="completed",
+                    created_at=recent,
+                )
+            )
+            scores.append(
+                Score(
+                    id=f"recent-score-{idx}",
+                    attempt_id=attempt_id,
+                    scorer="llm_judge",
+                    value_json={"status": "failed", "error": "judge unavailable"},
+                    created_at=recent,
+                )
+            )
+        s.add_all(attempts + scores)
+        await s.commit()
+    notifier = FakeNotifier()
+    monitor = RunMonitorService(
+        session_factory,
+        notifier,
+        min_samples=2,
+        rate_window_seconds=60,
+        empty_response_rate_threshold=0.5,
+        score_failure_rate_threshold=0.5,
+    )
+
+    await monitor.evaluate_running("run-3")
+
+    titles = {item["title"] for item in notifier.sent}
+    assert "自动化测试空响应率过高" not in titles
+    assert "自动化测试评分失败率过高" not in titles
+    assert "自动化测试近期空响应率过高" in titles
+    assert "自动化测试近期评分失败率过高" in titles
+    recent_empty_alert = next(item for item in notifier.sent if item["title"] == "自动化测试近期空响应率过高")
+    assert "近期空响应率: 100.0%" in recent_empty_alert["text"]
+    assert "窗口样本: 2" in recent_empty_alert["text"]
+    recent_score_alert = next(item for item in notifier.sent if item["title"] == "自动化测试近期评分失败率过高")
+    assert "近期评分失败率: 100.0%" in recent_score_alert["text"]
+    assert "窗口评分数: 2" in recent_score_alert["text"]

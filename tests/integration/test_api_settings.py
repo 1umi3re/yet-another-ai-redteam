@@ -43,6 +43,7 @@ async def test_monitoring_settings_api_updates_and_sends_test(monkeypatch, tmp_p
                 "monitor_empty_response_rate_threshold": 0.15,
                 "monitor_score_failure_rate_threshold": 0.25,
                 "monitor_min_samples": 5,
+                "monitor_rate_window_seconds": 180,
                 "monitor_no_progress_seconds": 60,
                 "monitor_alert_cooldown_seconds": 120,
             },
@@ -53,6 +54,7 @@ async def test_monitoring_settings_api_updates_and_sends_test(monkeypatch, tmp_p
         assert body["dingtalk_webhook_configured"] is True
         assert "access_token=%2A%2A%2A" in body["dingtalk_webhook_url_display"]
         assert body["monitor_failure_rate_threshold"] == 0.3
+        assert body["monitor_rate_window_seconds"] == 180
 
         sent = await c.post("/api/settings/monitoring/test", headers=h)
         assert sent.status_code == 200

@@ -21,10 +21,11 @@ class Settings(BaseSettings):
     dingtalk_webhook_url: str | None = None
     dingtalk_secret: str | None = None
     dingtalk_timeout_seconds: float = 5.0
-    monitor_failure_rate_threshold: float = 0.2
+    monitor_failure_rate_threshold: float = 0.5
     monitor_empty_response_rate_threshold: float = 0.1
     monitor_score_failure_rate_threshold: float = 0.2
     monitor_min_samples: int = 20
+    monitor_rate_window_seconds: int = 300
     monitor_no_progress_seconds: int = 600
     monitor_alert_cooldown_seconds: int = 900
 

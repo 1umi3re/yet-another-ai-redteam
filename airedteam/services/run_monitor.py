@@ -9,7 +9,7 @@ import logging
 import time
 import urllib.parse
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -117,6 +117,11 @@ class RunMetrics:
     scores: int
     failed_scores: int
     unknown_scores: int
+    recent_window_seconds: int
+    recent_completed_attempts: int
+    recent_empty_responses: int
+    recent_scores: int
+    recent_failed_scores: int
     tokens_in: int
     tokens_out: int
     latency_ms: int
@@ -142,6 +147,14 @@ class RunMetrics:
     def score_failure_rate(self) -> float | None:
         return self.failed_scores / self.scores if self.scores else None
 
+    @property
+    def recent_empty_response_rate(self) -> float | None:
+        return self.recent_empty_responses / self.recent_completed_attempts if self.recent_completed_attempts else None
+
+    @property
+    def recent_score_failure_rate(self) -> float | None:
+        return self.recent_failed_scores / self.recent_scores if self.recent_scores else None
+
 
 class RunMonitorService:
     def __init__(
@@ -150,10 +163,11 @@ class RunMonitorService:
         notifier: DingTalkNotifier,
         *,
         enabled: bool = True,
-        failure_rate_threshold: float = 0.2,
+        failure_rate_threshold: float = 0.5,
         empty_response_rate_threshold: float = 0.1,
         score_failure_rate_threshold: float = 0.2,
         min_samples: int = 20,
+        rate_window_seconds: int = 300,
         no_progress_seconds: int = 600,
         alert_cooldown_seconds: int = 900,
     ) -> None:
@@ -164,6 +178,7 @@ class RunMonitorService:
         self._empty_response_rate_threshold = empty_response_rate_threshold
         self._score_failure_rate_threshold = score_failure_rate_threshold
         self._min_samples = max(1, min_samples)
+        self._rate_window_seconds = max(1, rate_window_seconds)
         self._no_progress_seconds = max(1, no_progress_seconds)
         self._alert_cooldown_seconds = max(1, alert_cooldown_seconds)
         self._sent_alerts: dict[tuple[str, str], float] = {}
@@ -175,10 +190,11 @@ class RunMonitorService:
 
     def apply_config(self, config: dict[str, Any]) -> None:
         self._monitor_enabled = bool(config.get("monitor_enabled", True))
-        self._failure_rate_threshold = float(config.get("monitor_failure_rate_threshold", 0.2))
+        self._failure_rate_threshold = float(config.get("monitor_failure_rate_threshold", 0.5))
         self._empty_response_rate_threshold = float(config.get("monitor_empty_response_rate_threshold", 0.1))
         self._score_failure_rate_threshold = float(config.get("monitor_score_failure_rate_threshold", 0.2))
         self._min_samples = max(1, int(config.get("monitor_min_samples", 20)))
+        self._rate_window_seconds = max(1, int(config.get("monitor_rate_window_seconds", 300)))
         self._no_progress_seconds = max(1, int(config.get("monitor_no_progress_seconds", 600)))
         self._alert_cooldown_seconds = max(1, int(config.get("monitor_alert_cooldown_seconds", 900)))
         self._notifier.configure(
@@ -332,6 +348,23 @@ class RunMonitorService:
                 self._empty_response_rate_threshold,
             )
         if (
+            metrics.recent_completed_attempts >= self._min_samples
+            and (metrics.recent_empty_response_rate or 0) >= self._empty_response_rate_threshold
+        ):
+            await self._send_metric_alert(
+                metrics,
+                "recent_empty_response_rate",
+                "自动化测试近期空响应率过高",
+                "近期空响应率",
+                metrics.recent_empty_response_rate,
+                self._empty_response_rate_threshold,
+                details=[
+                    f"- 时间窗口: 最近 {_format_timeout(metrics.recent_window_seconds)}",
+                    f"- 窗口样本: {metrics.recent_completed_attempts}",
+                    f"- 窗口空响应: {metrics.recent_empty_responses}",
+                ],
+            )
+        if (
             metrics.scores >= self._min_samples
             and (metrics.score_failure_rate or 0) >= self._score_failure_rate_threshold
         ):
@@ -342,6 +375,23 @@ class RunMonitorService:
                 "评分失败率",
                 metrics.score_failure_rate,
                 self._score_failure_rate_threshold,
+            )
+        if (
+            metrics.recent_scores >= self._min_samples
+            and (metrics.recent_score_failure_rate or 0) >= self._score_failure_rate_threshold
+        ):
+            await self._send_metric_alert(
+                metrics,
+                "recent_score_failure_rate",
+                "自动化测试近期评分失败率过高",
+                "近期评分失败率",
+                metrics.recent_score_failure_rate,
+                self._score_failure_rate_threshold,
+                details=[
+                    f"- 时间窗口: 最近 {_format_timeout(metrics.recent_window_seconds)}",
+                    f"- 窗口评分数: {metrics.recent_scores}",
+                    f"- 窗口评分失败: {metrics.recent_failed_scores}",
+                ],
             )
         if metrics.progress_total == 0 and metrics.status == "running":
             await self._send_alert(
@@ -393,6 +443,7 @@ class RunMonitorService:
         label: str,
         value: float | None,
         threshold: float,
+        details: list[str] | None = None,
     ) -> None:
         lines = [
             f"### {title}",
@@ -403,6 +454,8 @@ class RunMonitorService:
             f"- 进度: {metrics.progress_done}/{metrics.progress_total}",
             f"- 运行失败/空响应/评分失败: {metrics.failed_attempts}/{metrics.empty_responses}/{metrics.failed_scores}",
         ]
+        if details:
+            lines.extend(details)
         if metrics.recent_errors:
             lines.append("- 最近错误:")
             lines.extend(f"  - {_truncate(item, 180)}" for item in metrics.recent_errors[:3])
@@ -458,6 +511,11 @@ class RunMonitorService:
         tokens_out = 0
         latency_ms = 0
         recent_errors: list[str] = []
+        recent_cutoff = _utc_now_naive() - timedelta(seconds=self._rate_window_seconds)
+        recent_completed_attempts = 0
+        recent_empty_responses = 0
+        recent_scores = 0
+        recent_failed_scores = 0
 
         for attempt in attempts:
             if attempt.status == "failed":
@@ -466,8 +524,13 @@ class RunMonitorService:
                     recent_errors.append(f"{_attempt_label(attempt)}: {attempt.error}")
             if attempt.status == "completed":
                 completed_attempts += 1
+                in_recent_window = attempt.created_at >= recent_cutoff
+                if in_recent_window:
+                    recent_completed_attempts += 1
                 if _is_empty_response(attempt):
                     empty_responses += 1
+                    if in_recent_window:
+                        recent_empty_responses += 1
             tokens_in += attempt.tokens_in or 0
             tokens_out += attempt.tokens_out or 0
             latency_ms += attempt.latency_ms or 0
@@ -495,7 +558,12 @@ class RunMonitorService:
         failed_scores = 0
         unknown_scores = 0
         for score in scores:
-            if score_status(score.value_json) == "failed":
+            failed_score = score_status(score.value_json) == "failed"
+            if score.created_at >= recent_cutoff:
+                recent_scores += 1
+                if failed_score:
+                    recent_failed_scores += 1
+            if failed_score:
                 failed_scores += 1
                 value = score.value_json or {}
                 if isinstance(value, dict) and value.get("error"):
@@ -525,6 +593,11 @@ class RunMonitorService:
             scores=len(scores),
             failed_scores=failed_scores,
             unknown_scores=unknown_scores,
+            recent_window_seconds=self._rate_window_seconds,
+            recent_completed_attempts=recent_completed_attempts,
+            recent_empty_responses=recent_empty_responses,
+            recent_scores=recent_scores,
+            recent_failed_scores=recent_failed_scores,
             tokens_in=tokens_in,
             tokens_out=tokens_out,
             latency_ms=latency_ms,
@@ -558,6 +631,7 @@ class MonitoringConfigStore:
             "monitor_empty_response_rate_threshold",
             "monitor_score_failure_rate_threshold",
             "monitor_min_samples",
+            "monitor_rate_window_seconds",
             "monitor_no_progress_seconds",
             "monitor_alert_cooldown_seconds",
         ):
@@ -589,6 +663,7 @@ class MonitoringConfigStore:
             "monitor_empty_response_rate_threshold": settings.monitor_empty_response_rate_threshold,
             "monitor_score_failure_rate_threshold": settings.monitor_score_failure_rate_threshold,
             "monitor_min_samples": settings.monitor_min_samples,
+            "monitor_rate_window_seconds": settings.monitor_rate_window_seconds,
             "monitor_no_progress_seconds": settings.monitor_no_progress_seconds,
             "monitor_alert_cooldown_seconds": settings.monitor_alert_cooldown_seconds,
         }
@@ -623,6 +698,7 @@ class MonitoringConfigStore:
             "monitor_empty_response_rate_threshold": self._config.get("monitor_empty_response_rate_threshold"),
             "monitor_score_failure_rate_threshold": self._config.get("monitor_score_failure_rate_threshold"),
             "monitor_min_samples": self._config.get("monitor_min_samples"),
+            "monitor_rate_window_seconds": self._config.get("monitor_rate_window_seconds"),
             "monitor_no_progress_seconds": self._config.get("monitor_no_progress_seconds"),
             "monitor_alert_cooldown_seconds": self._config.get("monitor_alert_cooldown_seconds"),
         }
@@ -729,6 +805,10 @@ def _duration_ms(started_at: datetime | None, finished_at: datetime | None) -> i
     if started_at is None or finished_at is None:
         return None
     return max(0, int((finished_at - started_at).total_seconds() * 1000))
+
+
+def _utc_now_naive() -> datetime:
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 def _top_lines(label: str, rows: list[dict[str, Any]]) -> list[str]:

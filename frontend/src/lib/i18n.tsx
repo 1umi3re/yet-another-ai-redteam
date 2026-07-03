@@ -552,6 +552,7 @@ const zh: Record<string, string> = {
   "Seconds": "秒",
   "Minimum samples": "最小样本数",
   "Attempts or scores required before threshold alerts.": "触发阈值告警前需要达到的尝试数或评分数。",
+  "Rate window": "失败率统计窗口",
   "Attempt failure threshold": "任务失败率阈值",
   "Empty response threshold": "空响应率阈值",
   "Score failure threshold": "评分失败率阈值",

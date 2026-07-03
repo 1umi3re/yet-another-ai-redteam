@@ -21,6 +21,7 @@ class MonitoringSettingsPatch(BaseModel):
     monitor_empty_response_rate_threshold: float | None = Field(default=None, ge=0, le=1)
     monitor_score_failure_rate_threshold: float | None = Field(default=None, ge=0, le=1)
     monitor_min_samples: int | None = Field(default=None, ge=1)
+    monitor_rate_window_seconds: int | None = Field(default=None, ge=1)
     monitor_no_progress_seconds: int | None = Field(default=None, ge=1)
     monitor_alert_cooldown_seconds: int | None = Field(default=None, ge=1)
 

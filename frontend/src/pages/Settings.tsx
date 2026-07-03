@@ -24,6 +24,7 @@ type MonitoringSettings = {
   monitor_empty_response_rate_threshold: number;
   monitor_score_failure_rate_threshold: number;
   monitor_min_samples: number;
+  monitor_rate_window_seconds: number;
   monitor_no_progress_seconds: number;
   monitor_alert_cooldown_seconds: number;
 };
@@ -39,6 +40,7 @@ type MonitoringForm = {
   monitor_empty_response_rate_threshold: string;
   monitor_score_failure_rate_threshold: string;
   monitor_min_samples: string;
+  monitor_rate_window_seconds: string;
   monitor_no_progress_seconds: string;
   monitor_alert_cooldown_seconds: string;
 };
@@ -88,6 +90,7 @@ function MonitoringSettingsPanel() {
       monitor_empty_response_rate_threshold: toPercent(data.monitor_empty_response_rate_threshold),
       monitor_score_failure_rate_threshold: toPercent(data.monitor_score_failure_rate_threshold),
       monitor_min_samples: String(data.monitor_min_samples ?? 20),
+      monitor_rate_window_seconds: String(data.monitor_rate_window_seconds ?? 300),
       monitor_no_progress_seconds: String(data.monitor_no_progress_seconds ?? 600),
       monitor_alert_cooldown_seconds: String(data.monitor_alert_cooldown_seconds ?? 900),
     });
@@ -107,6 +110,7 @@ function MonitoringSettingsPanel() {
         monitor_empty_response_rate_threshold: Number(form.monitor_empty_response_rate_threshold) / 100,
         monitor_score_failure_rate_threshold: Number(form.monitor_score_failure_rate_threshold) / 100,
         monitor_min_samples: Number(form.monitor_min_samples),
+        monitor_rate_window_seconds: Number(form.monitor_rate_window_seconds),
         monitor_no_progress_seconds: Number(form.monitor_no_progress_seconds),
         monitor_alert_cooldown_seconds: Number(form.monitor_alert_cooldown_seconds),
       };
@@ -245,6 +249,15 @@ function MonitoringSettingsPanel() {
                 onChange={e => setForm({ ...form, monitor_min_samples: e.target.value })}
               />
             </Field>
+            <Field label={t("Rate window")} hint={t("Seconds")}>
+              <Input
+                type="number"
+                min="1"
+                step="1"
+                value={form.monitor_rate_window_seconds}
+                onChange={e => setForm({ ...form, monitor_rate_window_seconds: e.target.value })}
+              />
+            </Field>
             <Field label={t("Attempt failure threshold")} hint="%">
               <Input
                 type="number"
@@ -362,6 +375,7 @@ function validate(form: MonitoringForm): { valid: boolean; message: string } {
   }
   const positiveIntegerFields = [
     form.monitor_min_samples,
+    form.monitor_rate_window_seconds,
     form.monitor_no_progress_seconds,
     form.monitor_alert_cooldown_seconds,
   ];

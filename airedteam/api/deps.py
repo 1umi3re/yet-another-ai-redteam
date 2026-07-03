@@ -66,6 +66,7 @@ def build_state(settings: Settings | None = None) -> AppState:
         empty_response_rate_threshold=s.monitor_empty_response_rate_threshold,
         score_failure_rate_threshold=s.monitor_score_failure_rate_threshold,
         min_samples=s.monitor_min_samples,
+        rate_window_seconds=s.monitor_rate_window_seconds,
         no_progress_seconds=s.monitor_no_progress_seconds,
         alert_cooldown_seconds=s.monitor_alert_cooldown_seconds,
     )
