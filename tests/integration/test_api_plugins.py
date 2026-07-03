@@ -180,6 +180,11 @@ async def test_list_plugins_and_scenarios(monkeypatch, tmp_path):
         assert template_jailbreak_asset["purpose_filter"] == "attack_template"
         assert "best_of_n" in body["executors"]
         assert body["params"]["executors"]["best_of_n"]["attempts"]["default"] == "5"
+        assert "glossopetrae_single_turn" in body["executors"]
+        assert "glossopetrae_multi_turn" in body["executors"]
+        gloss_params = body["params"]["executors"]["glossopetrae_single_turn"]
+        assert gloss_params["seed"]["default"] == "1337"
+        assert gloss_params["word_order"]["options"] == ["SOV", "SVO", "VSO", "VOS", "OVS", "OSV"]
         assert "base64" in body["executor_methods"]
         assert body["executor_method_categories"]["base64"] == "encoding"
         assert body["params"]["executor_methods"]["base64"]["wrap"]["default"] is True
@@ -190,6 +195,8 @@ async def test_list_plugins_and_scenarios(monkeypatch, tmp_path):
         assert body["executor_attack_categories"]["zh_classical_chinese"] == "reformulation"
         assert body["executor_attack_categories"]["add_image_text"] == "multimodal_injection"
         assert body["executor_attack_categories"]["crescendo"] == "multi_turn_escalation"
+        assert body["executor_attack_categories"]["glossopetrae_single_turn"] == "encoding_obfuscation"
+        assert body["executor_attack_categories"]["glossopetrae_multi_turn"] == "encoding_obfuscation"
         assert body["executor_technical_categories"]["base64"] == "encoding"
         assert body["executor_technical_categories"]["prefix"] == "prompt_framing"
         assert body["executor_attack_category_meta"]["encoding_obfuscation"]["name"] == "编码 / 混淆"
@@ -202,11 +209,15 @@ async def test_list_plugins_and_scenarios(monkeypatch, tmp_path):
         assert body["executor_language_support"]["add_image_text"] == []
         assert body["executor_language_support"]["single_turn"] == ["en", "zh"]
         assert body["executor_language_support"]["general_multi_turn"] == ["en", "zh"]
+        assert body["executor_language_support"]["glossopetrae_single_turn"] == ["en", "zh"]
+        assert body["executor_language_support"]["glossopetrae_multi_turn"] == ["en", "zh"]
         assert body["executor_method_descriptions"]["forced_response"]
         assert body["executor_method_descriptions"]["zh_pinyin"]
         assert body["executor_method_descriptions"]["zh_classical_chinese"]
         assert body["executor_method_descriptions"]["forged_tool_result"]
         assert body["executor_method_descriptions"]["developer_mode"]
+        assert body["executor_method_descriptions"]["glossopetrae_single_turn"]
+        assert body["executor_method_descriptions"]["glossopetrae_multi_turn"]
         assert "jailbreak_iterative" in body["executors"]
         jailbreak_params = body["params"]["executors"]["jailbreak_iterative"]
         assert jailbreak_params["judge_config_id"]["type"] == "target_ref"

@@ -855,6 +855,26 @@ PARAM_SCHEMAS: dict[str, dict[str, dict]] = {
             "attempts": {"type": "string", "default": "5", "label": "Attempts"},
             "seed": {"type": "string", "default": "", "label": "Seed (optional)"},
         },
+        "glossopetrae_single_turn": {
+            "seed": {"type": "string", "default": "1337", "label": "Seed"},
+            "word_order": {
+                "type": "enum",
+                "options": ["SOV", "SVO", "VSO", "VOS", "OVS", "OSV"],
+                "default": "SOV",
+                "label": "Word order",
+            },
+            "language_name": {"type": "string", "default": "Glossopetrae", "label": "Language name"},
+        },
+        "glossopetrae_multi_turn": {
+            "seed": {"type": "string", "default": "1337", "label": "Seed"},
+            "word_order": {
+                "type": "enum",
+                "options": ["SOV", "SVO", "VSO", "VOS", "OVS", "OSV"],
+                "default": "SOV",
+                "label": "Word order",
+            },
+            "language_name": {"type": "string", "default": "Glossopetrae", "label": "Language name"},
+        },
         "crescendo": {
             "attacker_config_id": {
                 "type": "target_ref",

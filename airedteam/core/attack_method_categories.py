@@ -183,6 +183,8 @@ DEFAULT_ATTACK_METHOD_CATEGORIES: tuple[AttackMethodCategory, ...] = (
 NATIVE_EXECUTOR_ATTACK_CATEGORIES: dict[str, str] = {
     "split_executor": "payload_splitting",
     "best_of_n": "adversarial_suffix_optimization",
+    "glossopetrae_single_turn": "encoding_obfuscation",
+    "glossopetrae_multi_turn": "encoding_obfuscation",
     "crescendo": "multi_turn_escalation",
     "jailbreak_iterative": "adversarial_suffix_optimization",
     "pair": "adversarial_suffix_optimization",

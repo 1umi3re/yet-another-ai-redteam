@@ -59,6 +59,7 @@ test("formatAttackMethodName localizes known method names and preserves proper n
   assert.equal(formatAttackMethodName("base64", "zh"), "Base64 编码");
   assert.equal(formatAttackMethodName("dan", "zh"), "DAN");
   assert.equal(formatAttackMethodName("crescendo", "zh"), "Crescendo");
+  assert.equal(formatAttackMethodName("glossopetrae_single_turn", "zh"), "Glossopetrae 单轮新语言");
   assert.equal(formatAttackMethodName("single_turn", "en"), "single_turn");
   assert.equal(formatAttackMethodName("unknown_plugin", "zh"), "unknown_plugin");
 });

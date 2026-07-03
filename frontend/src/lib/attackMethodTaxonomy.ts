@@ -112,6 +112,8 @@ export const ATTACK_METHOD_NAME_ZH: Record<string, string> = {
   game_simulation_world: "游戏模拟世界",
   gcg: "GCG",
   general_multi_turn: "通用多轮攻击",
+  glossopetrae_multi_turn: "Glossopetrae 多轮新语言",
+  glossopetrae_single_turn: "Glossopetrae 单轮新语言",
   goal_redirection: "目标重定向",
   gptfuzzer_template: "GPTFuzzer 模板",
   grandma_framing: "祖母框架",

@@ -328,8 +328,22 @@ def test_adversarial_suffix_optimization_audit_uses_confirmed_method_set():
 
 def test_encoding_obfuscation_audit_uses_confirmed_method_set():
     from airedteam.core.attack_method_categories import default_attack_method_category_for
-    from airedteam.core.executor_methods import language_support_for_converter_method, method_description_for
+    from airedteam.core.executor_methods import (
+        language_support_for_converter_method,
+        language_support_for_executor,
+        method_description_for,
+    )
     from airedteam.core.registry import default_registry
+
+    executor_methods = {
+        "glossopetrae_multi_turn",
+        "glossopetrae_single_turn",
+    }
+    for method in executor_methods:
+        assert default_attack_method_category_for("executor", method) == "encoding_obfuscation"
+        assert language_support_for_executor(method) == ["en", "zh"]
+        assert default_registry().get("executors", method) is not None
+        assert method_description_for(method)
 
     expected = {
         "a1z26",

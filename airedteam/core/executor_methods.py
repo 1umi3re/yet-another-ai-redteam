@@ -10,6 +10,8 @@ NATIVE_EXECUTOR_LANGUAGE_SUPPORT: dict[str, list[str]] = {
     "single_turn": ["en", "zh"],
     "split_executor": ["en", "zh"],
     "best_of_n": ["en", "zh"],
+    "glossopetrae_single_turn": ["en", "zh"],
+    "glossopetrae_multi_turn": ["en", "zh"],
     "crescendo": ["en", "zh"],
     "jailbreak_iterative": ["en", "zh"],
     "pair": ["en", "zh"],
@@ -375,6 +377,12 @@ EXECUTOR_METHOD_DESCRIPTIONS: dict[str, str] = {
     "likert_framing": "Frames the payload as the highest-scoring item on a Likert scale.",
     "skeleton_key": "Frames the payload as a Skeleton Key authorized testing request.",
     "split_executor": "Sends one converted prompt to the target as size-bounded chat chunks.",
+    "glossopetrae_single_turn": (
+        "Generates a prompt-scoped temporary language and sends its spec with the transformed prompt in one turn."
+    ),
+    "glossopetrae_multi_turn": (
+        "Generates a prompt-scoped temporary language, sends the spec first, then sends the transformed prompt."
+    ),
     "payload_split": "Splits the payload into labeled parts and asks the target to reconstruct it.",
     "string_join": "Inserts a joiner between every character to break contiguous token matching.",
     "template_segment": "Places the payload inside explicit segment delimiters within a template.",
