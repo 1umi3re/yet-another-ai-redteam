@@ -553,6 +553,9 @@ def _attempt_verdict(scores: list[Score]) -> str:
 
 def _attempt_item(attempt: Attempt, scores_by_attempt: dict[str, list[Score]]) -> dict[str, Any]:
     scores = scores_by_attempt.get(attempt.id, [])
+    service_context = dict(attempt.service_context_json or {})
+    transformed_prompt = service_context.get("transformed_prompt") or attempt.prompt_text
+    sent_prompt = service_context.get("sent_prompt") or attempt.prompt_text
     return {
         "id": attempt.id,
         "run_id": attempt.run_id,
@@ -560,8 +563,10 @@ def _attempt_item(attempt: Attempt, scores_by_attempt: dict[str, list[Score]]) -
         "target_name": attempt.target_name,
         "dataset_item_id": attempt.dataset_item_id,
         "original_prompt": attempt.original_prompt_text or attempt.prompt_text,
-        "transformed_prompt": attempt.prompt_text,
-        "prompt": attempt.prompt_text,
+        "transformed_prompt": transformed_prompt,
+        "sent_prompt": sent_prompt,
+        "prompt": sent_prompt,
+        "service_context": service_context or None,
         "response": attempt.response_text,
         "response_blob_path": attempt.response_blob_path,
         "prompt_snapshot_blob_path": attempt.prompt_snapshot_blob_path,
@@ -1347,8 +1352,10 @@ def _run_export_json(
                 "target_name": a.target_name,
                 "dataset_item_id": a.dataset_item_id,
                 "original_prompt": a.original_prompt_text or a.prompt_text,
-                "transformed_prompt": a.prompt_text,
-                "prompt": a.prompt_text,
+                "transformed_prompt": (a.service_context_json or {}).get("transformed_prompt") or a.prompt_text,
+                "sent_prompt": (a.service_context_json or {}).get("sent_prompt") or a.prompt_text,
+                "prompt": (a.service_context_json or {}).get("sent_prompt") or a.prompt_text,
+                "service_context": a.service_context_json,
                 "response": a.response_text,
                 "messages": messages_by_attempt.get(a.id, []),
                 "response_blob_path": a.response_blob_path,
@@ -1417,6 +1424,8 @@ def _run_export_csv(
         "converter_chain",
         "original_prompt",
         "transformed_prompt",
+        "sent_prompt",
+        "service_context",
         "response",
         "messages",
         "response_blob_path",
@@ -1454,7 +1463,10 @@ def _run_export_csv(
                 "dataset_item_language": attempt.dataset_item_language,
                 "converter_chain": " -> ".join(attempt.converter_chain or []),
                 "original_prompt": attempt.original_prompt_text or attempt.prompt_text,
-                "transformed_prompt": attempt.prompt_text,
+                "transformed_prompt": (attempt.service_context_json or {}).get("transformed_prompt")
+                or attempt.prompt_text,
+                "sent_prompt": (attempt.service_context_json or {}).get("sent_prompt") or attempt.prompt_text,
+                "service_context": json.dumps(attempt.service_context_json or {}, ensure_ascii=False),
                 "response": attempt.response_text,
                 "messages": json.dumps(messages_by_attempt.get(attempt.id, []), ensure_ascii=False),
                 "response_blob_path": attempt.response_blob_path,

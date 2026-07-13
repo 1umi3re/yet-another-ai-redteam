@@ -41,6 +41,7 @@ from airedteam.services.converter_runtime import (
 from airedteam.services.converter_templates import resolve_converter_attack_template
 from airedteam.services.prompt_assets import PromptAssetService
 from airedteam.services.run_monitor import RunSpecSummary
+from airedteam.services.service_context_runtime import ServiceContextTarget
 from airedteam.storage.models import Attempt, Run, Score
 
 TERMINAL_RUN_STATUSES = {"completed", "failed", "cancelled"}
@@ -121,6 +122,7 @@ class RunService:
         response_inline_max_bytes: int = 8192,
         max_concurrency: int = 8,
         monitor=None,
+        service_context_templates=None,
     ) -> None:
         self._sf = session_factory
         self._blob = blob_store
@@ -132,6 +134,7 @@ class RunService:
         self._inline_max = response_inline_max_bytes
         self._max_conc = max_concurrency
         self._monitor = monitor
+        self._service_context_templates = service_context_templates
         self._tasks: dict[str, asyncio.Task] = {}
 
     async def create_run(self, *, name: str, runspec_dict: dict) -> Run:
@@ -493,6 +496,7 @@ class RunService:
             executor_kind=attempt.executor_kind,
             dataset_item_language=attempt.dataset_item_language,
             conversation=conversation,
+            service_context=dict(attempt.service_context_json or {}) or None,
         )
 
     async def _write_score(self, run_id: str, attempt_id: str, sr: ScoreResult) -> None:
@@ -834,7 +838,19 @@ class RunService:
             target_refs = [await self._resolve_plugin_ref(t, "target") for t in spec.targets]
             ds_ref = await self._resolve_plugin_ref(spec.dataset, "dataset")
 
-            targets = [self._build_target_from_cfg(r) for r in target_refs]
+            targets = []
+            for spec_ref, runtime_ref in zip(spec.targets, target_refs, strict=True):
+                target = self._build_target_from_cfg(runtime_ref)
+                if self._service_context_templates is not None and spec_ref.config_id:
+                    model = str((runtime_ref.get("params") or {}).get("model") or "").strip()
+                    active_template = (
+                        await self._service_context_templates.active_for(spec_ref.config_id, model)
+                        if model
+                        else None
+                    )
+                    if active_template is not None:
+                        target = ServiceContextTarget(target, active_template)
+                targets.append(target)
             closeables.extend(targets)
             dataset = build_dataset(ds_ref, blob_store=self._blob)
 
@@ -941,6 +957,7 @@ class RunService:
                     a.response_blob_path = blob_path
                     a.conversation_blob_path = conv_path
                     a.prompt_snapshot_blob_path = prompt_snapshot_path
+                    a.service_context_json = ar.service_context
                     a.started_at = ar.started_at
                     a.finished_at = ar.finished_at
                     a.duration_ms = ar.duration_ms

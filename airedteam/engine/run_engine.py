@@ -161,6 +161,10 @@ class RunEngine:
             executor_name = item.executor_variant.plugin if item.executor_variant is not None else None
             executor_kind = item.executor_variant.kind if item.executor_variant is not None else "executor"
             started_at = datetime.now(UTC).replace(tzinfo=None)
+            capture_token = None
+            begin_capture = getattr(item.target, "begin_attempt", None)
+            if callable(begin_capture):
+                capture_token = begin_capture()
             try:
                 ar = await active_executor.run(item.prompt, item.target, item.converter_variant)
             except Exception as e:
@@ -171,6 +175,8 @@ class RunEngine:
                     error=exception_detail(e),
                     converter_chain=[getattr(c, "name", type(c).__name__) for c in item.converter_variant],
                 )
+            if capture_token is not None:
+                item.target.finish_attempt(capture_token, ar)
             finished_at = datetime.now(UTC).replace(tzinfo=None)
             ar.started_at = ar.started_at or started_at
             ar.finished_at = ar.finished_at or finished_at

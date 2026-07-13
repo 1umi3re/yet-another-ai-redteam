@@ -21,6 +21,7 @@ import {
   Pause,
   Play,
   RotateCcw,
+  Sparkles,
   ChevronsLeft,
   ChevronLeft,
   ChevronRight,
@@ -1099,7 +1100,24 @@ function AttemptDetailDrawer({ runId, attempt, scores, onClose }: { runId: strin
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {attempt.service_context && (
+            <div className="rounded-lg border border-brand-100 bg-brand-50/50 px-3 py-2 text-xs text-brand-800">
+              <div className="flex flex-wrap items-center gap-2">
+                <Sparkles className="h-3.5 w-3.5" />
+                <span className="font-medium">{t("Topic bridge")}</span>
+                <Badge tone={attempt.service_context.status === "applied" ? "green" : "amber"}>
+                  {attempt.service_context.status}
+                </Badge>
+                {attempt.service_context.topic && <Badge>{attempt.service_context.topic}</Badge>}
+                <span>v{attempt.service_context.template_version}</span>
+              </div>
+              {attempt.service_context.fallback_reason && (
+                <div className="mt-1 text-amber-800">{attempt.service_context.fallback_reason}</div>
+              )}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 gap-4">
             <Section title={t("Original prompt")}>
               <pre className="text-xs whitespace-pre-wrap break-words font-mono bg-gray-50 border border-gray-200 rounded-lg p-3 text-gray-800 max-h-64 overflow-auto">
 {attempt.original_prompt ?? attempt.prompt ?? ""}
@@ -1110,6 +1128,13 @@ function AttemptDetailDrawer({ runId, attempt, scores, onClose }: { runId: strin
 {attempt.transformed_prompt ?? attempt.prompt ?? ""}
               </pre>
             </Section>
+            {attempt.service_context && (
+              <Section title={t("Final sent prompt")}>
+                <pre className="text-xs whitespace-pre-wrap break-words font-mono bg-gray-50 border border-gray-200 rounded-lg p-3 text-gray-800 max-h-64 overflow-auto">
+{attempt.sent_prompt ?? attempt.prompt ?? ""}
+                </pre>
+              </Section>
+            )}
           </div>
 
           {messages.length > 0 ? (

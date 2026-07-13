@@ -34,6 +34,10 @@ class UpdateTargetLimits(BaseModel):
     input_limit_unit: str | None = Field(default=None, pattern="^characters$")
 
 
+class GenerateServiceContextTemplate(BaseModel):
+    generator_config_id: str
+
+
 class CheckResult(BaseModel):
     ok: bool
     latency_ms: int | None = None
@@ -154,6 +158,63 @@ async def check_target(tid: str, _=Depends(require_admin), state: AppState = Dep
 
     runtime_cfg = await state.targets.resolve_for_runtime(tid)
     return await _check_target_connectivity(runtime_cfg)
+
+
+@router.get("/targets/{tid}/service-context-templates")
+async def list_service_context_templates(
+    tid: str,
+    _=Depends(require_admin),
+    state: AppState = Depends(get_state),
+):
+    try:
+        return await state.service_context_templates.list_for_target(tid)
+    except KeyError:
+        raise HTTPException(404, "Target not found") from None
+
+
+@router.post("/targets/{tid}/service-context-templates/generate")
+async def generate_service_context_template(
+    tid: str,
+    req: GenerateServiceContextTemplate,
+    _=Depends(require_admin),
+    state: AppState = Depends(get_state),
+):
+    try:
+        return await state.service_context_templates.generate_service_context_template(
+            tid, req.generator_config_id
+        )
+    except KeyError:
+        raise HTTPException(404, "Target or generator target not found") from None
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@router.get("/targets/{tid}/service-context-templates/{template_id}/trace")
+async def get_service_context_template_trace(
+    tid: str,
+    template_id: str,
+    _=Depends(require_admin),
+    state: AppState = Depends(get_state),
+):
+    row = await state.service_context_templates.get(template_id)
+    if row is None or row.target_config_id != tid:
+        raise HTTPException(404, "Template not found")
+    return await state.service_context_templates.get_trace(template_id)
+
+
+@router.post("/targets/{tid}/service-context-templates/{template_id}/activate")
+async def activate_service_context_template(
+    tid: str,
+    template_id: str,
+    _=Depends(require_admin),
+    state: AppState = Depends(get_state),
+):
+    try:
+        return await state.service_context_templates.activate(tid, template_id)
+    except KeyError:
+        raise HTTPException(404, "Template not found") from None
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 @router.post("/targets/check", response_model=CheckResult)

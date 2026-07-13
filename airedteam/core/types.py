@@ -56,6 +56,7 @@ class AttemptResult:
     dataset_item_language: str | None = None
     conversation: list[Message] | None = None
     prompt_snapshots: list[dict[str, Any]] = field(default_factory=list)
+    service_context: dict[str, Any] | None = None
     started_at: datetime | None = None
     finished_at: datetime | None = None
     duration_ms: int | None = None

@@ -27,6 +27,7 @@ async def initialize_database(engine: AsyncEngine) -> None:
                     "started_at": "DATETIME",
                     "finished_at": "DATETIME",
                     "duration_ms": "INTEGER",
+                    "service_context_json": "JSON",
                 },
             )
 

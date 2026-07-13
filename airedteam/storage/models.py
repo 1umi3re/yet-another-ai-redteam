@@ -40,6 +40,38 @@ class TargetConfig(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
 
+class ServiceContextTemplate(Base):
+    __tablename__ = "service_context_templates"
+    __table_args__ = (
+        UniqueConstraint(
+            "target_config_id",
+            "target_model",
+            "version",
+            name="uq_service_context_template_version",
+        ),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    target_config_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("target_configs.id", ondelete="CASCADE"), index=True
+    )
+    target_model: Mapped[str] = mapped_column(String(200))
+    generator_config_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("target_configs.id", ondelete="SET NULL"), nullable=True
+    )
+    generator_model: Mapped[str] = mapped_column(String(200))
+    version: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(20), default="generating")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=False)
+    topic: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    template_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    rationale: Mapped[str | None] = mapped_column(Text, nullable=True)
+    verification_passed: Mapped[bool] = mapped_column(Boolean, default=False)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    trace_blob_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+
 class DatasetMeta(Base):
     __tablename__ = "datasets"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
@@ -161,6 +193,7 @@ class Attempt(Base):
     response_blob_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     conversation_blob_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     prompt_snapshot_blob_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    service_context_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)

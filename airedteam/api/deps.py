@@ -14,6 +14,7 @@ from airedteam.services.manual import ManualService
 from airedteam.services.prompt_assets import PromptAssetService
 from airedteam.services.run_monitor import DingTalkNotifier, MonitoringConfigStore, RunMonitorService
 from airedteam.services.runs import RunService
+from airedteam.services.service_context_templates import ServiceContextTemplateService
 from airedteam.services.target_configs import TargetConfigService
 from airedteam.storage.blobs import LocalBlobStore
 from airedteam.storage.db import make_engine, make_sessionmaker
@@ -35,6 +36,7 @@ class AppState:
     prompt_assets: PromptAssetService
     monitor: RunMonitorService
     monitor_config: MonitoringConfigStore
+    service_context_templates: ServiceContextTemplateService
     runs: RunService
     manual: ManualService
     attack_methods: AttackMethodCategoryService
@@ -71,6 +73,7 @@ def build_state(settings: Settings | None = None) -> AppState:
         alert_cooldown_seconds=s.monitor_alert_cooldown_seconds,
     )
     monitor_config = MonitoringConfigStore(settings=s, monitor=monitor, root=s.blob_dir)
+    service_context_templates = ServiceContextTemplateService(SessionLocal, blob, targets, prompt_assets)
     runs = RunService(
         SessionLocal,
         blob,
@@ -82,6 +85,7 @@ def build_state(settings: Settings | None = None) -> AppState:
         response_inline_max_bytes=s.response_inline_max_bytes,
         max_concurrency=s.max_concurrency,
         monitor=monitor,
+        service_context_templates=service_context_templates,
     )
     manual = ManualService(SessionLocal, blob, targets, converters, prompt_assets)
     attack_methods = AttackMethodCategoryService(SessionLocal)
@@ -98,6 +102,7 @@ def build_state(settings: Settings | None = None) -> AppState:
         prompt_assets,
         monitor,
         monitor_config,
+        service_context_templates,
         runs,
         manual,
         attack_methods,
