@@ -31,3 +31,10 @@ def test_revision_ids_fit_alembic_version_column():
                 continue
             revision = ast.literal_eval(node.value)
             assert len(revision) <= 32, f"{path.name} revision ID is too long: {revision}"
+
+
+def test_retest_provenance_has_alembic_migration():
+    migration_text = Path("alembic/versions/0014_retest_provenance.py").read_text()
+
+    for column in ("target_config_id", "executor_ref_json", "source_run_id", "source_attempt_id", "retest_mode"):
+        assert f'sa.Column("{column}"' in migration_text

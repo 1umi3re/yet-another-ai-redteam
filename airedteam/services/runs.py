@@ -12,6 +12,7 @@ from sqlalchemy import delete, func, select, update
 
 from airedteam.builtins.executors.converter_method import ConverterMethodExecutor
 from airedteam.builtins.executors.general_multi_turn import GeneralMultiTurnExecutor
+from airedteam.builtins.executors.retest import RETEST_METADATA_KEY, RetestExecutor
 from airedteam.core.executor_methods import (
     language_support_for_converter_method,
     language_support_for_executor,
@@ -139,7 +140,9 @@ class RunService:
 
     async def create_run(self, *, name: str, runspec_dict: dict) -> Run:
         spec = RunSpec.model_validate(runspec_dict)  # validate early
-        if not spec.executors and spec.executor is None:
+        if spec.retest is None and spec.dataset is None:
+            raise ValueError("runspec requires dataset")
+        if spec.retest is None and not spec.executors and spec.executor is None:
             raise ValueError("runspec requires executor or executors")
         async with self._sf() as s:
             row = Run(name=name, runspec_yaml=yaml.safe_dump(runspec_dict), status="pending")
@@ -296,6 +299,7 @@ class RunService:
                         plugin=plugin_name,
                         executor=ConverterMethodExecutor(method_name=plugin_name, converter=converter),
                         language_support=set(language_support_for_converter_method(plugin_name)),
+                        source_ref=ref,
                     )
                 )
                 continue
@@ -306,9 +310,21 @@ class RunService:
                     plugin=plugin_name,
                     executor=executor,
                     language_support=set(language_support_for_executor(plugin_name)),
+                    source_ref=ref,
                 )
             )
         return variants
+
+    async def _build_retest_method(self, ref: dict, closeables: list):
+        kind = ref.get("kind") or "executor"
+        plugin_name = ref.get("plugin")
+        if kind == "converter_method":
+            converter_ref = await self._resolve_converter_ref(ref, closeables)
+            return ConverterMethodExecutor(
+                method_name=plugin_name,
+                converter=build_converter(converter_ref),
+            )
+        return await self._build_executor_from_ref(ref, closeables)
 
     async def _build_executor_from_ref(self, ref: dict, closeables: list):
         executor_params = dict(ref.get("params") or {})
@@ -379,9 +395,11 @@ class RunService:
             else:
                 targets.append(ref.plugin or "(target)")
 
-        dataset_label = spec.dataset.plugin or spec.dataset.config_id or "(dataset)"
-        dataset_count = None
-        if spec.dataset.config_id:
+        dataset_label = "successful attempts" if spec.retest is not None else "(dataset)"
+        dataset_count = len(spec.retest.source_attempt_ids) if spec.retest is not None else None
+        if spec.dataset is not None:
+            dataset_label = spec.dataset.plugin or spec.dataset.config_id or "(dataset)"
+        if spec.dataset is not None and spec.dataset.config_id:
             try:
                 dataset = await self._datasets.get(spec.dataset.config_id)
             except Exception:
@@ -391,7 +409,9 @@ class RunService:
                 dataset_count = dataset.item_count
 
         methods = []
-        if spec.executors:
+        if spec.retest is not None:
+            methods = [spec.retest.mode]
+        elif spec.executors:
             methods = [ref.plugin or ref.config_id or "(executor)" for ref in spec.executors]
         elif spec.converters:
             methods = [ref.plugin or ref.config_id or "(converter)" for ref in spec.converters]
@@ -821,7 +841,7 @@ class RunService:
             await s.commit()
 
         try:
-            if spec.dataset.config_id:
+            if spec.dataset is not None and spec.dataset.config_id:
                 dataset_row = await self._datasets.ensure_languages_for_run(spec.dataset.config_id)
                 if dataset_row.id != spec.dataset.config_id:
                     spec_payload = yaml.safe_load(run.runspec_yaml) or {}
@@ -836,12 +856,13 @@ class RunService:
                     spec = RunSpec.model_validate(spec_payload)
 
             target_refs = [await self._resolve_plugin_ref(t, "target") for t in spec.targets]
-            ds_ref = await self._resolve_plugin_ref(spec.dataset, "dataset")
 
             targets = []
             for spec_ref, runtime_ref in zip(spec.targets, target_refs, strict=True):
                 target = self._build_target_from_cfg(runtime_ref)
-                if self._service_context_templates is not None and spec_ref.config_id:
+                target._airedteam_config_id = spec_ref.config_id
+                exact_replay = spec.retest is not None and spec.retest.mode == "exact_replay"
+                if not exact_replay and self._service_context_templates is not None and spec_ref.config_id:
                     model = str((runtime_ref.get("params") or {}).get("model") or "").strip()
                     active_template = (
                         await self._service_context_templates.active_for(spec_ref.config_id, model)
@@ -850,33 +871,61 @@ class RunService:
                     )
                     if active_template is not None:
                         target = ServiceContextTarget(target, active_template)
+                        target._airedteam_config_id = spec_ref.config_id
                 targets.append(target)
             closeables.extend(targets)
-            dataset = build_dataset(ds_ref, blob_store=self._blob)
+            executor_ref = None
+            if spec.retest is not None:
+                raw = await self._blob.get(spec.retest.snapshot_blob_path)
+                snapshot = json.loads(raw.decode("utf-8"))
+                snapshot_items = list(snapshot.get("items") or [])
+                prompts = []
+                methods: dict[str, object] = {}
+                for item in snapshot_items:
+                    original = str(item.get("original_prompt") or item.get("sent_prompt") or "")
+                    language = normalize_language(item.get("language")) or detect_prompt_language(original)
+                    metadata = {
+                        "id": item.get("source_attempt_id"),
+                        "language": language,
+                        RETEST_METADATA_KEY: item,
+                    }
+                    prompts.append(Prompt(text=original, metadata=metadata))
+                    if spec.retest.mode == "reapply_method":
+                        methods[str(item["source_attempt_id"])] = await self._build_retest_method(
+                            dict(item["method_ref"]), closeables
+                        )
+                dataset = _MaterializedDataset(prompts, name="successful_attempt_retest")
+                converters = []
+                executor_variants = None
+                executor = RetestExecutor(mode=spec.retest.mode, methods=methods)
+                executor_ref = {"kind": "retest", "plugin": spec.retest.mode, "params": {}}
+            else:
+                ds_ref = await self._resolve_plugin_ref(spec.dataset, "dataset")
+                dataset = build_dataset(ds_ref, blob_store=self._blob)
 
-            # Apply sampling if configured
-            if spec.sampling is not None:
-                dataset = SampledDataset(
-                    dataset, limit=spec.sampling.limit, shuffle=spec.sampling.shuffle, seed=spec.sampling.seed
-                )
+                if spec.sampling is not None:
+                    dataset = SampledDataset(
+                        dataset, limit=spec.sampling.limit, shuffle=spec.sampling.shuffle, seed=spec.sampling.seed
+                    )
 
-            prompts: list[Prompt] = []
-            async for prompt in dataset:
-                metadata = dict(prompt.metadata)
-                language = normalize_language(metadata.get("language")) or detect_prompt_language(prompt.text)
-                metadata["language"] = language
-                prompts.append(Prompt(text=prompt.text, metadata=metadata, artifacts=prompt.artifacts))
-            dataset = _MaterializedDataset(prompts, name=getattr(dataset, "name", "materialized_dataset"))
+                prompts = []
+                async for prompt in dataset:
+                    metadata = dict(prompt.metadata)
+                    language = normalize_language(metadata.get("language")) or detect_prompt_language(prompt.text)
+                    metadata["language"] = language
+                    prompts.append(Prompt(text=prompt.text, metadata=metadata, artifacts=prompt.artifacts))
+                dataset = _MaterializedDataset(prompts, name=getattr(dataset, "name", "materialized_dataset"))
 
-            converter_refs = [
-                await self._resolve_converter_ref(conv.model_dump(), closeables) for conv in spec.converters
-            ]
-            converters = [build_converter(r) for r in converter_refs]
+                converter_refs = [
+                    await self._resolve_converter_ref(conv.model_dump(), closeables) for conv in spec.converters
+                ]
+                converters = [build_converter(r) for r in converter_refs]
 
-            executor_variants = await self._build_executor_variants(spec, closeables) if spec.executors else None
-            executor = None
-            if executor_variants is None:
-                executor = await self._build_executor_from_ref(spec.executor.model_dump(), closeables)
+                executor_variants = await self._build_executor_variants(spec, closeables) if spec.executors else None
+                executor = None
+                if executor_variants is None:
+                    executor_ref = spec.executor.model_dump()
+                    executor = await self._build_executor_from_ref(executor_ref, closeables)
 
             scorers, scorer_closeables = await self._build_scorers(spec)
             closeables.extend(scorer_closeables)
@@ -945,6 +994,7 @@ class RunService:
                         attempt_id = a.id
                         await s.execute(delete(Score).where(Score.attempt_id == a.id))
                     a.target_id = target_name
+                    a.target_config_id = ar.target_config_id
                     a.target_name = target_name
                     a.dataset_item_id = dataset_item_id
                     a.original_prompt_text = original_prompt.text
@@ -952,6 +1002,10 @@ class RunService:
                     a.converter_chain = ar.converter_chain
                     a.executor_name = ar.executor_name
                     a.executor_kind = ar.executor_kind
+                    a.executor_ref_json = ar.executor_ref
+                    a.source_run_id = ar.source_run_id
+                    a.source_attempt_id = ar.source_attempt_id
+                    a.retest_mode = ar.retest_mode
                     a.dataset_item_language = ar.dataset_item_language
                     a.response_text = stored_text
                     a.response_blob_path = blob_path
@@ -1053,6 +1107,7 @@ class RunService:
                 targets=targets,
                 converters=converters,
                 executor=executor,
+                executor_ref=executor_ref,
                 executor_variants=executor_variants,
                 scorers=scorers,
                 concurrency=min(spec.concurrency, self._max_conc),

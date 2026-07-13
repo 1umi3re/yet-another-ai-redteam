@@ -181,6 +181,9 @@ class Attempt(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     run_id: Mapped[str] = mapped_column(String(36), ForeignKey("runs.id", ondelete="CASCADE"))
     target_id: Mapped[str] = mapped_column(String(100))
+    target_config_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("target_configs.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     target_name: Mapped[str] = mapped_column(String(200))
     dataset_item_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
     work_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
@@ -189,6 +192,10 @@ class Attempt(Base):
     converter_chain: Mapped[list] = mapped_column(JSON, default=list)
     executor_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     executor_kind: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    executor_ref_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    source_run_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    source_attempt_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    retest_mode: Mapped[str | None] = mapped_column(String(24), nullable=True)
     dataset_item_language: Mapped[str | None] = mapped_column(String(10), nullable=True)
     response_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     response_blob_path: Mapped[str | None] = mapped_column(String(500), nullable=True)

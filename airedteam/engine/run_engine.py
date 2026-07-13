@@ -37,6 +37,7 @@ class ExecutorVariant:
     plugin: str
     executor: Any
     language_support: set[str] | frozenset[str]
+    source_ref: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -128,6 +129,7 @@ class RunEngine:
         orchestrator,
         converters: list | None = None,
         executor=None,
+        executor_ref: dict[str, Any] | None = None,
         executor_variants: list[ExecutorVariant] | None = None,
         should_stop: Callable[[], Awaitable[bool]] | None = None,
         should_skip_work: Callable[[str], Awaitable[bool]] | None = None,
@@ -186,6 +188,10 @@ class RunEngine:
                 (ar.converter_chain or [None])[0] or getattr(active_executor, "name", type(active_executor).__name__)
             )
             ar.executor_kind = ar.executor_kind or executor_kind
+            ar.executor_ref = ar.executor_ref or (
+                item.executor_variant.source_ref if item.executor_variant is not None else executor_ref
+            )
+            ar.target_config_id = ar.target_config_id or getattr(item.target, "_airedteam_config_id", None)
             ar.dataset_item_language = ar.dataset_item_language or item.dataset_item_language
             ar.prompt = _prompt_with_original_prompt(ar.prompt, item.prompt)
             async with self._lock:

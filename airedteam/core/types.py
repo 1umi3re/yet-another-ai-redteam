@@ -60,6 +60,11 @@ class AttemptResult:
     started_at: datetime | None = None
     finished_at: datetime | None = None
     duration_ms: int | None = None
+    target_config_id: str | None = None
+    executor_ref: dict[str, Any] | None = None
+    source_run_id: str | None = None
+    source_attempt_id: str | None = None
+    retest_mode: str | None = None
 
 
 @dataclass

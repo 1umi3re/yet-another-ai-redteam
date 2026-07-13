@@ -11,6 +11,7 @@ const AttackMethods = lazy(() => import("./pages/AttackMethods"));
 const Runs = lazy(() => import("./pages/Runs"));
 const RunDetail = lazy(() => import("./pages/RunDetail"));
 const NewRun = lazy(() => import("./pages/NewRun"));
+const RetestRun = lazy(() => import("./pages/RetestRun"));
 const ManualConsole = lazy(() => import("./pages/ManualConsole"));
 const Settings = lazy(() => import("./pages/Settings"));
 
@@ -33,6 +34,7 @@ export default function App() {
           <Route path="/datasets" element={<Navigate to="/assets" replace />} />
           <Route path="/runs" element={<Runs />} />
           <Route path="/runs/new" element={<NewRun />} />
+          <Route path="/runs/retest" element={<RetestRun />} />
           <Route path="/runs/:id" element={<RunDetail />} />
           <Route path="/manual" element={<ManualConsole />} />
           <Route path="/settings" element={<Settings />} />

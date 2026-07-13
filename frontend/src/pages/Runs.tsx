@@ -8,7 +8,7 @@ import { Field, Input, Select } from "../components/ui/Form";
 import { Badge, StatusBadge } from "../components/ui/Badge";
 import { ProgressBar } from "../components/ui/ProgressBar";
 import { EmptyState } from "../components/ui/EmptyState";
-import { ListChecks, PlayCircle, ArrowUpRight, MessageSquare } from "lucide-react";
+import { ListChecks, PlayCircle, ArrowUpRight, MessageSquare, RotateCcw } from "lucide-react";
 import { useI18n } from "../lib/i18n";
 
 function formatDateTime(value?: string | null): string {
@@ -60,7 +60,10 @@ export default function Runs() {
           <h1 className="text-2xl font-bold tracking-tight">{t("Runs")}</h1>
           <p className="text-sm text-gray-500 mt-1">{t("Attack executions against configured targets.")}</p>
         </div>
-        <Link to="/runs/new"><Button icon={<PlayCircle className="h-4 w-4" />}>{t("New run")}</Button></Link>
+        <div className="flex gap-2">
+          {targetFilter && <Link to={`/runs/retest?target=${encodeURIComponent(targetFilter)}`}><Button variant="secondary" icon={<RotateCcw className="h-4 w-4" />}>{t("Retest successes")}</Button></Link>}
+          <Link to="/runs/new"><Button icon={<PlayCircle className="h-4 w-4" />}>{t("New run")}</Button></Link>
+        </div>
       </div>
       <Card>
         <CardHeader><CardTitle>{t("All runs")}</CardTitle></CardHeader>
@@ -132,6 +135,7 @@ export default function Runs() {
                       <div className="flex items-center gap-2">
                         <span>{r.name}</span>
                         {r.kind === "manual" && <Badge tone="blue">{t("Manual")}</Badge>}
+                        {r.subtype === "retest" && <Badge tone="indigo">{t("Retest")}</Badge>}
                       </div>
                     </td>
                     <td className="px-5 py-3 text-gray-700">

@@ -3,17 +3,20 @@ from __future__ import annotations
 import csv
 import io
 import json
+import uuid
+from collections import Counter
 from datetime import datetime
 from html import escape as html_escape
 from typing import Any
 
 import yaml
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sse_starlette.sse import EventSourceResponse
 
 from airedteam.api.deps import AppState, get_state, require_admin
+from airedteam.core.registry import default_registry
 from airedteam.core.score_status import score_retryable, score_status
 from airedteam.storage.models import Attempt, Run, Score
 
@@ -38,6 +41,7 @@ class RunOut(BaseModel):
     target_ids: list[str] = []
     target_names: list[str] = []
     error: str | None = None
+    subtype: str = "standard"
 
 
 class ResumeRun(BaseModel):
@@ -50,6 +54,18 @@ class RetryScores(BaseModel):
     attempt_ids: list[str] | None = None
     scorers: list[str] | None = None
     scorer_ref: dict[str, Any] | None = None
+
+
+class CreateRetest(BaseModel):
+    name: str
+    target_config_id: str
+    mode: str
+    scorer: dict[str, Any]
+    concurrency: int = 4
+    timeout_seconds: float | None = None
+    select_all: bool = True
+    excluded_attempt_ids: list[str] = Field(default_factory=list)
+    attempt_ids: list[str] = Field(default_factory=list)
 
 
 async def _run_to_out(r: Run, state: AppState) -> RunOut:
@@ -71,6 +87,7 @@ async def _run_to_out(r: Run, state: AppState) -> RunOut:
         target_ids=target_ids,
         target_names=target_names,
         error=r.error,
+        subtype="retest" if _retest_spec_for_run(r) is not None else "standard",
     )
 
 
@@ -89,6 +106,17 @@ def _target_ids_for_run(r: Run) -> list[str]:
         if isinstance(target, dict) and isinstance(target.get("config_id"), str):
             ids.append(target["config_id"])
     return ids
+
+
+def _retest_spec_for_run(r: Run) -> dict[str, Any] | None:
+    if r.kind != "automated":
+        return None
+    try:
+        spec = yaml.safe_load(r.runspec_yaml or "{}")
+    except Exception:
+        return None
+    value = spec.get("retest") if isinstance(spec, dict) else None
+    return value if isinstance(value, dict) else None
 
 
 @router.post("/runs", status_code=201, response_model=RunOut)
@@ -190,6 +218,92 @@ async def list_runs(
         if target_id:
             rs = [r for r in rs if target_id in _target_ids_for_run(r)]
         return [await _run_to_out(r, state) for r in rs]
+
+
+@router.get("/targets/{target_config_id}/successful-attempts")
+async def list_successful_attempts(
+    target_config_id: str,
+    _=Depends(require_admin),
+    state: AppState = Depends(get_state),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+):
+    records = await _successful_attempt_records(state, target_config_id)
+    methods = Counter(item["executor_name"] for item in records)
+    languages = Counter(item.get("language") or "unknown" for item in records)
+    runs = Counter(item["source_run_name"] for item in records)
+    return {
+        "items": [
+            {key: value for key, value in item.items() if key != "_snapshot"}
+            for item in records[offset : offset + limit]
+        ],
+        "total": len(records),
+        "limit": limit,
+        "offset": offset,
+        "summary": {
+            "successful_attempts": len(records),
+            "source_runs": len(runs),
+            "by_run": dict(runs),
+            "by_method": dict(methods),
+            "by_language": dict(languages),
+            "reapply_available": sum(bool(item["reapply_eligible"]) for item in records),
+            "reapply_approximate": sum(item["provenance_quality"] == "defaulted" for item in records),
+        },
+    }
+
+
+@router.post("/retests", status_code=201, response_model=RunOut)
+async def create_retest(req: CreateRetest, _=Depends(require_admin), state: AppState = Depends(get_state)):
+    if req.mode not in {"exact_replay", "reapply_method"}:
+        raise HTTPException(400, "mode must be exact_replay or reapply_method")
+    if req.concurrency < 1:
+        raise HTTPException(400, "concurrency must be positive")
+    if req.timeout_seconds is not None and req.timeout_seconds <= 0:
+        raise HTTPException(400, "timeout_seconds must be positive")
+    records = await _successful_attempt_records(state, req.target_config_id)
+    excluded = set(req.excluded_attempt_ids)
+    included = set(req.attempt_ids)
+    candidates = [item for item in records if req.mode != "reapply_method" or item["reapply_eligible"]]
+    selected = [
+        item for item in candidates
+        if (req.select_all and item["id"] not in excluded) or (not req.select_all and item["id"] in included)
+    ]
+    if not selected:
+        raise HTTPException(400, "select at least one successful attempt")
+    if req.mode == "reapply_method":
+        unavailable = [item["id"] for item in selected if not item["reapply_eligible"]]
+        if unavailable:
+            raise HTTPException(400, f"selected attempts cannot reapply their method: {', '.join(unavailable[:5])}")
+
+    source_attempt_ids = [item["id"] for item in selected]
+    snapshot_path = f"retests/{uuid.uuid4()}.json"
+    snapshot = {
+        "version": 1,
+        "mode": req.mode,
+        "source_target_config_id": req.target_config_id,
+        "items": [item["_snapshot"] for item in selected],
+    }
+    await state.blob_store.put(snapshot_path, json.dumps(snapshot, ensure_ascii=False).encode("utf-8"))
+    runspec: dict[str, Any] = {
+        "version": 3,
+        "name": req.name,
+        "targets": [{"config_id": req.target_config_id}],
+        "scorers": [req.scorer],
+        "concurrency": req.concurrency,
+        "retest": {
+            "mode": req.mode,
+            "source_target_config_id": req.target_config_id,
+            "snapshot_blob_path": snapshot_path,
+            "source_attempt_ids": source_attempt_ids,
+        },
+    }
+    if req.timeout_seconds is not None:
+        runspec["timeout_seconds"] = req.timeout_seconds
+    try:
+        row = await state.runs.create_run(name=req.name, runspec_dict=runspec)
+    except Exception as exc:
+        raise HTTPException(400, f"invalid retest: {exc}") from exc
+    return await _run_to_out(row, state)
 
 
 @router.get("/runs/{rid}", response_model=RunOut)
@@ -551,6 +665,134 @@ def _attempt_verdict(scores: list[Score]) -> str:
     return _score_verdict(chosen) or "unscored"
 
 
+def _method_ref_for_attempt(attempt: Attempt, run: Run) -> tuple[dict[str, Any] | None, str, str | None]:
+    if attempt.executor_ref_json:
+        return dict(attempt.executor_ref_json), "exact", None
+    try:
+        spec = yaml.safe_load(run.runspec_yaml or "{}") or {}
+    except Exception:
+        spec = {}
+    name = _attempt_executor_name(attempt)
+    kind = _attempt_executor_kind(attempt)
+    candidates: list[dict[str, Any]] = []
+    for raw in spec.get("executors") or []:
+        if not isinstance(raw, dict):
+            continue
+        if (raw.get("kind") or "executor") == kind and raw.get("plugin") == name:
+            candidates.append(dict(raw))
+    legacy_executor = spec.get("executor")
+    if kind == "executor" and isinstance(legacy_executor, dict) and legacy_executor.get("plugin") == name:
+        candidates.append({"kind": "executor", **legacy_executor})
+    if kind == "converter_method":
+        for raw in spec.get("converters") or []:
+            if isinstance(raw, dict) and raw.get("plugin") == name:
+                candidates.append({"kind": "converter_method", **raw})
+    unique = {
+        json.dumps(candidate, sort_keys=True, separators=(",", ":"), default=str): candidate
+        for candidate in candidates
+    }
+    if len(unique) == 1:
+        return next(iter(unique.values())), "inferred", None
+
+    group = "converters" if kind == "converter_method" else "executors"
+    try:
+        default_registry().get(group, name)
+    except Exception:
+        return None, "unavailable", f"{kind} plugin {name!r} is not registered"
+    return {"kind": kind, "plugin": name, "params": {}}, "defaulted", (
+        "The historical method parameters were ambiguous or missing; current defaults will be used."
+    )
+
+
+async def _successful_attempt_records(state: AppState, target_config_id: str) -> list[dict[str, Any]]:
+    target = await state.targets.get(target_config_id)
+    if target is None:
+        raise HTTPException(404, "target not found")
+    async with state.session_factory() as s:
+        runs = (
+            await s.execute(select(Run).where(Run.kind == "automated").order_by(Run.created_at.desc()))
+        ).scalars().all()
+        source_runs = [run for run in runs if target_config_id in _target_ids_for_run(run)]
+        if not source_runs:
+            return []
+        run_by_id = {run.id: run for run in source_runs}
+        attempts = (
+            await s.execute(
+                select(Attempt)
+                .where(Attempt.run_id.in_(run_by_id))
+                .order_by(Attempt.created_at.desc())
+            )
+        ).scalars().all()
+        scores = (
+            await s.execute(
+                select(Score).join(Attempt, Score.attempt_id == Attempt.id).where(Attempt.run_id.in_(run_by_id))
+            )
+        ).scalars().all()
+    scores_by_attempt = _scores_by_attempt(scores)
+    records: list[dict[str, Any]] = []
+    for attempt in attempts:
+        run = run_by_id[attempt.run_id]
+        run_target_ids = _target_ids_for_run(run)
+        belongs = attempt.target_config_id == target_config_id
+        if attempt.target_config_id is None:
+            belongs = len(run_target_ids) == 1 or attempt.target_name == target.name
+        if not belongs or _attempt_verdict(scores_by_attempt.get(attempt.id, [])) != "complied":
+            continue
+        method_ref, quality, reason = _method_ref_for_attempt(attempt, run)
+        service_context = dict(attempt.service_context_json or {})
+        sent_prompt = service_context.get("sent_prompt") or attempt.prompt_text
+        user_messages: list[dict[str, Any]] = []
+        if attempt.conversation_blob_path:
+            try:
+                raw = await state.blob_store.get(attempt.conversation_blob_path)
+                conversation = json.loads(raw.decode("utf-8"))
+                user_messages = [
+                    {
+                        "text": str(message.get("text") or ""),
+                        "metadata": dict(message.get("metadata") or {}),
+                        "artifacts": list(message.get("artifacts") or []),
+                    }
+                    for message in conversation.get("messages") or []
+                    if message.get("role") == "user"
+                ]
+            except Exception:
+                user_messages = []
+        if not user_messages:
+            user_messages = [{"text": sent_prompt, "metadata": {}}]
+        snapshot = {
+            "source_attempt_id": attempt.id,
+            "source_run_id": run.id,
+            "source_run_name": run.name,
+            "original_prompt": attempt.original_prompt_text or attempt.prompt_text,
+            "transformed_prompt": service_context.get("transformed_prompt") or attempt.prompt_text,
+            "sent_prompt": sent_prompt,
+            "user_messages": user_messages,
+            "method_ref": method_ref,
+            "provenance_quality": quality,
+            "language": attempt.dataset_item_language,
+            "dataset_item_id": attempt.dataset_item_id,
+        }
+        records.append(
+            {
+                "id": attempt.id,
+                "source_run_id": run.id,
+                "source_run_name": run.name,
+                "executor_name": _attempt_executor_name(attempt),
+                "executor_kind": _attempt_executor_kind(attempt),
+                "language": attempt.dataset_item_language,
+                "original_prompt": snapshot["original_prompt"],
+                "sent_prompt": sent_prompt,
+                "multi_turn": len(user_messages) > 1,
+                "provenance_quality": quality,
+                "reapply_eligible": method_ref is not None,
+                "reapply_reason": reason,
+                "created_at": _isoformat(attempt.created_at),
+                "_snapshot": snapshot,
+            }
+        )
+    return records
+
+
 def _attempt_item(attempt: Attempt, scores_by_attempt: dict[str, list[Score]]) -> dict[str, Any]:
     scores = scores_by_attempt.get(attempt.id, [])
     service_context = dict(attempt.service_context_json or {})
@@ -560,6 +802,7 @@ def _attempt_item(attempt: Attempt, scores_by_attempt: dict[str, list[Score]]) -
         "id": attempt.id,
         "run_id": attempt.run_id,
         "target_id": attempt.target_id,
+        "target_config_id": attempt.target_config_id,
         "target_name": attempt.target_name,
         "dataset_item_id": attempt.dataset_item_id,
         "original_prompt": attempt.original_prompt_text or attempt.prompt_text,
@@ -573,6 +816,10 @@ def _attempt_item(attempt: Attempt, scores_by_attempt: dict[str, list[Score]]) -
         "converter_chain": attempt.converter_chain,
         "executor_name": _attempt_executor_name(attempt),
         "executor_kind": _attempt_executor_kind(attempt),
+        "executor_ref": attempt.executor_ref_json,
+        "source_run_id": attempt.source_run_id,
+        "source_attempt_id": attempt.source_attempt_id,
+        "retest_mode": attempt.retest_mode,
         "dataset_item_language": attempt.dataset_item_language,
         "status": attempt.status,
         "error": attempt.error,
