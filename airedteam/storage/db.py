@@ -30,6 +30,11 @@ async def initialize_database(engine: AsyncEngine) -> None:
                     "service_context_json": "JSON",
                 },
             )
+            await _ensure_sqlite_columns(
+                conn,
+                "service_context_templates",
+                {"language": "VARCHAR(100)"},
+            )
 
 
 async def _ensure_sqlite_columns(conn, table: str, columns: dict[str, str]) -> None:

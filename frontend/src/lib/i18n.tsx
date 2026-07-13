@@ -166,6 +166,8 @@ const zh: Record<string, string> = {
   "Candidate": "候选模板",
   "passed": "通过",
   "failed": "失败",
+  "Maximum template attempts": "最大模板尝试次数",
+  "Each failed candidate feeds its evaluation back into the next attempt. Default: 10.": "每个失败候选的评估结果都会反馈给下一次尝试。默认：10 次。",
   "stream": "流式",
   "no stream": "无流式",
   "hide": "隐藏",

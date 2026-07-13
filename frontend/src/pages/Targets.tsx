@@ -22,6 +22,7 @@ type CheckResult = {
 };
 type ServiceContextTemplate = {
   id: string; version: number; status: string; is_active: boolean; topic: string | null;
+  language: string | null;
   template: string | null; rationale: string | null; target_model: string; generator_model: string;
   verification_passed: boolean; error: string | null; created_at: string | null;
 };
@@ -42,6 +43,7 @@ export default function Targets() {
   const [deleteTarget, setDeleteTarget] = useState<T | null>(null);
   const [templateTarget, setTemplateTarget] = useState<T | null>(null);
   const [generatorConfigId, setGeneratorConfigId] = useState("");
+  const [maxTemplateCandidates, setMaxTemplateCandidates] = useState("10");
   const [templateTraces, setTemplateTraces] = useState<Record<string, any>>({});
   const [expandedTraceId, setExpandedTraceId] = useState<string | null>(null);
   const [limitDrafts, setLimitDrafts] = useState<Record<string, { timeout: string; max_concurrency: string; max_input_chars: string }>>({});
@@ -159,7 +161,7 @@ export default function Targets() {
   const generateTemplate = useMutation({
     mutationFn: async () => api.post<ServiceContextTemplate>(
       `/api/targets/${templateTarget!.id}/service-context-templates/generate`,
-      { generator_config_id: generatorConfigId },
+      { generator_config_id: generatorConfigId, max_candidates: Number(maxTemplateCandidates) },
     ),
     onSuccess: ({ data: generated }) => {
       if (generated.status === "succeeded") toast.success(t("Topic-bridge template generated"));
@@ -374,6 +376,7 @@ export default function Targets() {
                             onClick={() => {
                               setTemplateTarget(target);
                               setGeneratorConfigId("");
+                              setMaxTemplateCandidates("10");
                             }}
                           >
                             {t("Topic bridge")}
@@ -474,10 +477,28 @@ export default function Targets() {
                   ))}
                 </Select>
               </Field>
+              <Field
+                label={t("Maximum template attempts")}
+                hint={t("Each failed candidate feeds its evaluation back into the next attempt. Default: 10.")}
+              >
+                <Input
+                  type="number"
+                  min="1"
+                  max="20"
+                  step="1"
+                  value={maxTemplateCandidates}
+                  onChange={e => setMaxTemplateCandidates(e.target.value)}
+                />
+              </Field>
               <div className="mt-3 flex justify-end">
                 <Button
                   icon={<Sparkles className="h-4 w-4" />}
-                  disabled={!generatorConfigId}
+                  disabled={
+                    !generatorConfigId
+                    || !Number.isInteger(Number(maxTemplateCandidates))
+                    || Number(maxTemplateCandidates) < 1
+                    || Number(maxTemplateCandidates) > 20
+                  }
                   loading={generateTemplate.isPending}
                   onClick={() => generateTemplate.mutate()}
                 >
@@ -501,6 +522,7 @@ export default function Targets() {
                       <Badge tone={version.status === "succeeded" ? "green" : "red"}>{version.status}</Badge>
                       {version.is_active && <Badge tone="indigo">{t("active")}</Badge>}
                       {version.topic && <Badge>{version.topic}</Badge>}
+                      {version.language && <Badge tone="blue">{version.language}</Badge>}
                     </div>
                     {!version.is_active && version.status === "succeeded" && (
                       <Button

@@ -89,6 +89,7 @@ class ServiceContextTarget:
                 "target_model": self._template.get("target_model"),
                 "generator_model": self._template.get("generator_model"),
                 "topic": self._template.get("topic"),
+                "language": self._template.get("language"),
                 "transformed_prompt": (chosen_call or {}).get("transformed_prompt"),
                 "sent_prompt": (chosen_call or {}).get("sent_prompt"),
                 "fallback_reason": (chosen_call or {}).get("fallback_reason"),

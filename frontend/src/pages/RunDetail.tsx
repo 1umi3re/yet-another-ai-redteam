@@ -1109,6 +1109,7 @@ function AttemptDetailDrawer({ runId, attempt, scores, onClose }: { runId: strin
                   {attempt.service_context.status}
                 </Badge>
                 {attempt.service_context.topic && <Badge>{attempt.service_context.topic}</Badge>}
+                {attempt.service_context.language && <Badge tone="blue">{attempt.service_context.language}</Badge>}
                 <span>v{attempt.service_context.template_version}</span>
               </div>
               {attempt.service_context.fallback_reason && (

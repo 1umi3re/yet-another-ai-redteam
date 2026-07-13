@@ -36,6 +36,7 @@ class UpdateTargetLimits(BaseModel):
 
 class GenerateServiceContextTemplate(BaseModel):
     generator_config_id: str
+    max_candidates: int = Field(default=10, ge=1, le=20)
 
 
 class CheckResult(BaseModel):
@@ -181,7 +182,9 @@ async def generate_service_context_template(
 ):
     try:
         return await state.service_context_templates.generate_service_context_template(
-            tid, req.generator_config_id
+            tid,
+            req.generator_config_id,
+            max_candidates=req.max_candidates,
         )
     except KeyError:
         raise HTTPException(404, "Target or generator target not found") from None

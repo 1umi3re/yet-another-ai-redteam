@@ -63,6 +63,7 @@ class ServiceContextTemplate(Base):
     status: Mapped[str] = mapped_column(String(20), default="generating")
     is_active: Mapped[bool] = mapped_column(Boolean, default=False)
     topic: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    language: Mapped[str | None] = mapped_column(String(100), nullable=True)
     template_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     rationale: Mapped[str | None] = mapped_column(Text, nullable=True)
     verification_passed: Mapped[bool] = mapped_column(Boolean, default=False)
