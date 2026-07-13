@@ -91,6 +91,17 @@ docker compose up --build
 pytest -q
 ```
 
+### Alembic migration safety
+
+Keep every Alembic `revision` identifier at **32 characters or fewer**. Alembic's default
+`alembic_version.version_num` column is `VARCHAR(32)`; longer IDs can apply the migration
+body and then fail while recording the new version on PostgreSQL with
+`StringDataRightTruncation`.
+
+Use short IDs such as `0013_svc_ctx_language`, while descriptive text belongs in the
+migration filename and docstring. `tests/unit/test_alembic_migrations.py` enforces this
+limit so the same production migration failure does not recur.
+
 ## Seeding datasets (AdvBench / HarmBench)
 
 Bundled JSON versions of **AdvBench** (520 prompts) and **HarmBench** (400 prompts) are shipped with the package. Seed them into your running instance with:

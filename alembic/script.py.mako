@@ -4,6 +4,9 @@ Revision ID: ${up_revision}
 Revises: ${down_revision | comma,n}
 Create Date: ${create_date}
 
+IMPORTANT: Keep revision IDs at 32 characters or fewer. Alembic's default
+version_num column is VARCHAR(32), including on PostgreSQL.
+
 """
 from typing import Sequence, Union
 from alembic import op

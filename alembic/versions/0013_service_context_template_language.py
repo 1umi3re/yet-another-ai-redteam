@@ -1,6 +1,6 @@
 """service context template language
 
-Revision ID: 0013_service_context_template_language
+Revision ID: 0013_svc_ctx_language
 Revises: 0012_service_context_templates
 Create Date: 2026-07-13 00:00:00.000000
 """
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 from alembic import op
 
-revision: str = "0013_service_context_template_language"
+revision: str = "0013_svc_ctx_language"
 down_revision: str | None = "0012_service_context_templates"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
