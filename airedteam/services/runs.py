@@ -13,6 +13,7 @@ from sqlalchemy import delete, func, select, update
 from airedteam.builtins.executors.converter_method import ConverterMethodExecutor
 from airedteam.builtins.executors.general_multi_turn import GeneralMultiTurnExecutor
 from airedteam.builtins.executors.retest import RETEST_METADATA_KEY, RetestExecutor
+from airedteam.builtins.scorers.llm_judge_ensemble import validate_judge_configs
 from airedteam.core.executor_methods import (
     language_support_for_converter_method,
     language_support_for_executor,
@@ -383,6 +384,25 @@ class RunService:
             params["prompt_assets"] = self._prompt_assets
             metadata["judge_config_id"] = judge_cfg_id
             metadata["judge_name"] = judge_cfg.name if judge_cfg is not None else judge_cfg_id
+        elif ref.get("plugin") == "llm_judge_ensemble":
+            judge_config_ids = [params.pop(f"judge_config_id_{position}", None) for position in range(1, 4)]
+            if any(not config_id for config_id in judge_config_ids):
+                raise ValueError(
+                    "llm_judge_ensemble scorer requires params.judge_config_id_1, "
+                    "params.judge_config_id_2, and params.judge_config_id_3"
+                )
+            judge_configs = [await self._targets.get(config_id) for config_id in judge_config_ids]
+            judge_metadata = validate_judge_configs(judge_configs)
+            judges = []
+            for config_id in judge_config_ids:
+                judge_ref = await self._targets.resolve_for_runtime(config_id)
+                judge = self._build_target_from_cfg(judge_ref)
+                judges.append(judge)
+                closeables.append(judge)
+            params["judges"] = judges
+            params["judge_metadata"] = judge_metadata
+            params["prompt_assets"] = self._prompt_assets
+            metadata["judges"] = judge_metadata
         scorer = build_scorer({"plugin": ref["plugin"], "params": params})
         return scorer, closeables, metadata
 

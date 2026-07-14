@@ -303,6 +303,7 @@ substring = "airedteam.builtins.scorers.substring:SubstringScorer"
 regex = "airedteam.builtins.scorers.regex:RegexScorer"
 refusal = "airedteam.builtins.scorers.refusal:RefusalScorer"
 llm_judge = "airedteam.builtins.scorers.llm_judge:LLMJudgeScorer"
+llm_judge_ensemble = "airedteam.builtins.scorers.llm_judge_ensemble:LLMJudgeEnsembleScorer"
 
 [project.entry-points."airedteam.scenarios"]
 owasp_llm_top10_jailbreak = "airedteam.builtins.scenarios.owasp_llm_top10_jailbreak:scenario"

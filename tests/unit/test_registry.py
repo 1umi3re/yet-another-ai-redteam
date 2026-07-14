@@ -8,7 +8,7 @@ def test_registry_loads_known_groups():
     assert "json_upload" in r.list("datasets")
     assert "hf" in r.list("datasets")
     assert {"identity", "base64", "rot13", "prefix"}.issubset(set(r.list("converters")))
-    assert {"substring", "regex", "refusal", "llm_judge"}.issubset(set(r.list("scorers")))
+    assert {"substring", "regex", "refusal", "llm_judge", "llm_judge_ensemble"}.issubset(set(r.list("scorers")))
 
 
 def test_registry_get_returns_callable_class():

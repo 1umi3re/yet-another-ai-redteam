@@ -1235,7 +1235,11 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function PromptSnapshotView({ snapshot }: { snapshot: any }) {
   const { t } = useI18n();
-  const snapshots = Array.isArray(snapshot?.snapshots) ? snapshot.snapshots : [snapshot];
+  const snapshots = Array.isArray(snapshot?.snapshots)
+    ? snapshot.snapshots
+    : Array.isArray(snapshot?.members)
+      ? snapshot.members.map((member: any) => ({ ...member.snapshot, ...member }))
+      : [snapshot];
   return (
     <div className="space-y-3">
       {snapshots.map((item: any, idx: number) => (
@@ -1243,6 +1247,8 @@ function PromptSnapshotView({ snapshot }: { snapshot: any }) {
           <div className="flex flex-wrap items-center gap-2 text-[11px]">
             <Badge>{item.asset_id ?? t("Prompt snapshot")}</Badge>
             {item.source && <Badge>{item.source}</Badge>}
+            {item.target_name && <Badge>{item.target_name}</Badge>}
+            {item.model_identity && <Badge>{item.model_identity}</Badge>}
             {item.override_id && <Badge>{t("override")}</Badge>}
             {item.sha256 && <span className="font-mono text-gray-500">{item.sha256.slice(0, 12)}</span>}
           </div>
@@ -1329,7 +1335,8 @@ function ScoreCard({ score }: { score: any }) {
   const tone = displayVerdict === "refused" ? "green" : displayVerdict === "complied" ? "red" : "amber";
   
   // Check for judge format error
-  const isLLMJudge = score.scorer === "llm_judge";
+  const isLLMJudge = score.scorer === "llm_judge" || score.scorer === "llm_judge_ensemble";
+  const ensembleVotes = score.scorer === "llm_judge_ensemble" && Array.isArray(v.votes) ? v.votes : [];
   const hasParseError = isLLMJudge && v.parse_error === true;
 
   const handleSave = () => {
@@ -1404,6 +1411,67 @@ function ScoreCard({ score }: { score: any }) {
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {ensembleVotes.length > 0 && (
+        <div className="rounded-md border border-gray-200 bg-gray-50 p-2 space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+            <span className="font-semibold text-gray-700">{t("Judge votes")}</span>
+            <span className="text-gray-500">
+              {t("{{valid}} valid · {{complied}} complied · {{refused}} refused", {
+                valid: v.valid_votes ?? 0,
+                complied: v.complied_votes ?? 0,
+                refused: v.refused_votes ?? 0,
+              })}
+            </span>
+          </div>
+          <div className="grid gap-2 lg:grid-cols-3">
+            {ensembleVotes.map((vote: any, idx: number) => {
+              const valid = vote.status === "valid";
+              const voteVerdict = valid && typeof vote.label === "boolean"
+                ? (vote.label ? "complied" : "refused")
+                : vote.status === "invalid" ? "invalid" : "error";
+              const voteTone = voteVerdict === "complied"
+                ? "red"
+                : voteVerdict === "refused" ? "green" : "amber";
+              return (
+                <div key={vote.target_config_id ?? idx} className="rounded border border-gray-200 bg-white p-2 text-[11px]">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="font-medium text-gray-700 truncate">
+                        {vote.target_name ?? t("Judge {{position}}", { position: vote.position ?? idx + 1 })}
+                      </div>
+                      <div className="font-mono text-[10px] text-gray-500 truncate">
+                        {vote.model_identity ?? vote.model ?? "—"}
+                      </div>
+                    </div>
+                    <Badge tone={voteTone as any}>{t(voteVerdict)}</Badge>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-gray-500">
+                    {typeof vote.confidence === "number" && (
+                      <span>{t("confidence {{value}}", { value: vote.confidence.toFixed(2) })}</span>
+                    )}
+                    {typeof vote.score === "number" && (
+                      <span>{t("score {{value}}", { value: vote.score })}</span>
+                    )}
+                    {vote.parse_error === true && <span>{t("Judge format error")}</span>}
+                  </div>
+                  {(vote.rationale || vote.error) && (
+                    <div className="mt-2 text-gray-600 break-words">{vote.rationale ?? vote.error}</div>
+                  )}
+                  {vote.judge_raw && (
+                    <details className="mt-2 text-gray-500">
+                      <summary className="cursor-pointer hover:text-gray-700">{t("Raw judge output")}</summary>
+                      <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap break-words rounded border border-gray-200 bg-gray-50 p-1 font-mono text-[10px]">
+{vote.judge_raw}
+                      </pre>
+                    </details>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
       

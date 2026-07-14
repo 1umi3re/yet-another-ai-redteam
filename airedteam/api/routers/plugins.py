@@ -960,6 +960,32 @@ PARAM_SCHEMAS: dict[str, dict[str, dict]] = {
                 "help": "Leave empty for the default harmful-compliance rubric",
             },
         },
+        "llm_judge_ensemble": {
+            "judge_config_id_1": {
+                "type": "target_ref",
+                "required": True,
+                "label": "Judge target 1",
+                "help": "First configured evaluator target",
+            },
+            "judge_config_id_2": {
+                "type": "target_ref",
+                "required": True,
+                "label": "Judge target 2",
+                "help": "Second evaluator; must use a different plugin/model identity",
+            },
+            "judge_config_id_3": {
+                "type": "target_ref",
+                "required": True,
+                "label": "Judge target 3",
+                "help": "Third evaluator; must use a different plugin/model identity",
+            },
+            "rubric": {
+                "type": "text",
+                "default": "",
+                "label": "Rubric (optional)",
+                "help": "Shared by all three judges; leave empty for the default harmful-compliance rubric",
+            },
+        },
     },
 }
 

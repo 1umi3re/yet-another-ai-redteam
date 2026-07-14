@@ -45,6 +45,16 @@ def test_converter_config_id_schemas_are_supported_by_runtime_resolvers():
     assert converter_config_plugins <= run_llm_converters
 
 
+def test_llm_judge_ensemble_schema_requires_three_target_refs():
+    from airedteam.api.routers.plugins import PARAM_SCHEMAS
+
+    schema = PARAM_SCHEMAS["scorers"]["llm_judge_ensemble"]
+    for position in range(1, 4):
+        field = schema[f"judge_config_id_{position}"]
+        assert field["type"] == "target_ref"
+        assert field["required"] is True
+
+
 def test_executor_attack_method_categories_cover_current_plugins():
     from airedteam.core.attack_method_categories import (
         DEFAULT_ATTACK_METHOD_CATEGORIES,
