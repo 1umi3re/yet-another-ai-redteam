@@ -78,6 +78,7 @@ export default function ManualConsole() {
   const { data: plugins } = useQuery({
     queryKey: ["plugins"],
     queryFn: async () => (await api.get("/api/plugins")).data,
+    staleTime: 5 * 60_000,
   });
   const convSchemas: PluginSchemas = plugins?.params?.converters ?? {};
   const scorerSchemas: PluginSchemas = plugins?.params?.scorers ?? {};

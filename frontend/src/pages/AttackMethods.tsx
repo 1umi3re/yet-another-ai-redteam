@@ -98,6 +98,7 @@ export default function AttackMethods() {
   const { data: plugins } = useQuery({
     queryKey: ["plugins"],
     queryFn: async () => (await api.get("/api/plugins")).data,
+    staleTime: 5 * 60_000,
   });
 
   const [scope, setScope] = useState<CategoryScope>({ kind: "all" });

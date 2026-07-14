@@ -34,6 +34,10 @@ async def test_prompt_asset_api_override_flow(monkeypatch, tmp_path):
         assert listed.status_code == 200
         assert any(a["id"] == "llm_judge.single.v1" for a in listed.json())
         assert any(a["id"] == "llm_judge.single.v2" for a in listed.json())
+        summary = await c.get("/api/prompt-assets", headers=h, params={"view": "summary"})
+        assert summary.status_code == 200
+        summary_asset = next(a for a in summary.json() if a["id"] == "llm_judge.single.v1")
+        assert "template" not in summary_asset
 
         custom = await c.post(
             "/api/prompt-assets",
@@ -75,6 +79,10 @@ async def test_prompt_asset_api_override_flow(monkeypatch, tmp_path):
         )
         assert active.status_code == 200
         assert active.json()["active_override"]["id"] == oid
+        summary_active = await c.get("/api/prompt-assets", headers=h, params={"view": "summary"})
+        active_metadata = next(a for a in summary_active.json() if a["id"] == "llm_judge.single.v1")
+        assert active_metadata["active_override"]["id"] == oid
+        assert "template" not in active_metadata["active_override"]
 
         updated = await c.patch(
             f"/api/prompt-assets/overrides/{oid}",

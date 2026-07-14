@@ -49,9 +49,13 @@ export default function NewRun() {
   const queryClient = useQueryClient();
   const { data: targets } = useQuery({ queryKey: ["targets"], queryFn: async () => (await api.get("/api/targets")).data });
   const { data: datasets } = useQuery({ queryKey: ["datasets"], queryFn: async () => (await api.get("/api/datasets")).data });
-  const { data: scenarios } = useQuery({ queryKey: ["scenarios"], queryFn: async () => (await api.get("/api/scenarios")).data });
-  const { data: plugins } = useQuery({ queryKey: ["plugins"], queryFn: async () => (await api.get("/api/plugins")).data });
-  const { data: promptAssets } = useQuery({ queryKey: ["prompt-assets"], queryFn: async () => (await api.get("/api/prompt-assets")).data });
+  const { data: scenarios } = useQuery({ queryKey: ["scenarios"], queryFn: async () => (await api.get("/api/scenarios")).data, staleTime: 5 * 60_000 });
+  const { data: plugins } = useQuery({ queryKey: ["plugins"], queryFn: async () => (await api.get("/api/plugins")).data, staleTime: 5 * 60_000 });
+  const { data: promptAssets } = useQuery({
+    queryKey: ["prompt-assets"],
+    queryFn: async () => (await api.get("/api/prompt-assets", { params: { view: "summary" } })).data,
+    staleTime: 5 * 60_000,
+  });
 
   const convSchemas: PluginSchemas = plugins?.params?.executor_methods ?? plugins?.params?.converters ?? {};
   const scorerSchemas: PluginSchemas = plugins?.params?.scorers ?? {};

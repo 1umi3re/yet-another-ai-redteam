@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 import { api } from "../lib/api";
 import { Card, CardHeader, CardTitle } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
@@ -33,29 +33,38 @@ export default function Runs() {
   const [statusFilter, setStatusFilter] = useState("");
   const [kindFilter, setKindFilter] = useState("");
   const [runSearch, setRunSearch] = useState("");
+  const deferredSearch = useDeferredValue(runSearch);
+  const [page, setPage] = useState(0);
+  const pageSize = 100;
   const [excludedSourceRuns, setExcludedSourceRuns] = useState<Set<string>>(new Set());
+  const usePaging = !targetFilter;
   const { data, isLoading } = useQuery({
-    queryKey: ["runs", targetFilter],
+    queryKey: ["runs", targetFilter, statusFilter, kindFilter, deferredSearch, page, usePaging],
     queryFn: async () => (await api.get("/api/runs", {
-      params: { target_id: targetFilter || undefined },
+      params: {
+        target_id: targetFilter || undefined,
+        status: statusFilter || undefined,
+        kind: kindFilter || undefined,
+        search: deferredSearch || undefined,
+        paged: usePaging,
+        limit: pageSize,
+        offset: page * pageSize,
+      },
     })).data,
-    refetchInterval: 2000,
+    refetchInterval: query => {
+      const payload = query.state.data;
+      const items = Array.isArray(payload) ? payload : (payload?.items ?? []);
+      return items.some((run: any) => ["running", "pausing"].includes(run.status)) ? 3000 : false;
+    },
   });
   const { data: targets = [] } = useQuery({
     queryKey: ["targets"],
     queryFn: async () => (await api.get("/api/targets")).data,
   });
-  const filteredRuns = useMemo(() => {
-    const q = runSearch.trim().toLowerCase();
-    return (data ?? []).filter((run: any) => {
-      if (statusFilter && run.status !== statusFilter) return false;
-      if (kindFilter && run.kind !== kindFilter) return false;
-      if (!q) return true;
-      return run.name.toLowerCase().includes(q)
-        || (run.target_names ?? []).join(", ").toLowerCase().includes(q);
-    });
-  }, [data, kindFilter, runSearch, statusFilter]);
-  const automatedRuns = useMemo(() => (data ?? []).filter((run: any) => run.kind === "automated"), [data]);
+  const runs: any[] = Array.isArray(data) ? data : (data?.items ?? []);
+  const total = Array.isArray(data) ? data.length : (data?.total ?? 0);
+  const filteredRuns = runs;
+  const automatedRuns = useMemo(() => runs.filter((run: any) => run.kind === "automated"), [runs]);
   const includedSourceRunIds = automatedRuns
     .filter((run: any) => !excludedSourceRuns.has(run.id))
     .map((run: any) => run.id);
@@ -93,12 +102,12 @@ export default function Runs() {
             <Field label={t("Search runs")}>
               <Input
                 value={runSearch}
-                onChange={e => setRunSearch(e.target.value)}
+                onChange={e => { setRunSearch(e.target.value); setPage(0); }}
                 placeholder={t("Search by run or target")}
               />
             </Field>
             <Field label={t("Target")}>
-              <Select value={targetFilter} onChange={e => { setTargetFilter(e.target.value); setExcludedSourceRuns(new Set()); }}>
+              <Select value={targetFilter} onChange={e => { setTargetFilter(e.target.value); setExcludedSourceRuns(new Set()); setPage(0); }}>
                 <option value="">{t("All targets")}</option>
                 {targets.map((target: any) => (
                   <option key={target.id} value={target.id}>{target.name}</option>
@@ -106,7 +115,7 @@ export default function Runs() {
               </Select>
             </Field>
             <Field label={t("Status")}>
-              <Select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+              <Select value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(0); }}>
                 <option value="">{t("All statuses")}</option>
                 <option value="running">{t("Running")}</option>
                 <option value="completed">{t("Completed")}</option>
@@ -115,18 +124,18 @@ export default function Runs() {
               </Select>
             </Field>
             <Field label={t("Kind")}>
-              <Select value={kindFilter} onChange={e => setKindFilter(e.target.value)}>
+              <Select value={kindFilter} onChange={e => { setKindFilter(e.target.value); setPage(0); }}>
                 <option value="">{t("All kinds")}</option>
                 <option value="automated">{t("Automated")}</option>
                 <option value="manual">{t("Manual")}</option>
               </Select>
             </Field>
           </div>
-          <div className="mt-2 text-xs text-gray-500">{t("Auto-refreshing every 2s")}</div>
+          <div className="mt-2 text-xs text-gray-500">{t("Active runs refresh automatically")}</div>
         </div>
         {isLoading ? (
           <div className="p-5 text-sm text-gray-500">{t("Loading…")}</div>
-        ) : !data?.length ? (
+        ) : !runs.length ? (
           <EmptyState
             icon={<ListChecks className="h-10 w-10" />}
             title={t("No runs yet")}
@@ -207,6 +216,13 @@ export default function Runs() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+        {usePaging && total > pageSize && (
+          <div className="flex items-center justify-end gap-3 border-t border-gray-100 px-5 py-3">
+            <Button variant="secondary" size="sm" disabled={page === 0} onClick={() => setPage(value => value - 1)}>{t("Previous")}</Button>
+            <span className="text-xs text-gray-500">{page + 1} / {Math.ceil(total / pageSize)}</span>
+            <Button variant="secondary" size="sm" disabled={(page + 1) * pageSize >= total} onClick={() => setPage(value => value + 1)}>{t("Next")}</Button>
           </div>
         )}
       </Card>

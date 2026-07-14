@@ -97,6 +97,30 @@ async def test_create_and_run_via_api(monkeypatch, tmp_path):
         assert s["finished_at"]
         assert isinstance(s["duration_ms"], int)
         assert s["duration_ms"] >= 0
+        legacy_runs = (await c.get("/api/runs", headers=h)).json()
+        assert isinstance(legacy_runs, list)
+        paged_runs = (
+            await c.get(
+                "/api/runs",
+                headers=h,
+                params={
+                    "paged": True,
+                    "limit": 1,
+                    "target_id": tid,
+                    "status": "completed",
+                    "kind": "automated",
+                    "search": "r1",
+                },
+            )
+        ).json()
+        assert paged_runs["total"] == 1
+        assert paged_runs["items"][0]["id"] == rid
+        assert paged_runs["items"][0]["target_names"] == ["t1"]
+        summary = (await c.get("/api/runs/summary", headers=h)).json()
+        assert summary["total"] == 1
+        assert summary["completed"] == 1
+        assert summary["running"] == 0
+        assert summary["recent"][0]["id"] == rid
         attempts = (await c.get(f"/api/runs/{rid}/attempts", headers=h)).json()
         assert len(attempts) == 1
         assert attempts[0]["run_id"] == rid

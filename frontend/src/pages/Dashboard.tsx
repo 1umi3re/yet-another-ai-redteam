@@ -14,16 +14,15 @@ export default function Dashboard() {
   const { t } = useI18n();
   const { data: targets } = useQuery({ queryKey: ["targets"], queryFn: async () => (await api.get("/api/targets")).data });
   const { data: datasets } = useQuery({ queryKey: ["datasets"], queryFn: async () => (await api.get("/api/datasets")).data });
-  const { data: runs } = useQuery({
-    queryKey: ["runs"],
-    queryFn: async () => (await api.get("/api/runs")).data,
-    refetchInterval: 3000,
+  const { data: runSummary } = useQuery({
+    queryKey: ["run-summary"],
+    queryFn: async () => (await api.get("/api/runs/summary", { params: { recent_limit: 5 } })).data,
+    refetchInterval: query => (query.state.data?.running ?? 0) > 0 ? 3000 : false,
   });
 
-  const runsArr: any[] = runs ?? [];
-  const completed = runsArr.filter(r => r.status === "completed").length;
-  const running = runsArr.filter(r => ["running", "pausing"].includes(r.status)).length;
-  const recent = runsArr.slice(0, 5);
+  const completed = runSummary?.completed ?? 0;
+  const running = runSummary?.running ?? 0;
+  const recent: any[] = runSummary?.recent ?? [];
 
   return (
     <div className="space-y-6">
@@ -38,7 +37,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Stat icon={<Target className="h-4 w-4" />} label={t("Targets")} value={targets?.length ?? 0} to="/targets" tone="brand" />
         <Stat icon={<Database className="h-4 w-4" />} label={t("Test Datasets")} value={datasets?.length ?? 0} to="/assets?tab=datasets" tone="brand" />
-        <Stat icon={<ListChecks className="h-4 w-4" />} label={t("Total runs")} value={runsArr.length} to="/runs" tone="brand" />
+        <Stat icon={<ListChecks className="h-4 w-4" />} label={t("Total runs")} value={runSummary?.total ?? 0} to="/runs" tone="brand" />
         <Stat icon={<CheckCircle2 className="h-4 w-4" />} label={t("Completed")} value={completed} sub={running ? t("{{count}} running", { count: running }) : undefined} to="/runs" tone="green" />
       </div>
 

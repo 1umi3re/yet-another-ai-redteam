@@ -31,8 +31,12 @@ export default function RetestRun() {
   const [timeout, setTimeout] = useState("");
 
   const { data: targets = [] } = useQuery({ queryKey: ["targets"], queryFn: async () => (await api.get("/api/targets")).data });
-  const { data: plugins } = useQuery({ queryKey: ["plugins"], queryFn: async () => (await api.get("/api/plugins")).data });
-  const { data: promptAssets = [] } = useQuery({ queryKey: ["prompt-assets"], queryFn: async () => (await api.get("/api/prompt-assets")).data });
+  const { data: plugins } = useQuery({ queryKey: ["plugins"], queryFn: async () => (await api.get("/api/plugins")).data, staleTime: 5 * 60_000 });
+  const { data: promptAssets = [] } = useQuery({
+    queryKey: ["prompt-assets"],
+    queryFn: async () => (await api.get("/api/prompt-assets", { params: { view: "summary" } })).data,
+    staleTime: 5 * 60_000,
+  });
   const { data, isLoading } = useQuery({
     queryKey: ["successful-attempts", targetId, page, selectedSourceRuns ? Array.from(selectedSourceRuns).sort().join(",") : "all"],
     enabled: !!targetId,

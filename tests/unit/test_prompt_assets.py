@@ -1,9 +1,32 @@
 import pytest
+from sqlalchemy import event
 
 from airedteam.services.prompt_assets import PromptAssetService
 from airedteam.storage import models
 from airedteam.storage.blobs import LocalBlobStore
 from airedteam.storage.db import make_engine, make_sessionmaker
+
+
+@pytest.mark.asyncio
+async def test_prompt_asset_listing_uses_constant_query_count(tmp_path):
+    eng = make_engine(f"sqlite+aiosqlite:///{tmp_path}/t.db")
+    sessions = make_sessionmaker(eng)
+    async with eng.begin() as connection:
+        await connection.run_sync(models.Base.metadata.create_all)
+
+    statements: list[str] = []
+
+    @event.listens_for(eng.sync_engine, "before_cursor_execute")
+    def record_statement(_connection, _cursor, statement, _parameters, _context, _executemany):
+        if statement.lstrip().upper().startswith("SELECT"):
+            statements.append(statement)
+
+    service = PromptAssetService(sessions, LocalBlobStore(tmp_path / "blobs"))
+    assets = await service.list_assets(include_template=False)
+
+    assert assets
+    assert len(statements) == 2
+    assert all("template" not in asset for asset in assets)
 
 
 @pytest.mark.asyncio

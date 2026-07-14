@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import csv
 import io
 import json
@@ -12,13 +13,13 @@ from typing import Any
 import yaml
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sse_starlette.sse import EventSourceResponse
 
 from airedteam.api.deps import AppState, get_state, require_admin
 from airedteam.core.registry import default_registry
 from airedteam.core.score_status import score_retryable, score_status
-from airedteam.storage.models import Attempt, Run, Score
+from airedteam.storage.models import Attempt, Run, RunTarget, Score
 
 router = APIRouter()
 
@@ -69,12 +70,24 @@ class CreateRetest(BaseModel):
     source_run_ids: list[str] = Field(default_factory=list)
 
 
-async def _run_to_out(r: Run, state: AppState) -> RunOut:
+async def _target_name_map(state: AppState) -> dict[str, str]:
+    return {target.id: target.name for target in await state.targets.list()}
+
+
+async def _run_to_out(
+    r: Run,
+    state: AppState,
+    target_names_by_id: dict[str, str] | None = None,
+) -> RunOut:
     target_ids = _target_ids_for_run(r)
-    target_names = []
-    for target_id in target_ids:
-        target = await state.targets.get(target_id)
-        target_names.append(target.name if target is not None else target_id)
+    if target_names_by_id is None:
+        targets = [await state.targets.get(target_id) for target_id in target_ids]
+        target_names = [
+            target.name if target is not None else target_id
+            for target_id, target in zip(target_ids, targets, strict=True)
+        ]
+    else:
+        target_names = [target_names_by_id.get(target_id, target_id) for target_id in target_ids]
     return RunOut(
         id=r.id,
         name=r.name,
@@ -90,6 +103,11 @@ async def _run_to_out(r: Run, state: AppState) -> RunOut:
         error=r.error,
         subtype="retest" if _retest_spec_for_run(r) is not None else "standard",
     )
+
+
+async def _runs_to_out(rows: list[Run], state: AppState) -> list[RunOut]:
+    target_names = await _target_name_map(state)
+    return [await _run_to_out(row, state, target_names) for row in rows]
 
 
 def _target_ids_for_run(r: Run) -> list[str]:
@@ -208,17 +226,74 @@ async def retry_attempt(rid: str, aid: str, _=Depends(require_admin), state: App
         raise HTTPException(400, str(e)) from e
 
 
-@router.get("/runs", response_model=list[RunOut])
+@router.get("/runs")
 async def list_runs(
     _=Depends(require_admin),
     state: AppState = Depends(get_state),
     target_id: str | None = None,
+    status: str | None = None,
+    kind: str | None = None,
+    search: str | None = Query(default=None, max_length=200),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    paged: bool = False,
+):
+    target_names = await _target_name_map(state)
+    stmt = select(Run)
+    if target_id:
+        stmt = stmt.join(RunTarget, RunTarget.run_id == Run.id).where(RunTarget.target_id == target_id)
+    if status:
+        stmt = stmt.where(Run.status == status)
+    if kind:
+        stmt = stmt.where(Run.kind == kind)
+    if search and search.strip():
+        term = search.strip()
+        matching_target_ids = [
+            target_key for target_key, target_name in target_names.items() if term.casefold() in target_name.casefold()
+        ]
+        conditions = [Run.name.ilike(f"%{term}%")]
+        if matching_target_ids:
+            conditions.append(
+                Run.id.in_(select(RunTarget.run_id).where(RunTarget.target_id.in_(matching_target_ids)))
+            )
+        stmt = stmt.where(or_(*conditions))
+    stmt = stmt.order_by(Run.created_at.desc())
+    async with state.session_factory() as s:
+        if not paged:
+            rows = (await s.execute(stmt)).scalars().all()
+            return [await _run_to_out(row, state, target_names) for row in rows]
+        total = int((await s.execute(select(func.count()).select_from(stmt.order_by(None).subquery()))).scalar_one())
+        rows = (await s.execute(stmt.offset(offset).limit(limit))).scalars().all()
+    return {
+        "items": [await _run_to_out(row, state, target_names) for row in rows],
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }
+
+
+@router.get("/runs/summary")
+async def runs_summary(
+    _=Depends(require_admin),
+    state: AppState = Depends(get_state),
+    recent_limit: int = Query(default=5, ge=1, le=25),
 ):
     async with state.session_factory() as s:
-        rs = (await s.execute(select(Run).order_by(Run.created_at.desc()))).scalars().all()
-        if target_id:
-            rs = [r for r in rs if target_id in _target_ids_for_run(r)]
-        return [await _run_to_out(r, state) for r in rs]
+        status_rows = (await s.execute(select(Run.status, func.count()).group_by(Run.status))).all()
+        recent = (
+            (await s.execute(select(Run).order_by(Run.created_at.desc()).limit(recent_limit)))
+            .scalars()
+            .all()
+        )
+    by_status = {status: int(count) for status, count in status_rows}
+    items = await _runs_to_out(recent, state)
+    return {
+        "total": sum(by_status.values()),
+        "completed": by_status.get("completed", 0),
+        "running": sum(by_status.get(value, 0) for value in ("running", "pausing")),
+        "by_status": by_status,
+        "recent": items,
+    }
 
 
 @router.get("/targets/{target_config_id}/successful-attempts")
@@ -253,10 +328,12 @@ async def list_successful_attempts(
         )
         option["successful_attempts"] += 1
         option["reapply_available"] += int(bool(item["reapply_eligible"]))
+    page_records = records[offset : offset + limit]
+    await _hydrate_successful_attempts(state, page_records)
     return {
         "items": [
-            {key: value for key, value in item.items() if key != "_snapshot"}
-            for item in records[offset : offset + limit]
+            {key: value for key, value in item.items() if not key.startswith("_")}
+            for item in page_records
         ],
         "total": len(records),
         "limit": limit,
@@ -284,10 +361,11 @@ async def create_retest(req: CreateRetest, _=Depends(require_admin), state: AppS
         raise HTTPException(400, "timeout_seconds must be positive")
     if len(req.source_run_ids) > 1000:
         raise HTTPException(400, "too many source runs selected")
-    records = await _successful_attempt_records(state, req.target_config_id)
-    if req.source_run_ids:
-        selected_run_ids = set(req.source_run_ids)
-        records = [item for item in records if item["source_run_id"] in selected_run_ids]
+    records = await _successful_attempt_records(
+        state,
+        req.target_config_id,
+        source_run_ids=set(req.source_run_ids) if req.source_run_ids else None,
+    )
     excluded = set(req.excluded_attempt_ids)
     included = set(req.attempt_ids)
     candidates = [item for item in records if req.mode != "reapply_method" or item["reapply_eligible"]]
@@ -301,6 +379,8 @@ async def create_retest(req: CreateRetest, _=Depends(require_admin), state: AppS
         unavailable = [item["id"] for item in selected if not item["reapply_eligible"]]
         if unavailable:
             raise HTTPException(400, f"selected attempts cannot reapply their method: {', '.join(unavailable[:5])}")
+
+    await _hydrate_successful_attempts(state, selected)
 
     source_attempt_ids = [item["id"] for item in selected]
     source_run_ids = list(dict.fromkeys(item["source_run_id"] for item in selected))
@@ -361,33 +441,51 @@ async def list_attempts(
     offset: int = Query(default=0, ge=0),
     paged: bool = False,
 ):
+    stmt = select(Attempt).where(Attempt.run_id == rid)
+    if target_id:
+        stmt = stmt.where(or_(Attempt.target_id == target_id, Attempt.target_name == target_id))
+    if status:
+        stmt = stmt.where(Attempt.status == status)
+    if dataset_item_id:
+        stmt = stmt.where(Attempt.dataset_item_id == dataset_item_id)
+    stmt = stmt.order_by(Attempt.created_at)
+    needs_python_filter = any((verdict, converter, executor)) or reviewed is not None
     async with state.session_factory() as s:
-        rows = (
-            (await s.execute(select(Attempt).where(Attempt.run_id == rid).order_by(Attempt.created_at))).scalars().all()
-        )
-        scores = (
-            (await s.execute(select(Score).join(Attempt, Score.attempt_id == Attempt.id).where(Attempt.run_id == rid)))
+        if paged and not needs_python_filter:
+            total = int(
+                (await s.execute(select(func.count()).select_from(stmt.order_by(None).subquery()))).scalar_one()
+            )
+            rows = (await s.execute(stmt.offset(offset).limit(limit))).scalars().all()
+        else:
+            rows = (await s.execute(stmt)).scalars().all()
+            total = len(rows)
+        attempt_ids = [row.id for row in rows]
+        scores = [] if not attempt_ids else (
+            (await s.execute(select(Score).where(Score.attempt_id.in_(attempt_ids))))
             .scalars()
             .all()
         )
         scores_by_attempt = _scores_by_attempt(scores)
-        filtered_rows = _filter_attempts(
-            rows,
-            scores_by_attempt,
-            target_id=target_id,
-            status=status,
-            verdict=verdict,
-            dataset_item_id=dataset_item_id,
-            converter=converter,
-            executor=executor,
-            reviewed=reviewed,
-        )
-        items = [_attempt_item(a, scores_by_attempt) for a in filtered_rows]
+        if needs_python_filter:
+            rows = _filter_attempts(
+                rows,
+                scores_by_attempt,
+                target_id=None,
+                status=None,
+                verdict=verdict,
+                dataset_item_id=None,
+                converter=converter,
+                executor=executor,
+                reviewed=reviewed,
+            )
+            total = len(rows)
+            if paged:
+                rows = rows[offset : offset + limit]
+        items = [_attempt_item(a, scores_by_attempt) for a in rows]
         if not paged:
             return items
-        total = len(items)
         return {
-            "items": items[offset : offset + limit],
+            "items": items,
             "total": total,
             "limit": limit,
             "offset": offset,
@@ -407,15 +505,27 @@ async def list_scores(
     offset: int = Query(default=0, ge=0),
     paged: bool = False,
 ):
+    stmt = (
+        select(Score, Attempt)
+        .join(Attempt, Score.attempt_id == Attempt.id)
+        .where(Attempt.run_id == rid)
+    )
+    if attempt_id:
+        stmt = stmt.where(Score.attempt_id == attempt_id)
+    if scorer:
+        stmt = stmt.where(Score.scorer == scorer)
+    if reviewed is not None:
+        stmt = stmt.where(Score.reviewer_label.is_not(None) if reviewed else Score.reviewer_label.is_(None))
+    stmt = stmt.order_by(Score.created_at)
     async with state.session_factory() as s:
-        rows = (
-            await s.execute(
-                select(Score, Attempt)
-                .join(Attempt, Score.attempt_id == Attempt.id)
-                .where(Attempt.run_id == rid)
-                .order_by(Score.created_at)
+        if paged and verdict is None:
+            total = int(
+                (await s.execute(select(func.count()).select_from(stmt.order_by(None).subquery()))).scalar_one()
             )
-        ).all()
+            rows = (await s.execute(stmt.offset(offset).limit(limit))).all()
+        else:
+            rows = (await s.execute(stmt)).all()
+            total = len(rows)
         items = [
             {
                 "id": sc.id,
@@ -434,19 +544,15 @@ async def list_scores(
             }
             for sc, a in rows
         ]
-        if attempt_id:
-            items = [s for s in items if s["attempt_id"] == attempt_id]
-        if scorer:
-            items = [s for s in items if s["scorer"] == scorer]
         if verdict:
             items = [s for s in items if s["final_verdict"] == verdict]
-        if reviewed is not None:
-            items = [s for s in items if (s["reviewer_label"] is not None) is reviewed]
+            total = len(items)
+            if paged:
+                items = items[offset : offset + limit]
         if not paged:
             return items
-        total = len(items)
         return {
-            "items": items[offset : offset + limit],
+            "items": items,
             "total": total,
             "limit": limit,
             "offset": offset,
@@ -734,15 +840,27 @@ def _method_ref_for_attempt(attempt: Attempt, run: Run) -> tuple[dict[str, Any] 
     )
 
 
-async def _successful_attempt_records(state: AppState, target_config_id: str) -> list[dict[str, Any]]:
+async def _successful_attempt_records(
+    state: AppState,
+    target_config_id: str,
+    *,
+    source_run_ids: set[str] | None = None,
+) -> list[dict[str, Any]]:
     target = await state.targets.get(target_config_id)
     if target is None:
         raise HTTPException(404, "target not found")
     async with state.session_factory() as s:
-        runs = (
-            await s.execute(select(Run).where(Run.kind == "automated").order_by(Run.created_at.desc()))
-        ).scalars().all()
-        source_runs = [run for run in runs if target_config_id in _target_ids_for_run(run)]
+        run_stmt = (
+            select(Run)
+            .join(RunTarget, RunTarget.run_id == Run.id)
+            .where(Run.kind == "automated", RunTarget.target_id == target_config_id)
+            .order_by(Run.created_at.desc())
+        )
+        if source_run_ids is not None:
+            if not source_run_ids:
+                return []
+            run_stmt = run_stmt.where(Run.id.in_(source_run_ids))
+        source_runs = (await s.execute(run_stmt)).scalars().all()
         if not source_runs:
             return []
         run_by_id = {run.id: run for run in source_runs}
@@ -771,37 +889,6 @@ async def _successful_attempt_records(state: AppState, target_config_id: str) ->
         method_ref, quality, reason = _method_ref_for_attempt(attempt, run)
         service_context = dict(attempt.service_context_json or {})
         sent_prompt = service_context.get("sent_prompt") or attempt.prompt_text
-        user_messages: list[dict[str, Any]] = []
-        if attempt.conversation_blob_path:
-            try:
-                raw = await state.blob_store.get(attempt.conversation_blob_path)
-                conversation = json.loads(raw.decode("utf-8"))
-                user_messages = [
-                    {
-                        "text": str(message.get("text") or ""),
-                        "metadata": dict(message.get("metadata") or {}),
-                        "artifacts": list(message.get("artifacts") or []),
-                    }
-                    for message in conversation.get("messages") or []
-                    if message.get("role") == "user"
-                ]
-            except Exception:
-                user_messages = []
-        if not user_messages:
-            user_messages = [{"text": sent_prompt, "metadata": {}}]
-        snapshot = {
-            "source_attempt_id": attempt.id,
-            "source_run_id": run.id,
-            "source_run_name": run.name,
-            "original_prompt": attempt.original_prompt_text or attempt.prompt_text,
-            "transformed_prompt": service_context.get("transformed_prompt") or attempt.prompt_text,
-            "sent_prompt": sent_prompt,
-            "user_messages": user_messages,
-            "method_ref": method_ref,
-            "provenance_quality": quality,
-            "language": attempt.dataset_item_language,
-            "dataset_item_id": attempt.dataset_item_id,
-        }
         records.append(
             {
                 "id": attempt.id,
@@ -810,17 +897,69 @@ async def _successful_attempt_records(state: AppState, target_config_id: str) ->
                 "executor_name": _attempt_executor_name(attempt),
                 "executor_kind": _attempt_executor_kind(attempt),
                 "language": attempt.dataset_item_language,
-                "original_prompt": snapshot["original_prompt"],
+                "original_prompt": attempt.original_prompt_text or attempt.prompt_text,
                 "sent_prompt": sent_prompt,
-                "multi_turn": len(user_messages) > 1,
+                "multi_turn": False,
                 "provenance_quality": quality,
                 "reapply_eligible": method_ref is not None,
                 "reapply_reason": reason,
                 "created_at": _isoformat(attempt.created_at),
-                "_snapshot": snapshot,
+                "_attempt": attempt,
+                "_run": run,
+                "_method_ref": method_ref,
             }
         )
     return records
+
+
+async def _hydrate_successful_attempt(state: AppState, item: dict[str, Any]) -> None:
+    attempt: Attempt = item["_attempt"]
+    run: Run = item["_run"]
+    method_ref = item["_method_ref"]
+    service_context = dict(attempt.service_context_json or {})
+    sent_prompt = service_context.get("sent_prompt") or attempt.prompt_text
+    user_messages: list[dict[str, Any]] = []
+    if attempt.conversation_blob_path:
+        try:
+            raw = await state.blob_store.get(attempt.conversation_blob_path)
+            conversation = json.loads(raw.decode("utf-8"))
+            user_messages = [
+                {
+                    "text": str(message.get("text") or ""),
+                    "metadata": dict(message.get("metadata") or {}),
+                    "artifacts": list(message.get("artifacts") or []),
+                }
+                for message in conversation.get("messages") or []
+                if message.get("role") == "user"
+            ]
+        except Exception:
+            user_messages = []
+    if not user_messages:
+        user_messages = [{"text": sent_prompt, "metadata": {}}]
+    item["multi_turn"] = len(user_messages) > 1
+    item["_snapshot"] = {
+        "source_attempt_id": attempt.id,
+        "source_run_id": run.id,
+        "source_run_name": run.name,
+        "original_prompt": attempt.original_prompt_text or attempt.prompt_text,
+        "transformed_prompt": service_context.get("transformed_prompt") or attempt.prompt_text,
+        "sent_prompt": sent_prompt,
+        "user_messages": user_messages,
+        "method_ref": method_ref,
+        "provenance_quality": item["provenance_quality"],
+        "language": attempt.dataset_item_language,
+        "dataset_item_id": attempt.dataset_item_id,
+    }
+
+
+async def _hydrate_successful_attempts(state: AppState, items: list[dict[str, Any]]) -> None:
+    semaphore = asyncio.Semaphore(10)
+
+    async def hydrate(item: dict[str, Any]) -> None:
+        async with semaphore:
+            await _hydrate_successful_attempt(state, item)
+
+    await asyncio.gather(*(hydrate(item) for item in items))
 
 
 def _attempt_item(attempt: Attempt, scores_by_attempt: dict[str, list[Score]]) -> dict[str, Any]:
@@ -860,6 +999,7 @@ def _attempt_item(attempt: Attempt, scores_by_attempt: dict[str, list[Score]]) -
         "tokens_in": attempt.tokens_in,
         "tokens_out": attempt.tokens_out,
         "final_verdict": _attempt_verdict(scores),
+        "score_failed": any(score_status(score.value_json) == "failed" for score in scores),
         "reviewed": any(score.reviewer_label is not None for score in scores),
     }
 

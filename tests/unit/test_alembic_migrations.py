@@ -57,3 +57,12 @@ def test_oidc_login_has_alembic_migration():
     assert '"ticket_hash"' in migration_text
     assert '"consumed_at"' in migration_text
     assert 'op.drop_table("oidc_login_tickets")' in migration_text
+
+
+def test_run_loading_indexes_have_alembic_migration():
+    migration_text = Path("alembic/versions/0017_run_loading.py").read_text()
+    assert 'revision: str = "0017_run_loading"' in migration_text
+    assert 'down_revision: str | None = "0016_oidc_login"' in migration_text
+    assert '"run_targets"' in migration_text
+    assert '"ix_attempts_run_created_at"' in migration_text
+    assert 'op.drop_table("run_targets")' in migration_text

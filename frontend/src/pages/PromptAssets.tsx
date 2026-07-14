@@ -89,7 +89,8 @@ export default function PromptAssets({
   const qc = useQueryClient();
   const { data: allAssets = [] } = useQuery<Asset[]>({
     queryKey: ["prompt-assets"],
-    queryFn: async () => (await api.get("/api/prompt-assets")).data,
+    queryFn: async () => (await api.get("/api/prompt-assets", { params: { view: "summary" } })).data,
+    staleTime: 5 * 60_000,
   });
   const filteredAssets = useMemo(
     () => assetFilter ? allAssets.filter(assetFilter) : allAssets,

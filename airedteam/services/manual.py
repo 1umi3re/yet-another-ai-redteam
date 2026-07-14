@@ -33,6 +33,8 @@ class ManualService:
                 started_at=datetime.now(UTC).replace(tzinfo=None),
             )
             s.add(run)
+            await s.flush()
+            s.add(models.RunTarget(run_id=run.id, target_id=target_id))
             await s.commit()
             return run.id
 

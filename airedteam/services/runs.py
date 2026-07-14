@@ -43,7 +43,7 @@ from airedteam.services.converter_templates import resolve_converter_attack_temp
 from airedteam.services.prompt_assets import PromptAssetService
 from airedteam.services.run_monitor import RunSpecSummary
 from airedteam.services.service_context_runtime import ServiceContextTarget
-from airedteam.storage.models import Attempt, Run, Score
+from airedteam.storage.models import Attempt, Run, RunTarget, Score
 
 TERMINAL_RUN_STATUSES = {"completed", "failed", "cancelled"}
 STOP_REQUEST_STATUSES = {"pausing", "paused", "cancelled"}
@@ -147,6 +147,9 @@ class RunService:
         async with self._sf() as s:
             row = Run(name=name, runspec_yaml=yaml.safe_dump(runspec_dict), status="pending")
             s.add(row)
+            await s.flush()
+            for target_id in dict.fromkeys(ref.config_id for ref in spec.targets if ref.config_id):
+                s.add(RunTarget(run_id=row.id, target_id=target_id))
             await s.commit()
             await s.refresh(row)
             await self._notify_run_created(row, spec)

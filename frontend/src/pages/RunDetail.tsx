@@ -130,9 +130,9 @@ export default function RunDetail() {
   const { data: run } = useQuery({
     queryKey: ["run", id],
     queryFn: async () => (await api.get(`/api/runs/${id}`)).data,
-    refetchInterval: (q) => isTerminalStatus(q.state.data?.status) ? false : 2000,
+    refetchInterval: (q) => isTerminalStatus(q.state.data?.status) ? false : 10_000,
   });
-  const pollInterval: number | false = isTerminalStatus(run?.status) ? false : 2000;
+  const pollInterval: number | false = isTerminalStatus(run?.status) ? false : 10_000;
   const { data: attemptsPage = { items: [], total: 0, offset: 0, limit: attemptLimit } } = useQuery({
     queryKey: ["run-attempts", id, attemptVerdict, attemptStatus, attemptTarget, attemptExecutor, attemptPage, attemptLimit],
     queryFn: async () => (await api.get(`/api/runs/${id}/attempts`, {
@@ -146,6 +146,7 @@ export default function RunDetail() {
         executor: attemptExecutor || undefined,
       },
     })).data,
+    enabled: tab === "attempts",
     placeholderData: keepPreviousData,
     refetchInterval: pollInterval,
   });
@@ -158,9 +159,12 @@ export default function RunDetail() {
     [attemptPage, attemptPageCount],
   );
   const { data: scoresRaw = [] } = useQuery({
-    queryKey: ["run-scores", id],
-    queryFn: async () => (await api.get(`/api/runs/${id}/scores`)).data,
-    refetchInterval: pollInterval,
+    queryKey: ["run-scores", id, detailAttemptId],
+    queryFn: async () => (await api.get(`/api/runs/${id}/scores`, {
+      params: { attempt_id: detailAttemptId },
+    })).data,
+    enabled: !!detailAttemptId,
+    staleTime: 30_000,
   });
   const scores = Array.isArray(scoresRaw) ? scoresRaw : (scoresRaw.items ?? []);
   const { data: report } = useQuery({
@@ -177,29 +181,38 @@ export default function RunDetail() {
     if (!id || !token || isTerminalStatus(run?.status)) return;
     const url = `${api.defaults.baseURL}/api/runs/${id}/events?token=${encodeURIComponent(token)}`;
     const es = new EventSource(url);
-    es.onmessage = (e) => setEvents(prev => [...prev.slice(-199), JSON.parse(e.data)]);
+    let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+    const handleEvent = (event: MessageEvent) => {
+      let payload: any;
+      try { payload = JSON.parse(event.data); } catch { payload = { event: event.type, data: event.data }; }
+      setEvents(prev => [...prev.slice(-199), payload]);
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ["run", id] });
+        queryClient.invalidateQueries({ queryKey: ["run-report", id] });
+        queryClient.invalidateQueries({ queryKey: ["run-attempts", id] });
+      }, 300);
+    };
+    es.onmessage = handleEvent;
+    const namedEvents = ["run.finished", "run.failed", "run.cancelled", "run.paused", "run.resumed"];
+    namedEvents.forEach(name => es.addEventListener(name, handleEvent as EventListener));
     // Intentionally no onerror handler — EventSource auto-reconnects on transient
     // network errors. The cleanup below closes the stream on unmount.
-    return () => es.close();
-  }, [id, token, run?.status]);
+    return () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      namedEvents.forEach(name => es.removeEventListener(name, handleEvent as EventListener));
+      es.close();
+    };
+  }, [id, queryClient, token, run?.status]);
 
   useEffect(() => {
     const maxPage = Math.max(0, Math.ceil(attemptTotal / attemptLimit) - 1);
     if (attemptPage > maxPage) setAttemptPage(maxPage);
   }, [attemptLimit, attemptPage, attemptTotal]);
 
-  const scoreByAttempt = useMemo(() => {
-    const m = new Map<string, any>();
-    for (const s of scores as any[]) {
-      const current = m.get(s.attempt_id);
-      if (!current || (isScoreFailed(current) && !isScoreFailed(s))) m.set(s.attempt_id, s);
-    }
-    return m;
-  }, [scores]);
-
-  const failedScores = useMemo(
-    () => (scores as any[]).filter(score => isScoreFailed(score) && score.retryable !== false),
-    [scores],
+  const failedScoreCount = useMemo(
+    () => (report?.by_scorer ?? []).reduce((total: number, row: any) => total + (row.failed ?? 0), 0),
+    [report],
   );
 
   const attackMetrics = useMemo(() => {
@@ -424,7 +437,7 @@ export default function RunDetail() {
   const highestRiskTargetExecutor = targetExecutorRows.find((row: any) => (row.scored ?? 0) > 0);
   const runTabs: Array<TabItem<Tab>> = [
     { id: "overview", label: t("Overview") },
-    { id: "attempts", label: t("Attempts ({{count}})", { count: attemptsPage.total ?? attempts.length }) },
+    { id: "attempts", label: t("Attempts ({{count}})", { count: tab === "attempts" ? attemptTotal : (report?.totals?.attempts ?? 0) }) },
     { id: "events", label: t("Live events") },
   ];
 
@@ -492,11 +505,11 @@ export default function RunDetail() {
               </Button>
             </>
           )}
-          {failedScores.length > 0 && (
+          {failedScoreCount > 0 && (
             <Button variant="secondary" size="sm" icon={<RotateCcw className="h-4 w-4" />}
               loading={retryScoresMut.isPending}
               onClick={() => retryScoresMut.mutate()}>
-              {t("Retry failed judges ({{count}})", { count: failedScores.length })}
+              {t("Retry failed judges ({{count}})", { count: failedScoreCount })}
             </Button>
           )}
           {run?.kind === "automated" && run?.status === "completed" && (
@@ -797,9 +810,8 @@ export default function RunDetail() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {attempts.map((a: any) => {
-                  const sc = scoreByAttempt.get(a.id);
-                  const verdict = sc ? verdictOf(sc) : null;
-                  const scoreFailed = sc ? isScoreFailed(sc) : false;
+                  const verdict = a.final_verdict === "refused" || a.final_verdict === "complied" ? a.final_verdict : null;
+                  const scoreFailed = !!a.score_failed;
                   return (
                     <tr key={a.id} className="align-top hover:bg-gray-50/60">
                       <td className="px-5 py-3 font-medium whitespace-nowrap">{a.target_name}</td>

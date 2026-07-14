@@ -44,12 +44,18 @@ class PromptAssetService:
         self._blob = blob_store
         self._builtins = _load_builtins()
 
-    async def list_assets(self) -> list[dict[str, Any]]:
+    async def list_assets(self, *, include_template: bool = True) -> list[dict[str, Any]]:
         assets = list(self._builtins.values()) + await self._list_custom_assets()
+        active_overrides = await self._active_overrides_public()
         out: list[dict[str, Any]] = []
         for asset in sorted(assets, key=lambda a: a.id):
             item = asset.public()
-            item["active_override"] = await self._active_override_public(asset.id)
+            override = active_overrides.get(asset.id)
+            if not include_template:
+                item.pop("template", None)
+                if override is not None:
+                    override = {key: value for key, value in override.items() if key != "template"}
+            item["active_override"] = override
             out.append(item)
         return out
 
@@ -327,6 +333,29 @@ class PromptAssetService:
     async def _active_override_public(self, asset_id: str) -> dict[str, Any] | None:
         row = await self._active_override(asset_id)
         return _override_public(row) if row is not None else None
+
+    async def _active_overrides_public(self) -> dict[str, dict[str, Any]]:
+        async with self._sf() as s:
+            rows = (
+                (
+                    await s.execute(
+                        select(models.PromptAssetOverride)
+                        .where(models.PromptAssetOverride.is_active.is_(True))
+                        .order_by(
+                            models.PromptAssetOverride.asset_id,
+                            models.PromptAssetOverride.updated_at.desc(),
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+        # Older databases may contain more than one active row for an asset.
+        # Preserve the previous behavior by selecting the most recently updated.
+        return {
+            row.asset_id: _override_public(row)
+            for row in reversed(rows)
+        }
 
 
 def _override_public(row: models.PromptAssetOverride) -> dict[str, Any]:

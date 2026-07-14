@@ -21,9 +21,23 @@ function Protected({ children }: { children: JSX.Element }) {
   return t ? children : <Navigate to="/login" replace />;
 }
 
+function PageFallback() {
+  return (
+    <div className="min-h-screen bg-gray-50 p-6" aria-busy="true" aria-label="Loading">
+      <div className="mx-auto max-w-7xl animate-pulse space-y-6">
+        <div className="h-8 w-52 rounded bg-gray-200" />
+        <div className="grid gap-4 md:grid-cols-4">
+          {[0, 1, 2, 3].map(item => <div key={item} className="h-28 rounded-xl bg-white shadow-sm" />)}
+        </div>
+        <div className="h-72 rounded-xl bg-white shadow-sm" />
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<PageFallback />}>
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route element={<Protected><Layout /></Protected>}>

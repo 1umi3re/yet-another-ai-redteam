@@ -215,6 +215,16 @@ class Run(Base):
     attempts = relationship("Attempt", back_populates="run", cascade="all, delete-orphan")
 
 
+class RunTarget(Base):
+    __tablename__ = "run_targets"
+    run_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("runs.id", ondelete="CASCADE"), primary_key=True
+    )
+    # Deliberately not a foreign key: historical runs remain filterable after a
+    # target configuration has been deleted.
+    target_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+
+
 class Attempt(Base):
     __tablename__ = "attempts"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
@@ -271,7 +281,11 @@ class Score(Base):
 
 
 Index("ix_attempts_run_id", Attempt.run_id)
+Index("ix_attempts_run_created_at", Attempt.run_id, Attempt.created_at)
 Index("uq_attempts_run_work_key", Attempt.run_id, Attempt.work_key, unique=True)
 Index("ix_scores_attempt_id", Score.attempt_id)
+Index("ix_runs_created_at", Run.created_at)
+Index("ix_runs_status_kind", Run.status, Run.kind)
+Index("ix_run_targets_target_id", RunTarget.target_id)
 Index("ix_dataset_versions_dataset_id", DatasetVersion.dataset_id)
 Index("ix_executor_method_categories_category_id", ExecutorMethodCategory.category_id)

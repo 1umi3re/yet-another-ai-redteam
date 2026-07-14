@@ -8,7 +8,7 @@ import "./index.css";
 import { I18nProvider } from "./lib/i18n";
 
 const qc = new QueryClient({
-  defaultOptions: { queries: { refetchOnWindowFocus: false, staleTime: 5_000 } },
+  defaultOptions: { queries: { refetchOnWindowFocus: false, staleTime: 30_000 } },
 });
 
 ReactDOM.createRoot(document.getElementById("root")!).render(

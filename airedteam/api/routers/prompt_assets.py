@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from airedteam.api.deps import AppState, get_state, require_admin
@@ -31,8 +31,9 @@ class ActiveIn(BaseModel):
 async def list_prompt_assets(
     _=Depends(require_admin),
     state: AppState = Depends(get_state),
+    view: str = Query(default="full", pattern="^(full|summary)$"),
 ):
-    return await state.prompt_assets.list_assets()
+    return await state.prompt_assets.list_assets(include_template=view == "full")
 
 
 @router.post("/prompt-assets", status_code=201)
