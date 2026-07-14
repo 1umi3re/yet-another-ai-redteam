@@ -107,13 +107,68 @@ async def test_successful_attempts_can_be_exactly_replayed_or_reapplied(monkeypa
         await client.post(f"/api/runs/{source['id']}/start", headers=headers)
         assert (await _wait_for_run(client, headers, source["id"]))["status"] == "completed"
 
+        source_two = (
+            await client.post(
+                "/api/runs",
+                headers=headers,
+                json={
+                    "name": "source run two",
+                    "runspec": {
+                        "version": 2,
+                        "name": "source run two",
+                        "targets": [{"config_id": target["id"]}],
+                        "dataset": {"config_id": dataset["id"]},
+                        "executors": [{"kind": "executor", "plugin": "single_turn"}],
+                        "scorers": [{"plugin": "refusal"}],
+                    },
+                },
+            )
+        ).json()
+        await client.post(f"/api/runs/{source_two['id']}/start", headers=headers)
+        assert (await _wait_for_run(client, headers, source_two["id"]))["status"] == "completed"
+
         preview = (
             await client.get(f"/api/targets/{target['id']}/successful-attempts", headers=headers)
         ).json()
-        assert preview["total"] == 1
-        assert preview["summary"]["reapply_available"] == 1
-        assert preview["items"][0]["provenance_quality"] == "exact"
-        source_attempt_id = preview["items"][0]["id"]
+        assert preview["total"] == 2
+        assert preview["summary"]["reapply_available"] == 2
+        assert len(preview["summary"]["source_run_options"]) == 2
+        filtered = (
+            await client.get(
+                f"/api/targets/{target['id']}/successful-attempts",
+                headers=headers,
+                params={"source_run_ids": source["id"]},
+            )
+        ).json()
+        assert filtered["total"] == 1
+        assert filtered["items"][0]["source_run_id"] == source["id"]
+        assert len(filtered["summary"]["source_run_options"]) == 2
+        assert filtered["items"][0]["provenance_quality"] == "exact"
+        source_attempt_id = filtered["items"][0]["id"]
+        empty = (
+            await client.get(
+                f"/api/targets/{target['id']}/successful-attempts",
+                headers=headers,
+                params={"source_run_ids": ""},
+            )
+        ).json()
+        assert empty["total"] == 0
+        assert len(empty["summary"]["source_run_options"]) == 2
+
+        excluded_source = await client.post(
+            "/api/retests",
+            headers=headers,
+            json={
+                "name": "excluded source",
+                "target_config_id": target["id"],
+                "mode": "exact_replay",
+                "scorer": {"plugin": "refusal", "params": {}},
+                "select_all": False,
+                "attempt_ids": [source_attempt_id],
+                "source_run_ids": [source_two["id"]],
+            },
+        )
+        assert excluded_source.status_code == 400
 
         for mode in ("exact_replay", "reapply_method"):
             created = await client.post(
@@ -126,6 +181,7 @@ async def test_successful_attempts_can_be_exactly_replayed_or_reapplied(monkeypa
                     "scorer": {"plugin": "refusal", "params": {}},
                     "select_all": False,
                     "attempt_ids": [source_attempt_id],
+                    "source_run_ids": [source["id"]],
                 },
             )
             assert created.status_code == 201, created.text
@@ -141,4 +197,4 @@ async def test_successful_attempts_can_be_exactly_replayed_or_reapplied(monkeypa
 
         # Source and method-reapply use the active bridge. Exact replay sends the
         # already bridged prompt directly, so it must not become TOPIC:TOPIC:hello.
-        assert calls == ["TOPIC:hello", "TOPIC:hello", "TOPIC:hello"]
+        assert calls == ["TOPIC:hello", "TOPIC:hello", "TOPIC:hello", "TOPIC:hello"]

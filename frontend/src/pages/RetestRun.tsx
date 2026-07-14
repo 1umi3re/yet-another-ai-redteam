@@ -18,9 +18,13 @@ export default function RetestRun() {
   const nav = useNavigate();
   const [params] = useSearchParams();
   const targetId = params.get("target") ?? "";
+  const requestedSourceRuns = params.getAll("run");
   const [page, setPage] = useState(0);
   const [mode, setMode] = useState<"exact_replay" | "reapply_method">("exact_replay");
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
+  const [selectedSourceRuns, setSelectedSourceRuns] = useState<Set<string> | null>(
+    requestedSourceRuns.length ? new Set(requestedSourceRuns) : null,
+  );
   const [name, setName] = useState(t("Successful attempt retest"));
   const [scorer, setScorer] = useState<ConfiguredPlugin>({ plugin: "refusal", params: {} });
   const [concurrency, setConcurrency] = useState("4");
@@ -30,10 +34,14 @@ export default function RetestRun() {
   const { data: plugins } = useQuery({ queryKey: ["plugins"], queryFn: async () => (await api.get("/api/plugins")).data });
   const { data: promptAssets = [] } = useQuery({ queryKey: ["prompt-assets"], queryFn: async () => (await api.get("/api/prompt-assets")).data });
   const { data, isLoading } = useQuery({
-    queryKey: ["successful-attempts", targetId, page],
+    queryKey: ["successful-attempts", targetId, page, selectedSourceRuns ? Array.from(selectedSourceRuns).sort().join(",") : "all"],
     enabled: !!targetId,
     queryFn: async () => (await api.get(`/api/targets/${targetId}/successful-attempts`, {
-      params: { limit: PAGE_SIZE, offset: page * PAGE_SIZE },
+      params: {
+        limit: PAGE_SIZE,
+        offset: page * PAGE_SIZE,
+        source_run_ids: selectedSourceRuns === null ? undefined : Array.from(selectedSourceRuns).join(","),
+      },
     })).data,
   });
   const target = targets.find((item: any) => item.id === targetId);
@@ -41,6 +49,7 @@ export default function RetestRun() {
   const scorerSchema = scorerSchemas[scorer.plugin];
   const items: any[] = data?.items ?? [];
   const summary = data?.summary ?? {};
+  const sourceRunOptions: any[] = summary.source_run_options ?? [];
   const selectedCount = Math.max(0, (mode === "exact_replay" ? data?.total ?? 0 : summary.reapply_available ?? 0) - excluded.size);
   const pages = Math.max(1, Math.ceil((data?.total ?? 0) / PAGE_SIZE));
   const visibleSelectable = useMemo(
@@ -53,6 +62,18 @@ export default function RetestRun() {
     if (next.has(id)) next.delete(id); else next.add(id);
     return next;
   });
+  const sourceRunSelected = (id: string) => selectedSourceRuns === null || selectedSourceRuns.has(id);
+  const toggleSourceRun = (id: string) => {
+    setSelectedSourceRuns(previous => {
+      const next = previous === null
+        ? new Set(sourceRunOptions.map(run => run.id))
+        : new Set(previous);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+    setExcluded(new Set());
+    setPage(0);
+  };
   const mutation = useMutation({
     mutationFn: async () => {
       const created = await api.post("/api/retests", {
@@ -64,6 +85,7 @@ export default function RetestRun() {
         timeout_seconds: timeout ? Number(timeout) : null,
         select_all: true,
         excluded_attempt_ids: Array.from(excluded),
+        source_run_ids: selectedSourceRuns === null ? [] : Array.from(selectedSourceRuns),
       });
       await api.post(`/api/runs/${created.data.id}/start`);
       return created.data;
@@ -114,7 +136,30 @@ export default function RetestRun() {
     </Card>
 
     <Card>
-      <CardHeader><CardTitle>{t("2. Review attempts")}</CardTitle></CardHeader>
+      <CardHeader><CardTitle>{t("2. Choose source runs")}</CardTitle></CardHeader>
+      <CardBody className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm text-gray-500">{t("Only successful attempts from checked automated runs will be included.")}</p>
+          <div className="flex gap-2">
+            <Button size="sm" variant="ghost" onClick={() => { setSelectedSourceRuns(null); setExcluded(new Set()); setPage(0); }}>{t("Select all")}</Button>
+            <Button size="sm" variant="ghost" onClick={() => { setSelectedSourceRuns(new Set()); setExcluded(new Set()); setPage(0); }}>{t("Deselect all")}</Button>
+          </div>
+        </div>
+        <div className="divide-y divide-gray-100 rounded-lg border border-gray-200">
+          {sourceRunOptions.map(run => (
+            <label key={run.id} className="flex cursor-pointer items-center gap-3 px-4 py-3 hover:bg-gray-50">
+              <input type="checkbox" checked={sourceRunSelected(run.id)} onChange={() => toggleSourceRun(run.id)} />
+              <span className="min-w-0 flex-1 truncate text-sm font-medium">{run.name}</span>
+              <span className="text-xs text-gray-500">{t("{{count}} successful", { count: run.successful_attempts })}</span>
+              <span className="text-xs text-gray-400">{t("{{count}} method-replayable", { count: run.reapply_available })}</span>
+            </label>
+          ))}
+        </div>
+      </CardBody>
+    </Card>
+
+    <Card>
+      <CardHeader><CardTitle>{t("3. Review attempts")}</CardTitle></CardHeader>
       {isLoading ? <div className="p-5 text-sm text-gray-500">{t("Loading…")}</div> : !items.length ? <div className="p-5 text-sm text-gray-500">{t("No successful attempts found for this target.")}</div> : <>
         <div className="border-b border-gray-100 px-5 py-3 flex items-center justify-between text-xs text-gray-500">
           <span>{t("{{count}} selected", { count: selectedCount })}</span>
@@ -137,7 +182,7 @@ export default function RetestRun() {
     </Card>
 
     <Card>
-      <CardHeader><CardTitle>{t("3. Configure new run")}</CardTitle></CardHeader>
+      <CardHeader><CardTitle>{t("4. Configure new run")}</CardTitle></CardHeader>
       <CardBody className="space-y-4">
         <div className="grid gap-4 md:grid-cols-3"><Field required label={t("Run name")}><Input value={name} onChange={event => setName(event.target.value)} /></Field><Field label={t("Concurrency")}><Input type="number" min="1" value={concurrency} onChange={event => setConcurrency(event.target.value)} /></Field><Field label={t("Run timeout")} hint={t("Blank means no limit.")}><Input type="number" min="1" value={timeout} onChange={event => setTimeout(event.target.value)} /></Field></div>
         <Field label={t("Scorer")}><Select value={scorer.plugin} onChange={event => setScorer({ plugin: event.target.value, params: defaultsFor(scorerSchemas[event.target.value]) })}>{plugins?.scorers?.map((plugin: string) => <option key={plugin}>{plugin}</option>)}</Select></Field>

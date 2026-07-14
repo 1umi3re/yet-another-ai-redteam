@@ -66,6 +66,7 @@ class CreateRetest(BaseModel):
     select_all: bool = True
     excluded_attempt_ids: list[str] = Field(default_factory=list)
     attempt_ids: list[str] = Field(default_factory=list)
+    source_run_ids: list[str] = Field(default_factory=list)
 
 
 async def _run_to_out(r: Run, state: AppState) -> RunOut:
@@ -227,11 +228,31 @@ async def list_successful_attempts(
     state: AppState = Depends(get_state),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
+    source_run_ids: str | None = Query(default=None, max_length=40000),
 ):
-    records = await _successful_attempt_records(state, target_config_id)
+    all_records = await _successful_attempt_records(state, target_config_id)
+    requested_run_ids = None if source_run_ids is None else {value for value in source_run_ids.split(",") if value}
+    records = (
+        all_records
+        if requested_run_ids is None
+        else [item for item in all_records if item["source_run_id"] in requested_run_ids]
+    )
     methods = Counter(item["executor_name"] for item in records)
     languages = Counter(item.get("language") or "unknown" for item in records)
-    runs = Counter(item["source_run_name"] for item in records)
+    run_ids = {item["source_run_id"] for item in records}
+    source_run_options: dict[str, dict[str, Any]] = {}
+    for item in all_records:
+        option = source_run_options.setdefault(
+            item["source_run_id"],
+            {
+                "id": item["source_run_id"],
+                "name": item["source_run_name"],
+                "successful_attempts": 0,
+                "reapply_available": 0,
+            },
+        )
+        option["successful_attempts"] += 1
+        option["reapply_available"] += int(bool(item["reapply_eligible"]))
     return {
         "items": [
             {key: value for key, value in item.items() if key != "_snapshot"}
@@ -242,8 +263,9 @@ async def list_successful_attempts(
         "offset": offset,
         "summary": {
             "successful_attempts": len(records),
-            "source_runs": len(runs),
-            "by_run": dict(runs),
+            "source_runs": len(run_ids),
+            "source_run_options": list(source_run_options.values()),
+            "by_run": dict(Counter(item["source_run_name"] for item in records)),
             "by_method": dict(methods),
             "by_language": dict(languages),
             "reapply_available": sum(bool(item["reapply_eligible"]) for item in records),
@@ -260,7 +282,12 @@ async def create_retest(req: CreateRetest, _=Depends(require_admin), state: AppS
         raise HTTPException(400, "concurrency must be positive")
     if req.timeout_seconds is not None and req.timeout_seconds <= 0:
         raise HTTPException(400, "timeout_seconds must be positive")
+    if len(req.source_run_ids) > 1000:
+        raise HTTPException(400, "too many source runs selected")
     records = await _successful_attempt_records(state, req.target_config_id)
+    if req.source_run_ids:
+        selected_run_ids = set(req.source_run_ids)
+        records = [item for item in records if item["source_run_id"] in selected_run_ids]
     excluded = set(req.excluded_attempt_ids)
     included = set(req.attempt_ids)
     candidates = [item for item in records if req.mode != "reapply_method" or item["reapply_eligible"]]
@@ -276,11 +303,13 @@ async def create_retest(req: CreateRetest, _=Depends(require_admin), state: AppS
             raise HTTPException(400, f"selected attempts cannot reapply their method: {', '.join(unavailable[:5])}")
 
     source_attempt_ids = [item["id"] for item in selected]
+    source_run_ids = list(dict.fromkeys(item["source_run_id"] for item in selected))
     snapshot_path = f"retests/{uuid.uuid4()}.json"
     snapshot = {
         "version": 1,
         "mode": req.mode,
         "source_target_config_id": req.target_config_id,
+        "source_run_ids": source_run_ids,
         "items": [item["_snapshot"] for item in selected],
     }
     await state.blob_store.put(snapshot_path, json.dumps(snapshot, ensure_ascii=False).encode("utf-8"))
@@ -293,6 +322,7 @@ async def create_retest(req: CreateRetest, _=Depends(require_admin), state: AppS
         "retest": {
             "mode": req.mode,
             "source_target_config_id": req.target_config_id,
+            "source_run_ids": source_run_ids,
             "snapshot_blob_path": snapshot_path,
             "source_attempt_ids": source_attempt_ids,
         },

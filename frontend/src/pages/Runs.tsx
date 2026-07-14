@@ -10,6 +10,7 @@ import { ProgressBar } from "../components/ui/ProgressBar";
 import { EmptyState } from "../components/ui/EmptyState";
 import { ListChecks, PlayCircle, ArrowUpRight, MessageSquare, RotateCcw } from "lucide-react";
 import { useI18n } from "../lib/i18n";
+import { buildRetestPath } from "../lib/retestSelection";
 
 function formatDateTime(value?: string | null): string {
   if (!value) return "-";
@@ -32,6 +33,7 @@ export default function Runs() {
   const [statusFilter, setStatusFilter] = useState("");
   const [kindFilter, setKindFilter] = useState("");
   const [runSearch, setRunSearch] = useState("");
+  const [excludedSourceRuns, setExcludedSourceRuns] = useState<Set<string>>(new Set());
   const { data, isLoading } = useQuery({
     queryKey: ["runs", targetFilter],
     queryFn: async () => (await api.get("/api/runs", {
@@ -53,6 +55,15 @@ export default function Runs() {
         || (run.target_names ?? []).join(", ").toLowerCase().includes(q);
     });
   }, [data, kindFilter, runSearch, statusFilter]);
+  const automatedRuns = useMemo(() => (data ?? []).filter((run: any) => run.kind === "automated"), [data]);
+  const includedSourceRunIds = automatedRuns
+    .filter((run: any) => !excludedSourceRuns.has(run.id))
+    .map((run: any) => run.id);
+  const toggleSourceRun = (runId: string) => setExcludedSourceRuns(previous => {
+    const next = new Set(previous);
+    if (next.has(runId)) next.delete(runId); else next.add(runId);
+    return next;
+  });
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
@@ -61,7 +72,17 @@ export default function Runs() {
           <p className="text-sm text-gray-500 mt-1">{t("Attack executions against configured targets.")}</p>
         </div>
         <div className="flex gap-2">
-          {targetFilter && <Link to={`/runs/retest?target=${encodeURIComponent(targetFilter)}`}><Button variant="secondary" icon={<RotateCcw className="h-4 w-4" />}>{t("Retest successes")}</Button></Link>}
+          {targetFilter && (includedSourceRunIds.length ? (
+            <Link to={buildRetestPath(targetFilter, includedSourceRunIds)}>
+              <Button variant="secondary" icon={<RotateCcw className="h-4 w-4" />}>
+                {t("Retest selected runs ({{count}})", { count: includedSourceRunIds.length })}
+              </Button>
+            </Link>
+          ) : (
+            <Button disabled variant="secondary" icon={<RotateCcw className="h-4 w-4" />}>
+              {t("Retest selected runs ({{count}})", { count: 0 })}
+            </Button>
+          ))}
           <Link to="/runs/new"><Button icon={<PlayCircle className="h-4 w-4" />}>{t("New run")}</Button></Link>
         </div>
       </div>
@@ -77,7 +98,7 @@ export default function Runs() {
               />
             </Field>
             <Field label={t("Target")}>
-              <Select value={targetFilter} onChange={e => setTargetFilter(e.target.value)}>
+              <Select value={targetFilter} onChange={e => { setTargetFilter(e.target.value); setExcludedSourceRuns(new Set()); }}>
                 <option value="">{t("All targets")}</option>
                 {targets.map((target: any) => (
                   <option key={target.id} value={target.id}>{target.name}</option>
@@ -119,6 +140,7 @@ export default function Runs() {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-gray-600 text-xs uppercase tracking-wider">
                 <tr>
+                  <th className="px-3 py-2.5 w-10"></th>
                   <th className="text-left px-5 py-2.5">{t("Name")}</th>
                   <th className="text-left px-5 py-2.5">{t("Target")}</th>
                   <th className="text-left px-5 py-2.5">{t("Status")}</th>
@@ -131,6 +153,18 @@ export default function Runs() {
               <tbody className="divide-y divide-gray-100">
                 {filteredRuns.map((r: any) => (
                   <tr key={r.id} className="hover:bg-gray-50/70">
+                    <td className="px-3 py-3 text-center">
+                      {r.kind === "automated" && (
+                        <input
+                          type="checkbox"
+                          aria-label={t("Include run {{name}}", { name: r.name })}
+                          title={!targetFilter ? t("Filter by one target to select source runs") : undefined}
+                          disabled={!targetFilter}
+                          checked={!!targetFilter && !excludedSourceRuns.has(r.id)}
+                          onChange={() => toggleSourceRun(r.id)}
+                        />
+                      )}
+                    </td>
                     <td className="px-5 py-3 font-medium">
                       <div className="flex items-center gap-2">
                         <span>{r.name}</span>
