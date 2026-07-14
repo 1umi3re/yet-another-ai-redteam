@@ -35,7 +35,7 @@ export default function Runs() {
   const [runSearch, setRunSearch] = useState("");
   const deferredSearch = useDeferredValue(runSearch);
   const [page, setPage] = useState(0);
-  const pageSize = 100;
+  const pageSize = 20;
   const [excludedSourceRuns, setExcludedSourceRuns] = useState<Set<string>>(new Set());
   const usePaging = !targetFilter;
   const { data, isLoading } = useQuery({

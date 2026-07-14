@@ -17,6 +17,9 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
+from airedteam.core.score_state import score_final_verdict
+from airedteam.core.score_status import score_status
+
 
 def _uuid() -> str:
     return str(uuid.uuid4())
@@ -24,6 +27,39 @@ def _uuid() -> str:
 
 def _utcnow() -> datetime:
     return datetime.now(UTC).replace(tzinfo=None)
+
+
+def _converter_chain_key(context) -> str:
+    chain = context.get_current_parameters().get("converter_chain") or []
+    return " -> ".join(str(item) for item in chain)
+
+
+def _converter_chain_search(context) -> str:
+    chain = context.get_current_parameters().get("converter_chain") or []
+    return "".join(f"|{item}|" for item in chain)
+
+
+def _executor_name(context) -> str:
+    parameters = context.get_current_parameters()
+    chain = parameters.get("converter_chain") or []
+    return " -> ".join(str(item) for item in chain) if chain else "single_turn"
+
+
+def _executor_ref_present(context) -> bool:
+    return bool(context.get_current_parameters().get("executor_ref_json"))
+
+
+def _score_status(context) -> str:
+    return score_status(context.get_current_parameters().get("value_json"))
+
+
+def _score_final_verdict(context) -> str | None:
+    parameters = context.get_current_parameters()
+    return score_final_verdict(
+        str(parameters.get("scorer") or ""),
+        parameters.get("value_json"),
+        parameters.get("reviewer_label"),
+    )
 
 
 class Base(DeclarativeBase):
@@ -239,9 +275,12 @@ class Attempt(Base):
     original_prompt_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     prompt_text: Mapped[str] = mapped_column(Text)
     converter_chain: Mapped[list] = mapped_column(JSON, default=list)
-    executor_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    converter_chain_key: Mapped[str] = mapped_column(String(1000), default=_converter_chain_key)
+    converter_chain_search: Mapped[str] = mapped_column(Text, default=_converter_chain_search)
+    executor_name: Mapped[str | None] = mapped_column(String(100), nullable=True, default=_executor_name)
     executor_kind: Mapped[str | None] = mapped_column(String(40), nullable=True)
     executor_ref_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    executor_ref_present: Mapped[bool] = mapped_column(Boolean, default=_executor_ref_present)
     source_run_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     source_attempt_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     retest_mode: Mapped[str | None] = mapped_column(String(24), nullable=True)
@@ -270,6 +309,8 @@ class Score(Base):
     attempt_id: Mapped[str] = mapped_column(String(36), ForeignKey("attempts.id", ondelete="CASCADE"))
     scorer: Mapped[str] = mapped_column(String(100))
     value_json: Mapped[dict] = mapped_column(JSON)
+    status: Mapped[str] = mapped_column(String(20), default=_score_status)
+    final_verdict: Mapped[str | None] = mapped_column(String(20), nullable=True, default=_score_final_verdict)
     rationale: Mapped[str | None] = mapped_column(Text, nullable=True)
     prompt_snapshot_blob_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
@@ -282,8 +323,12 @@ class Score(Base):
 
 Index("ix_attempts_run_id", Attempt.run_id)
 Index("ix_attempts_run_created_at", Attempt.run_id, Attempt.created_at)
+Index("ix_attempts_run_executor", Attempt.run_id, Attempt.executor_name)
+Index("ix_attempts_run_chain_key", Attempt.run_id, Attempt.converter_chain_key)
 Index("uq_attempts_run_work_key", Attempt.run_id, Attempt.work_key, unique=True)
 Index("ix_scores_attempt_id", Score.attempt_id)
+Index("ix_scores_attempt_verdict", Score.attempt_id, Score.final_verdict)
+Index("ix_scores_attempt_status", Score.attempt_id, Score.status)
 Index("ix_runs_created_at", Run.created_at)
 Index("ix_runs_status_kind", Run.status, Run.kind)
 Index("ix_run_targets_target_id", RunTarget.target_id)

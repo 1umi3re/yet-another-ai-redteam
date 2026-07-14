@@ -66,3 +66,18 @@ def test_run_loading_indexes_have_alembic_migration():
     assert '"run_targets"' in migration_text
     assert '"ix_attempts_run_created_at"' in migration_text
     assert 'op.drop_table("run_targets")' in migration_text
+
+
+def test_queryable_score_state_has_alembic_migration():
+    migration_text = Path("alembic/versions/0018_query_state.py").read_text()
+    assert 'revision: str = "0018_query_state"' in migration_text
+    assert 'down_revision: str | None = "0017_run_loading"' in migration_text
+    for column in (
+        "converter_chain_key",
+        "converter_chain_search",
+        "executor_ref_present",
+        "status",
+        "final_verdict",
+    ):
+        assert f'"{column}"' in migration_text
+    assert '"ix_scores_attempt_verdict"' in migration_text

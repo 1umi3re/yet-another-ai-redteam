@@ -170,6 +170,9 @@ async def test_run_report_export_and_filters(monkeypatch, tmp_path):
             run_id = run.id
 
         report = (await c.get(f"/api/runs/{run_id}/report", headers=h)).json()
+        live_summary = (await c.get(f"/api/runs/{run_id}/live-summary", headers=h)).json()
+        assert live_summary["totals"] == report["totals"]
+        assert live_summary["by_scorer"] == report["by_scorer"]
         assert report["run"]["started_at"] == "2026-01-01T00:00:00"
         assert report["run"]["finished_at"] == "2026-01-01T00:00:02"
         assert report["run"]["duration_ms"] == 2000

@@ -167,10 +167,15 @@ export default function RunDetail() {
     staleTime: 30_000,
   });
   const scores = Array.isArray(scoresRaw) ? scoresRaw : (scoresRaw.items ?? []);
+  const { data: liveSummary } = useQuery({
+    queryKey: ["run-live-summary", id],
+    queryFn: async () => (await api.get(`/api/runs/${id}/live-summary`)).data,
+    refetchInterval: pollInterval,
+  });
   const { data: report } = useQuery({
     queryKey: ["run-report", id],
     queryFn: async () => (await api.get(`/api/runs/${id}/report`)).data,
-    refetchInterval: pollInterval,
+    enabled: tab === "overview",
   });
   const { data: targets = [] } = useQuery({
     queryKey: ["targets"],
@@ -189,6 +194,7 @@ export default function RunDetail() {
       if (refreshTimer) clearTimeout(refreshTimer);
       refreshTimer = setTimeout(() => {
         queryClient.invalidateQueries({ queryKey: ["run", id] });
+        queryClient.invalidateQueries({ queryKey: ["run-live-summary", id] });
         queryClient.invalidateQueries({ queryKey: ["run-report", id] });
         queryClient.invalidateQueries({ queryKey: ["run-attempts", id] });
       }, 300);
@@ -211,20 +217,24 @@ export default function RunDetail() {
   }, [attemptLimit, attemptPage, attemptTotal]);
 
   const failedScoreCount = useMemo(
-    () => (report?.by_scorer ?? []).reduce((total: number, row: any) => total + (row.failed ?? 0), 0),
-    [report],
+    () => (liveSummary?.by_scorer ?? report?.by_scorer ?? []).reduce(
+      (total: number, row: any) => total + (row.failed ?? 0),
+      0,
+    ),
+    [liveSummary, report],
   );
 
   const attackMetrics = useMemo(() => {
-    if (report?.totals) {
+    const totals = liveSummary?.totals ?? report?.totals;
+    if (totals) {
       return {
-        refused: report.totals.refused ?? 0,
-        complied: report.totals.complied ?? 0,
-        scored: report.totals.scored ?? 0,
-        attempts: report.totals.attempts ?? 0,
-        failed: report.totals.failed ?? 0,
-        unscored: report.totals.unscored ?? 0,
-        successRate: report.totals.success_rate ?? null,
+        refused: totals.refused ?? 0,
+        complied: totals.complied ?? 0,
+        scored: totals.scored ?? 0,
+        attempts: totals.attempts ?? 0,
+        failed: totals.failed ?? 0,
+        unscored: totals.unscored ?? 0,
+        successRate: totals.success_rate ?? null,
       };
     }
     let refused = 0, complied = 0;
@@ -243,7 +253,7 @@ export default function RunDetail() {
       unscored: Math.max(0, attempts.length - scored),
       successRate: scored ? complied / scored : null,
     };
-  }, [attempts.length, scores, report]);
+  }, [attempts.length, liveSummary, scores, report]);
   const failedAttemptCount = attackMetrics.failed ?? 0;
   const retryFailedAttemptsDisabled = failedAttemptCount === 0 || run?.status === "running" || run?.status === "pausing";
 
@@ -302,6 +312,7 @@ export default function RunDetail() {
     mutationFn: async () => (await api.post(`/api/runs/${id}/cancel`)).data,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["run", id] });
+      queryClient.invalidateQueries({ queryKey: ["run-live-summary", id] });
       queryClient.invalidateQueries({ queryKey: ["run-report", id] });
       toast.success(t("Run cancelled"));
     },
@@ -311,6 +322,7 @@ export default function RunDetail() {
     mutationFn: async () => (await api.post(`/api/runs/${id}/pause`)).data,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["run", id] });
+      queryClient.invalidateQueries({ queryKey: ["run-live-summary", id] });
       queryClient.invalidateQueries({ queryKey: ["run-report", id] });
       queryClient.invalidateQueries({ queryKey: ["run-attempts"] });
       toast.success(t("Run pause requested"));
@@ -321,6 +333,7 @@ export default function RunDetail() {
     mutationFn: async (retryFailed: boolean) => (await api.post(`/api/runs/${id}/resume`, { retry_failed: retryFailed })).data,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["run", id] });
+      queryClient.invalidateQueries({ queryKey: ["run-live-summary", id] });
       queryClient.invalidateQueries({ queryKey: ["run-report", id] });
       queryClient.invalidateQueries({ queryKey: ["run-attempts"] });
       toast.success(t("Run resumed"));
@@ -332,6 +345,7 @@ export default function RunDetail() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["run-scores", id] });
       queryClient.invalidateQueries({ queryKey: ["run-attempts", id] });
+      queryClient.invalidateQueries({ queryKey: ["run-live-summary", id] });
       queryClient.invalidateQueries({ queryKey: ["run-report", id] });
       toast.success(t("Retried {{count}} judge scores", { count: data?.retried ?? 0 }));
     },
@@ -345,6 +359,7 @@ export default function RunDetail() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["run-scores", id] });
       queryClient.invalidateQueries({ queryKey: ["run-attempts", id] });
+      queryClient.invalidateQueries({ queryKey: ["run-live-summary", id] });
       queryClient.invalidateQueries({ queryKey: ["run-report", id] });
       toast.success(t("Rejudged {{count}} attempts", { count: data?.retried ?? 0 }));
     },
@@ -354,6 +369,7 @@ export default function RunDetail() {
     mutationFn: async () => (await api.post(`/api/runs/${id}/attempts/retry-failed`)).data,
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["run", id] });
+      queryClient.invalidateQueries({ queryKey: ["run-live-summary", id] });
       queryClient.invalidateQueries({ queryKey: ["run-report", id] });
       queryClient.invalidateQueries({ queryKey: ["run-attempts", id] });
       queryClient.invalidateQueries({ queryKey: ["run-scores", id] });
@@ -365,6 +381,7 @@ export default function RunDetail() {
     mutationFn: async (attemptId: string) => (await api.post(`/api/runs/${id}/attempts/${attemptId}/retry`)).data,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["run", id] });
+      queryClient.invalidateQueries({ queryKey: ["run-live-summary", id] });
       queryClient.invalidateQueries({ queryKey: ["run-report", id] });
       queryClient.invalidateQueries({ queryKey: ["run-attempts", id] });
       queryClient.invalidateQueries({ queryKey: ["run-scores", id] });
@@ -437,7 +454,7 @@ export default function RunDetail() {
   const highestRiskTargetExecutor = targetExecutorRows.find((row: any) => (row.scored ?? 0) > 0);
   const runTabs: Array<TabItem<Tab>> = [
     { id: "overview", label: t("Overview") },
-    { id: "attempts", label: t("Attempts ({{count}})", { count: tab === "attempts" ? attemptTotal : (report?.totals?.attempts ?? 0) }) },
+    { id: "attempts", label: t("Attempts ({{count}})", { count: tab === "attempts" ? attemptTotal : (liveSummary?.totals?.attempts ?? report?.totals?.attempts ?? 0) }) },
     { id: "events", label: t("Live events") },
   ];
 
@@ -1275,6 +1292,7 @@ function ScoreCard({ score }: { score: any }) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["run-scores", runId] });
       queryClient.invalidateQueries({ queryKey: ["run-attempts", runId] });
+      queryClient.invalidateQueries({ queryKey: ["run-live-summary", runId] });
       queryClient.invalidateQueries({ queryKey: ["run-report", runId] });
       toast.success(t("Annotation saved"));
     },
@@ -1290,6 +1308,7 @@ function ScoreCard({ score }: { score: any }) {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["run-scores", runId] });
       queryClient.invalidateQueries({ queryKey: ["run-attempts", runId] });
+      queryClient.invalidateQueries({ queryKey: ["run-live-summary", runId] });
       queryClient.invalidateQueries({ queryKey: ["run-report", runId] });
       toast.success(t("Retried {{count}} judge scores", { count: data?.retried ?? 0 }));
     },
