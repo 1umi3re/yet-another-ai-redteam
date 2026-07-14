@@ -1,5 +1,7 @@
+import { useEffect } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/auth";
+import { api } from "../lib/api";
 import {
   Shield,
   Target,
@@ -37,9 +39,17 @@ const assetSubnav = [
 
 export default function Layout() {
   const setToken = useAuth(s => s.setToken);
+  const token = useAuth(s => s.token);
+  const account = useAuth(s => s.account);
+  const setAccount = useAuth(s => s.setAccount);
   const navigate = useNavigate();
   const location = useLocation();
   const { t } = useI18n();
+
+  useEffect(() => {
+    if (!token || account) return;
+    api.get("/api/auth/me").then(response => setAccount(response.data)).catch(() => undefined);
+  }, [account, setAccount, token]);
 
   const isNavActive = (to: string) => {
     const path = location.pathname;
@@ -101,6 +111,21 @@ export default function Layout() {
           })}
         </nav>
         <div className="p-3 border-t border-gray-100 space-y-2">
+          {account && (
+            <div className="flex items-center gap-2.5 px-3 py-2 min-w-0">
+              {account.picture ? (
+                <img src={account.picture} alt="" referrerPolicy="no-referrer" className="h-8 w-8 rounded-full object-cover" />
+              ) : (
+                <div className="h-8 w-8 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-xs font-semibold">
+                  {account.display_name.slice(0, 1).toUpperCase()}
+                </div>
+              )}
+              <div className="min-w-0">
+                <div className="truncate text-xs font-medium text-gray-800">{account.display_name}</div>
+                <div className="truncate text-[10px] text-gray-500">{account.email ?? t("Administrator")}</div>
+              </div>
+            </div>
+          )}
           <LanguageSwitch />
           <button
             className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-700 hover:bg-gray-100"

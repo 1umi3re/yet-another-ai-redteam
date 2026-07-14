@@ -18,5 +18,12 @@ async def test_login_success_and_failure(monkeypatch, tmp_path):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
         r = await c.post("/api/login", json={"password": "letmein"})
         assert r.status_code == 200 and "token" in r.json()
+        assert r.json()["account"]["auth_method"] == "password"
+        me = await c.get("/api/auth/me", headers={"Authorization": f"Bearer {r.json()['token']}"})
+        assert me.status_code == 200
+        assert me.json()["display_name"] == "Administrator"
+        config = await c.get("/api/auth/config")
+        assert config.json()["oidc_enabled"] is False
+        assert config.json()["password_enabled"] is True
         bad = await c.post("/api/login", json={"password": "wrong"})
         assert bad.status_code == 401

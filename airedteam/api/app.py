@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
 
 from airedteam.api.deps import get_state
 from airedteam.api.routers import attack_methods as attack_methods_router
@@ -32,6 +33,16 @@ async def lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     app = FastAPI(title="airedteam API", lifespan=lifespan)
     state = get_state()
+    app.add_middleware(
+        SessionMiddleware,
+        secret_key=state.settings.jwt_secret,
+        session_cookie="airedteam_oidc_session",
+        max_age=600,
+        same_site="lax",
+        https_only=bool(
+            state.settings.oidc_callback_url and state.settings.oidc_callback_url.startswith("https://")
+        ),
+    )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=state.settings.cors_origins,

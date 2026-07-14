@@ -46,3 +46,14 @@ def test_target_reconnaissance_has_alembic_migration():
     assert '"target_recon_reports"' in migration_text
     assert 'sa.Column("report_json", sa.JSON(), nullable=True)' in migration_text
     assert 'op.drop_table("target_recon_reports")' in migration_text
+
+
+def test_oidc_login_has_alembic_migration():
+    migration_text = Path("alembic/versions/0016_oidc_login.py").read_text()
+
+    assert 'revision: str = "0016_oidc_login"' in migration_text
+    assert 'down_revision: str | None = "0015_target_recon"' in migration_text
+    assert '"oidc_login_tickets"' in migration_text
+    assert '"ticket_hash"' in migration_text
+    assert '"consumed_at"' in migration_text
+    assert 'op.drop_table("oidc_login_tickets")' in migration_text

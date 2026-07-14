@@ -101,6 +101,17 @@ class TargetReconReport(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
 
 
+class OIDCLoginTicket(Base):
+    __tablename__ = "oidc_login_tickets"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    ticket_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    account_json: Mapped[dict] = mapped_column(JSON)
+    next_path: Mapped[str] = mapped_column(String(500), default="/dashboard")
+    expires_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+
 class DatasetMeta(Base):
     __tablename__ = "datasets"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)

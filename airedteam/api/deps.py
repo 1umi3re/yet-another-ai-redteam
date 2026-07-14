@@ -12,6 +12,7 @@ from airedteam.services.converters import ConverterChainService
 from airedteam.services.custom_scenarios import CustomScenarioService
 from airedteam.services.datasets import DatasetService
 from airedteam.services.manual import ManualService
+from airedteam.services.oidc import OIDCService
 from airedteam.services.prompt_assets import PromptAssetService
 from airedteam.services.run_monitor import DingTalkNotifier, MonitoringConfigStore, RunMonitorService
 from airedteam.services.runs import RunService
@@ -21,7 +22,7 @@ from airedteam.storage.blobs import LocalBlobStore
 from airedteam.storage.db import make_engine, make_sessionmaker
 from airedteam.storage.secretbox import SecretBox
 
-from .auth import verify_token
+from .auth import AuthIdentity, verify_identity
 
 
 @dataclass
@@ -43,6 +44,7 @@ class AppState:
     manual: ManualService
     attack_methods: AttackMethodCategoryService
     custom_scenarios: CustomScenarioService
+    oidc: OIDCService
 
 
 def build_state(settings: Settings | None = None) -> AppState:
@@ -93,6 +95,7 @@ def build_state(settings: Settings | None = None) -> AppState:
     manual = ManualService(SessionLocal, blob, targets, converters, prompt_assets)
     attack_methods = AttackMethodCategoryService(SessionLocal)
     custom_scenarios = CustomScenarioService(SessionLocal)
+    oidc = OIDCService(SessionLocal, s)
     return AppState(
         s,
         SessionLocal,
@@ -111,6 +114,7 @@ def build_state(settings: Settings | None = None) -> AppState:
         manual,
         attack_methods,
         custom_scenarios,
+        oidc,
     )
 
 
@@ -124,11 +128,15 @@ def get_state() -> AppState:
     return _STATE
 
 
-def require_admin(authorization: str = Header(default=""), state: AppState = Depends(get_state)) -> str:
+def require_identity(authorization: str = Header(default=""), state: AppState = Depends(get_state)) -> AuthIdentity:
     if not authorization.lower().startswith("bearer "):
         raise HTTPException(401, "missing bearer token")
     token = authorization.split(" ", 1)[1]
     try:
-        return verify_token(token, secret=state.settings.jwt_secret)
+        return verify_identity(token, secret=state.settings.jwt_secret)
     except PermissionError:
         raise HTTPException(401, "invalid token") from None
+
+
+def require_admin(identity: AuthIdentity = Depends(require_identity)) -> str:
+    return identity.subject

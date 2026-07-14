@@ -24,3 +24,33 @@ def test_settings_requires_master_key(monkeypatch):
     monkeypatch.setenv("AIREDTEAM_ADMIN_PASSWORD", "secret")
     with pytest.raises(ValidationError):
         Settings(_env_file=None)
+
+
+def test_oidc_settings_require_complete_configuration(monkeypatch):
+    monkeypatch.setenv("AIREDTEAM_MASTER_KEY", "0" * 44)
+    monkeypatch.setenv("AIREDTEAM_ADMIN_PASSWORD", "secret")
+    monkeypatch.setenv("AIREDTEAM_OIDC_ENDPOINT", "https://issuer.example.com")
+    with pytest.raises(ValidationError, match="partial OIDC configuration"):
+        Settings(_env_file=None)
+
+
+def test_oidc_settings_enable_complete_configuration(monkeypatch):
+    monkeypatch.setenv("AIREDTEAM_MASTER_KEY", "0" * 44)
+    monkeypatch.setenv("AIREDTEAM_ADMIN_PASSWORD", "secret")
+    monkeypatch.setenv("AIREDTEAM_OIDC_ENDPOINT", "https://issuer.example.com")
+    monkeypatch.setenv("AIREDTEAM_OIDC_CLIENT_ID", "client")
+    monkeypatch.setenv("AIREDTEAM_OIDC_CLIENT_SECRET", "secret")
+    monkeypatch.setenv("AIREDTEAM_OIDC_CALLBACK_URL", "https://api.example.com/api/auth/oidc/callback")
+    monkeypatch.setenv("AIREDTEAM_FRONTEND_URL", "https://app.example.com")
+    monkeypatch.setenv("AIREDTEAM_OIDC_FORCE_AUTH", "true")
+    settings = Settings(_env_file=None)
+    assert settings.oidc_enabled is True
+    assert settings.oidc_force_auth is True
+
+
+def test_forced_oidc_requires_configuration(monkeypatch):
+    monkeypatch.setenv("AIREDTEAM_MASTER_KEY", "0" * 44)
+    monkeypatch.setenv("AIREDTEAM_ADMIN_PASSWORD", "secret")
+    monkeypatch.setenv("AIREDTEAM_OIDC_FORCE_AUTH", "true")
+    with pytest.raises(ValidationError, match="OIDC_FORCE_AUTH"):
+        Settings(_env_file=None)

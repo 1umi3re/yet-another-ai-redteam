@@ -51,9 +51,31 @@ AIREDTEAM_JWT_SECRET=<paste output>
 AIREDTEAM_JWT_TTL_MINUTES=10080 # optional, token lifetime (default 7d)
 ```
 
+### OIDC login (optional)
+
+To allow users from an OpenID Connect provider to sign in, configure all of the
+following values. `AIREDTEAM_OIDC_ENDPOINT` is the provider issuer URL; airedteam
+loads its standard discovery document automatically.
+
+```env
+AIREDTEAM_OIDC_ENDPOINT=https://identity.example.com/realms/airedteam
+AIREDTEAM_OIDC_CLIENT_ID=airedteam
+AIREDTEAM_OIDC_CLIENT_SECRET=<provider-client-secret>
+AIREDTEAM_OIDC_CALLBACK_URL=https://api.example.com/api/auth/oidc/callback
+AIREDTEAM_FRONTEND_URL=https://airedteam.example.com
+AIREDTEAM_OIDC_FORCE_AUTH=false
+```
+
+Register the exact callback URL with the provider. With `AIREDTEAM_OIDC_FORCE_AUTH=false`,
+both OIDC and the admin password remain available. Setting it to `true` disables the
+password API with HTTP 403 and requires OIDC. All authenticated provider accounts receive
+the console's existing administrator permissions. Partial OIDC configuration is rejected
+at startup.
+
 ### Docker compose
 
-`docker-compose.yml` reads `AIREDTEAM_MASTER_KEY`, `AIREDTEAM_ADMIN_PASSWORD`, and `AIREDTEAM_JWT_SECRET` from your shell (or a `.env` file in the project root — Compose loads it automatically). Verify with:
+`docker-compose.yml` reads the airedteam settings from your shell (or a `.env` file in the
+project root — Compose loads it automatically), including the optional OIDC values. Verify with:
 
 ```bash
 docker compose config | grep AIREDTEAM_
@@ -77,7 +99,8 @@ In another shell:
 cd frontend && npm install && npm run dev
 ```
 
-Open http://localhost:5173 and log in with `AIREDTEAM_ADMIN_PASSWORD`.
+Open http://localhost:5173 and log in with `AIREDTEAM_ADMIN_PASSWORD`, or use the OIDC
+button when OIDC is configured.
 
 ## Docker
 
@@ -226,10 +249,12 @@ Run detail also includes paginated/filtered attempts, prompt snapshot rendering,
 
 Manual Console dataset prompt selection now supports server-side search and pagination, which keeps large datasets usable without loading every item into the browser.
 
-### Configuration unchanged
+### Core configuration
 
-Phase 2 features do not introduce new environment variables. The same three secrets from Phase 1 remain required:
+The original password-login configuration remains supported:
 
 - `AIREDTEAM_MASTER_KEY` — Fernet key for encrypting target secrets.
 - `AIREDTEAM_ADMIN_PASSWORD` — Login password for the web UI.
 - `AIREDTEAM_JWT_SECRET` — HMAC secret for signing JWTs (optional but recommended).
+
+OIDC is optional and uses the additional settings documented in the configuration section above.

@@ -2,11 +2,28 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { setAuthToken, setUnauthorizedHandler } from "./api";
 
-type S = { token: string | null; setToken: (t: string | null) => void };
+export type Account = {
+  subject: string;
+  display_name: string;
+  email: string | null;
+  picture: string | null;
+  auth_method: "password" | "oidc" | string;
+};
+
+type S = {
+  token: string | null;
+  account: Account | null;
+  setToken: (t: string | null) => void;
+  setAccount: (account: Account | null) => void;
+  setSession: (token: string, account: Account) => void;
+};
 
 export const useAuth = create<S>()(persist((set) => ({
   token: null,
-  setToken: (t) => { setAuthToken(t); set({ token: t }); },
+  account: null,
+  setToken: (t) => { setAuthToken(t); set({ token: t, ...(!t ? { account: null } : {}) }); },
+  setAccount: (account) => set({ account }),
+  setSession: (token, account) => { setAuthToken(token); set({ token, account }); },
 }), { name: "airedteam-auth", onRehydrateStorage: () => (s) => { if (s?.token) setAuthToken(s.token); } }));
 
 setUnauthorizedHandler(() => {
