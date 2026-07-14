@@ -63,7 +63,7 @@ export default function Layout() {
   return (
     <div className="h-[100dvh] max-h-[100dvh] min-h-0 flex overflow-hidden bg-gray-50">
       <aside className="h-full w-60 shrink-0 overflow-hidden bg-white border-r border-gray-200 flex flex-col">
-        <div className="h-16 flex items-center gap-2 px-5 border-b border-gray-100">
+        <div className="h-16 shrink-0 flex items-center gap-2 px-5 border-b border-gray-100">
           <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center text-white shadow-soft">
             <Shield className="h-4 w-4" />
           </div>
@@ -72,7 +72,7 @@ export default function Layout() {
             <div className="text-[10px] text-gray-500 -mt-0.5">{t("AI redteam console")}</div>
           </div>
         </div>
-        <nav className="p-3 space-y-0.5 flex-1 min-h-0">
+        <nav className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 space-y-0.5">
           {nav.map(({ to, labelKey, icon: Icon }) => {
             const active = isNavActive(to);
             return (
@@ -110,7 +110,7 @@ export default function Layout() {
             );
           })}
         </nav>
-        <div className="p-3 border-t border-gray-100 space-y-2">
+        <div className="shrink-0 bg-white p-3 border-t border-gray-100 space-y-1">
           {account && (
             <div className="flex items-center gap-2.5 px-3 py-2 min-w-0">
               {account.picture ? (
@@ -126,9 +126,9 @@ export default function Layout() {
               </div>
             </div>
           )}
-          <LanguageSwitch />
+          <LanguageSwitch variant="sidebar" />
           <button
-            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-700 hover:bg-gray-100"
+            className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-gray-700 transition hover:bg-gray-100"
             onClick={() => { setToken(null); navigate("/login"); }}
           >
             <LogOut className="h-4 w-4" /> {t("Sign out")}
