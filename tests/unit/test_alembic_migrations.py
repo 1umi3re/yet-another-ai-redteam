@@ -38,3 +38,11 @@ def test_retest_provenance_has_alembic_migration():
 
     for column in ("target_config_id", "executor_ref_json", "source_run_id", "source_attempt_id", "retest_mode"):
         assert f'sa.Column("{column}"' in migration_text
+
+
+def test_target_reconnaissance_has_alembic_migration():
+    migration_text = Path("alembic/versions/0015_target_recon.py").read_text()
+
+    assert '"target_recon_reports"' in migration_text
+    assert 'sa.Column("report_json", sa.JSON(), nullable=True)' in migration_text
+    assert 'op.drop_table("target_recon_reports")' in migration_text

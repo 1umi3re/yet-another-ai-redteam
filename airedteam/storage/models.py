@@ -73,6 +73,34 @@ class ServiceContextTemplate(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
 
 
+class TargetReconReport(Base):
+    __tablename__ = "target_recon_reports"
+    __table_args__ = (
+        UniqueConstraint(
+            "target_config_id",
+            "target_model",
+            "version",
+            name="uq_target_recon_report_version",
+        ),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    target_config_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("target_configs.id", ondelete="CASCADE"), index=True
+    )
+    target_model: Mapped[str] = mapped_column(String(200))
+    generator_config_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("target_configs.id", ondelete="SET NULL"), nullable=True
+    )
+    generator_model: Mapped[str] = mapped_column(String(200))
+    version: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(20), default="running")
+    report_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    trace_blob_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+
 class DatasetMeta(Base):
     __tablename__ = "datasets"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)

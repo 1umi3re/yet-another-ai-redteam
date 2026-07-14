@@ -33,6 +33,32 @@ async def test_generate_returns_response():
 
 @pytest.mark.asyncio
 @respx.mock
+async def test_generate_accepts_tool_call_only_response():
+    tool_calls = [
+        {
+            "id": "call_1",
+            "type": "function",
+            "function": {"name": "search", "arguments": '{"query":"weather"}'},
+        }
+    ]
+    respx.post("https://api.example.com/v1/chat/completions").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": None, "tool_calls": tool_calls}}],
+                "usage": {"prompt_tokens": 5, "completion_tokens": 2},
+            },
+        )
+    )
+    t = OpenAICompatTarget(name="t1", base_url="https://api.example.com/v1", model="gpt-x", api_key="sk")
+    response = await t.generate(Prompt(text="hi"))
+    assert response.text == ""
+    assert response.raw["choices"][0]["message"]["tool_calls"] == tool_calls
+    await t.aclose()
+
+
+@pytest.mark.asyncio
+@respx.mock
 async def test_generate_raises_on_http_error():
     respx.post("https://api.example.com/v1/chat/completions").mock(return_value=httpx.Response(500, text="boom"))
     t = OpenAICompatTarget(name="t1", base_url="https://api.example.com/v1", model="m", api_key="k")

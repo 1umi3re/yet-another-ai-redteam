@@ -11,6 +11,7 @@ import {
   MessageSquare,
   Tags,
   Settings as SettingsIcon,
+  Radar,
 } from "lucide-react";
 import clsx from "clsx";
 import { useI18n } from "../lib/i18n";
@@ -19,6 +20,7 @@ import { LanguageSwitch } from "./LanguageSwitch";
 const nav = [
   { to: "/dashboard", labelKey: "Dashboard", icon: Sparkles },
   { to: "/targets",   labelKey: "Targets",   icon: Target },
+  { to: "/reconnaissance", labelKey: "Reconnaissance", icon: Radar },
   { to: "/assets",    labelKey: "Assets",    icon: Database },
   { to: "/attack-methods", labelKey: "Attack Methods", icon: Tags },
   { to: "/runs/new",  labelKey: "New run",   icon: PlayCircle },

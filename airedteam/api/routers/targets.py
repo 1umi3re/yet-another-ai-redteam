@@ -39,6 +39,11 @@ class GenerateServiceContextTemplate(BaseModel):
     max_candidates: int = Field(default=10, ge=1, le=20)
 
 
+class RunReconnaissance(BaseModel):
+    generator_config_id: str
+    max_rounds: int = Field(default=10, ge=1, le=10)
+
+
 class CheckResult(BaseModel):
     ok: bool
     latency_ms: int | None = None
@@ -218,6 +223,50 @@ async def activate_service_context_template(
         raise HTTPException(404, "Template not found") from None
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
+
+
+@router.get("/targets/{tid}/reconnaissance")
+async def list_reconnaissance_reports(
+    tid: str,
+    _=Depends(require_admin),
+    state: AppState = Depends(get_state),
+):
+    try:
+        return await state.agent_reconnaissance.list_for_target(tid)
+    except KeyError:
+        raise HTTPException(404, "Target not found") from None
+
+
+@router.post("/targets/{tid}/reconnaissance/run")
+async def run_reconnaissance(
+    tid: str,
+    req: RunReconnaissance,
+    _=Depends(require_admin),
+    state: AppState = Depends(get_state),
+):
+    try:
+        return await state.agent_reconnaissance.run(
+            tid,
+            req.generator_config_id,
+            max_rounds=req.max_rounds,
+        )
+    except KeyError:
+        raise HTTPException(404, "Target or generator target not found") from None
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@router.get("/targets/{tid}/reconnaissance/{report_id}/trace")
+async def get_reconnaissance_trace(
+    tid: str,
+    report_id: str,
+    _=Depends(require_admin),
+    state: AppState = Depends(get_state),
+):
+    row = await state.agent_reconnaissance.get(report_id)
+    if row is None or row.target_config_id != tid:
+        raise HTTPException(404, "Reconnaissance report not found")
+    return await state.agent_reconnaissance.get_trace(report_id)
 
 
 @router.post("/targets/check", response_model=CheckResult)

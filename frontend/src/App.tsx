@@ -6,6 +6,7 @@ import { useAuth } from "./lib/auth";
 const Login = lazy(() => import("./pages/Login"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Targets = lazy(() => import("./pages/Targets"));
+const Reconnaissance = lazy(() => import("./pages/Reconnaissance"));
 const Assets = lazy(() => import("./pages/Assets"));
 const AttackMethods = lazy(() => import("./pages/AttackMethods"));
 const Runs = lazy(() => import("./pages/Runs"));
@@ -29,6 +30,7 @@ export default function App() {
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/targets" element={<Targets />} />
+          <Route path="/reconnaissance" element={<Reconnaissance />} />
           <Route path="/assets" element={<Assets />} />
           <Route path="/attack-methods" element={<AttackMethods />} />
           <Route path="/datasets" element={<Navigate to="/assets" replace />} />

@@ -48,7 +48,14 @@ class OpenAICompatTarget(BaseTarget):
         r.raise_for_status()
         latency = int((time.perf_counter() - t0) * 1000)
         data = r.json()
-        text = data["choices"][0]["message"]["content"]
+        message = data["choices"][0].get("message") or {}
+        content = message.get("content")
+        if isinstance(content, list):
+            text = "".join(
+                str(item.get("text") or "") for item in content if isinstance(item, dict) and item.get("type") == "text"
+            )
+        else:
+            text = str(content or "")
         usage = data.get("usage") or {}
         return Response(
             text=text,

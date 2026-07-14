@@ -6,6 +6,7 @@ from fastapi import Depends, Header, HTTPException
 
 from airedteam.config import Settings, get_settings
 from airedteam.engine.progress import ProgressBus
+from airedteam.services.agent_reconnaissance import AgentReconnaissanceService
 from airedteam.services.attack_method_categories import AttackMethodCategoryService
 from airedteam.services.converters import ConverterChainService
 from airedteam.services.custom_scenarios import CustomScenarioService
@@ -37,6 +38,7 @@ class AppState:
     monitor: RunMonitorService
     monitor_config: MonitoringConfigStore
     service_context_templates: ServiceContextTemplateService
+    agent_reconnaissance: AgentReconnaissanceService
     runs: RunService
     manual: ManualService
     attack_methods: AttackMethodCategoryService
@@ -74,6 +76,7 @@ def build_state(settings: Settings | None = None) -> AppState:
     )
     monitor_config = MonitoringConfigStore(settings=s, monitor=monitor, root=s.blob_dir)
     service_context_templates = ServiceContextTemplateService(SessionLocal, blob, targets, prompt_assets)
+    agent_reconnaissance = AgentReconnaissanceService(SessionLocal, blob, targets, prompt_assets)
     runs = RunService(
         SessionLocal,
         blob,
@@ -103,6 +106,7 @@ def build_state(settings: Settings | None = None) -> AppState:
         monitor,
         monitor_config,
         service_context_templates,
+        agent_reconnaissance,
         runs,
         manual,
         attack_methods,
