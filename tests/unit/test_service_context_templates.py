@@ -268,6 +268,69 @@ async def test_generation_uses_the_restricted_agents_response_language(tmp_path)
     await engine.dispose()
 
 
+@pytest.mark.asyncio
+async def test_manual_template_continues_versions_stays_inactive_and_can_be_activated(tmp_path):
+    engine = make_engine(f"sqlite+aiosqlite:///{tmp_path}/db.sqlite")
+    async with engine.begin() as conn:
+        await conn.run_sync(models.Base.metadata.create_all)
+    sf = make_sessionmaker(engine)
+    blob = LocalBlobStore(tmp_path / "blobs")
+    targets = TargetConfigService(sf, SecretBox(Fernet.generate_key().decode()))
+    tested = await targets.create(
+        name="tested",
+        plugin="openai_compat",
+        params={"name": "tested", "base_url": "https://tested", "model": "medical-model", "api_key": "x"},
+    )
+    async with sf() as session:
+        session.add(
+            models.ServiceContextTemplate(
+                target_config_id=tested.id,
+                target_model="medical-model",
+                generator_model="old-generator",
+                version=3,
+                status="failed",
+            )
+        )
+        await session.commit()
+
+    service = ServiceContextTemplateService(sf, blob, targets, PromptAssetService(sf, blob))
+    result = await service.create_manual_template(
+        tested.id,
+        "Manual medical workflow:\n{prompt}",
+    )
+
+    assert result["version"] == 4
+    assert result["source"] == "manual"
+    assert result["status"] == "succeeded"
+    assert result["verification_passed"] is False
+    assert result["is_active"] is False
+    assert result["has_trace"] is False
+    assert await service.active_for(tested.id, "medical-model") is None
+
+    activated = await service.activate(tested.id, result["id"])
+    assert activated["is_active"] is True
+    assert (await service.active_for(tested.id, "medical-model"))["id"] == result["id"]
+
+    next_result = await service.create_manual_template(
+        tested.id,
+        "Replacement medical workflow:\n{prompt}",
+    )
+    assert next_result["version"] == 5
+    assert next_result["is_active"] is False
+    await service.activate(tested.id, next_result["id"])
+    assert (await service.active_for(tested.id, "medical-model"))["id"] == next_result["id"]
+    assert next(
+        item for item in await service.list_for_target(tested.id) if item["id"] == result["id"]
+    )["is_active"] is False
+
+    with pytest.raises(ValueError, match="exactly one"):
+        await service.create_manual_template(tested.id, "missing placeholder")
+    with pytest.raises(ValueError, match="other than"):
+        await service.create_manual_template(tested.id, "{topic}: {prompt}")
+    assert [item["version"] for item in await service.list_for_target(tested.id)] == [5, 4, 3]
+    await engine.dispose()
+
+
 def test_template_validation_and_verbatim_wrapping():
     template = validate_bridge_template("Medical support task:\n{prompt}")
     transformed = "encoded attack text"

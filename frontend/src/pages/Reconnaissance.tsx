@@ -1,14 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Radar, Sparkles } from "lucide-react";
+import { Radar, Save, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Card, CardBody, CardHeader, CardTitle } from "../components/ui/Card";
-import { Field, Input, Select } from "../components/ui/Form";
+import { Field, Input, Select, Textarea } from "../components/ui/Form";
 import { Tabs } from "../components/ui/Tabs";
 
 type Target = { id: string; name: string; plugin: string; params: Record<string, any> };
@@ -19,6 +19,7 @@ type ReconReport = {
 type BridgeTemplate = {
   id: string; version: number; status: string; is_active: boolean; topic: string | null;
   language: string | null; template: string | null; target_model: string; generator_model: string;
+  source: "generated" | "manual"; verification_passed: boolean; has_trace: boolean;
   error: string | null; created_at: string | null;
 };
 type WorkspaceTab = "agent" | "topic-bridge";
@@ -45,6 +46,7 @@ export default function Reconnaissance() {
   const targetId = params.get("target") ?? "";
   const [reconGeneratorId, setReconGeneratorId] = useState("");
   const [bridgeGeneratorId, setBridgeGeneratorId] = useState("");
+  const [manualBridgeTemplate, setManualBridgeTemplate] = useState("");
   const [maxRounds, setMaxRounds] = useState("10");
   const [maxCandidates, setMaxCandidates] = useState("10");
   const [traces, setTraces] = useState<Record<string, any>>({});
@@ -78,6 +80,7 @@ export default function Reconnaissance() {
     setParams(next, { replace: true });
     setReconGeneratorId("");
     setBridgeGeneratorId("");
+    setManualBridgeTemplate("");
     setExpandedTrace(null);
   };
   const recon = useMutation({
@@ -114,6 +117,18 @@ export default function Reconnaissance() {
     },
     onError: (error: any) => toast.error(error?.response?.data?.detail ?? t("Failed to activate template")),
   });
+  const createManualBridge = useMutation({
+    mutationFn: async () => api.post<BridgeTemplate>(
+      `/api/targets/${targetId}/service-context-templates/manual`,
+      { template: manualBridgeTemplate },
+    ),
+    onSuccess: () => {
+      toast.success(t("Manual topic-bridge template saved"));
+      setManualBridgeTemplate("");
+      qc.invalidateQueries({ queryKey: ["service-context-templates", targetId] });
+    },
+    onError: (error: any) => toast.error(error?.response?.data?.detail ?? t("Failed to save manual template")),
+  });
   const loadTrace = useMutation({
     mutationFn: async ({ id, kind }: { id: string; kind: "recon" | "bridge" }) => {
       const path = kind === "recon"
@@ -135,6 +150,14 @@ export default function Reconnaissance() {
   };
 
   const generatorOptions = targets.filter(target => target.id !== targetId);
+  const usableTemplates = templates.filter(template => (
+    template.status === "succeeded"
+    && !!template.template
+    && (template.verification_passed || template.source === "manual")
+  ));
+  const activeTemplate = usableTemplates.find(template => template.is_active);
+  const manualPlaceholderCount = manualBridgeTemplate.split("{prompt}").length - 1;
+  const manualTemplateValid = !!manualBridgeTemplate.trim() && manualPlaceholderCount === 1;
   const tabs = [
     { id: "agent" as const, label: t("Agent reconnaissance"), icon: <Radar className="h-4 w-4" /> },
     { id: "topic-bridge" as const, label: t("Topic bridge"), icon: <Sparkles className="h-4 w-4" /> },
@@ -212,15 +235,59 @@ export default function Reconnaissance() {
             </CardBody>
           </Card>
           <Card>
+            <CardHeader><CardTitle>{t("Enter topic-bridge template manually")}</CardTitle></CardHeader>
+            <CardBody>
+              <div className="space-y-4">
+                <Field
+                  label={t("Template content")}
+                  hint={t("The template must contain exactly one {prompt} placeholder and no other variables.")}
+                >
+                  <Textarea
+                    rows={8}
+                    value={manualBridgeTemplate}
+                    placeholder={t("Place the transformed prompt at {prompt}.")}
+                    onChange={event => setManualBridgeTemplate(event.target.value)}
+                  />
+                </Field>
+                <div className="flex justify-end">
+                  <Button
+                    icon={<Save className="h-4 w-4" />}
+                    loading={createManualBridge.isPending}
+                    disabled={!manualTemplateValid}
+                    onClick={() => createManualBridge.mutate()}
+                  >
+                    {t("Save as new version")}
+                  </Button>
+                </div>
+              </div>
+            </CardBody>
+          </Card>
+          <Card>
             <CardHeader><CardTitle>{t("Topic-bridge versions")}</CardTitle></CardHeader>
+            {!templatesLoading && !!usableTemplates.length && <div className="border-b border-gray-100 p-5">
+              <Field label={t("Active version")} hint={t("New runs use this topic-bridge version by default.")}>
+                <Select
+                  value={activeTemplate?.id ?? ""}
+                  disabled={activateBridge.isPending}
+                  onChange={event => event.target.value && activateBridge.mutate(event.target.value)}
+                >
+                  <option value="">{t("-- no active version --")}</option>
+                  {usableTemplates.map(template => (
+                    <option key={template.id} value={template.id}>
+                      v{template.version} · {template.source === "manual" ? t("Manually entered") : t("Model generated")}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            </div>}
             {templatesLoading ? <div className="p-5 text-sm text-gray-500">{t("Loading…")}</div> : !templates.length ? <div className="p-5 text-sm text-gray-500">{t("No topic-bridge template has been generated for this model.")}</div> : <div className="divide-y divide-gray-100">{templates.map(template => {
               const traceKey = `bridge:${template.id}`;
               return <div key={template.id} className="p-5">
-                <div className="flex flex-wrap items-center justify-between gap-2"><div className="flex items-center gap-2"><span className="font-medium">v{template.version}</span><Badge tone={statusTone(template.status)}>{template.status}</Badge>{template.is_active && <Badge tone="indigo">{t("active")}</Badge>}{template.topic && <Badge>{template.topic}</Badge>}{template.language && <Badge tone="blue">{template.language}</Badge>}</div>{!template.is_active && template.status === "succeeded" && <Button size="sm" variant="secondary" loading={activateBridge.isPending && activateBridge.variables === template.id} onClick={() => activateBridge.mutate(template.id)}>{t("Activate")}</Button>}</div>
-                <div className="mt-2 text-xs text-gray-500">{t("Generated by")}: {template.generator_model}{template.created_at ? ` · ${new Date(template.created_at).toLocaleString()}` : ""}</div>
+                <div className="flex flex-wrap items-center gap-2"><span className="font-medium">v{template.version}</span><Badge tone={statusTone(template.status)}>{template.status}</Badge>{template.is_active && <Badge tone="indigo">{t("active")}</Badge>}<Badge tone={template.source === "manual" ? "amber" : "gray"}>{template.source === "manual" ? t("Manually entered") : t("Model generated")}</Badge>{template.topic && <Badge>{template.topic}</Badge>}{template.language && <Badge tone="blue">{template.language}</Badge>}</div>
+                <div className="mt-2 text-xs text-gray-500">{template.source === "generated" ? `${t("Generated by")}: ${template.generator_model}` : t("Manually entered")}{template.created_at ? ` · ${new Date(template.created_at).toLocaleString()}` : ""}</div>
                 {template.template && <pre className="mt-3 max-h-48 overflow-auto whitespace-pre-wrap rounded bg-gray-50 p-3 text-xs font-mono">{template.template}</pre>}
                 {template.error && <div className="mt-2 text-xs text-red-700">{template.error}</div>}
-                <div className="mt-3"><Button size="sm" variant="ghost" loading={loadTrace.isPending && loadTrace.variables?.id === template.id} onClick={() => toggleTrace(template.id, "bridge")}>{expandedTrace === traceKey ? t("Hide generation trace") : t("View generation trace")}</Button></div>
+                {template.has_trace && <div className="mt-3"><Button size="sm" variant="ghost" loading={loadTrace.isPending && loadTrace.variables?.id === template.id} onClick={() => toggleTrace(template.id, "bridge")}>{expandedTrace === traceKey ? t("Hide generation trace") : t("View generation trace")}</Button></div>}
                 {expandedTrace === traceKey && traces[traceKey] && <BridgeTrace trace={traces[traceKey]} />}
               </div>;
             })}</div>}

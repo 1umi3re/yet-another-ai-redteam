@@ -51,6 +51,72 @@ async def test_create_list_delete_target(monkeypatch, tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_create_and_activate_manual_topic_bridge(monkeypatch, tmp_path):
+    monkeypatch.setenv("AIREDTEAM_MASTER_KEY", Fernet.generate_key().decode())
+    monkeypatch.setenv("AIREDTEAM_ADMIN_PASSWORD", "letmein")
+    monkeypatch.setenv("AIREDTEAM_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/x.db")
+    monkeypatch.setenv("AIREDTEAM_BLOB_DIR", str(tmp_path / "blobs"))
+    import airedteam.api.deps as deps
+
+    deps._STATE = None
+    from airedteam.api.app import create_app
+
+    app = create_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
+        state = deps.get_state()
+        from airedteam.storage import models
+        from airedteam.storage.db import make_engine
+
+        eng = make_engine(state.settings.database_url)
+        async with eng.begin() as conn:
+            await conn.run_sync(models.Base.metadata.create_all)
+
+        h = await _login(c)
+        target = await c.post(
+            "/api/targets",
+            headers=h,
+            json={
+                "name": "manual-bridge-target",
+                "plugin": "openai_compat",
+                "params": {"name": "target", "base_url": "https://x", "model": "m"},
+                "secret": {"api_key": "sk-xxx"},
+            },
+        )
+        tid = target.json()["id"]
+
+        invalid = await c.post(
+            f"/api/targets/{tid}/service-context-templates/manual",
+            headers=h,
+            json={"template": "missing placeholder"},
+        )
+        assert invalid.status_code == 400
+
+        created = await c.post(
+            f"/api/targets/{tid}/service-context-templates/manual",
+            headers=h,
+            json={"template": "Service workflow:\n{prompt}"},
+        )
+        assert created.status_code == 201
+        assert created.json()["source"] == "manual"
+        assert created.json()["version"] == 1
+        assert created.json()["is_active"] is False
+
+        activated = await c.post(
+            f"/api/targets/{tid}/service-context-templates/{created.json()['id']}/activate",
+            headers=h,
+        )
+        assert activated.status_code == 200
+        assert activated.json()["is_active"] is True
+
+        versions = await c.get(
+            f"/api/targets/{tid}/service-context-templates",
+            headers=h,
+        )
+        assert versions.json()[0]["id"] == created.json()["id"]
+        assert versions.json()[0]["has_trace"] is False
+
+
+@pytest.mark.asyncio
 async def test_update_target_limits(monkeypatch, tmp_path):
     monkeypatch.setenv("AIREDTEAM_MASTER_KEY", Fernet.generate_key().decode())
     monkeypatch.setenv("AIREDTEAM_ADMIN_PASSWORD", "letmein")

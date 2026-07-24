@@ -6,6 +6,7 @@ from string import Formatter
 from typing import Any
 
 from sqlalchemy import func, select, update
+from sqlalchemy.exc import IntegrityError
 
 from airedteam.core.types import Prompt
 from airedteam.engine.factory import build_target
@@ -17,6 +18,8 @@ SCOPE_PROBE = (
     "the topics you can help with, and one example of a typical question you can answer."
 )
 DEFAULT_MAX_CANDIDATES = 10
+MANUAL_GENERATOR_MODEL = "manual"
+VERSION_ALLOCATION_ATTEMPTS = 5
 
 
 def _extract_json(text: str) -> dict[str, Any]:
@@ -60,12 +63,18 @@ def _model_name(runtime_cfg: dict) -> str:
 
 
 def _public(row: ServiceContextTemplate) -> dict[str, Any]:
+    source = (
+        "manual"
+        if row.generator_config_id is None and row.generator_model == MANUAL_GENERATOR_MODEL
+        else "generated"
+    )
     return {
         "id": row.id,
         "target_config_id": row.target_config_id,
         "target_model": row.target_model,
         "generator_config_id": row.generator_config_id,
         "generator_model": row.generator_model,
+        "source": source,
         "version": row.version,
         "status": row.status,
         "is_active": row.is_active,
@@ -92,6 +101,47 @@ class ServiceContextTemplateService:
         target = build_target(runtime_cfg)
         apply_target_input_limit(target, runtime_cfg)
         return target
+
+    async def _create_version(
+        self,
+        *,
+        target_config_id: str,
+        target_model: str,
+        generator_config_id: str | None,
+        generator_model: str,
+        status: str,
+        template_text: str | None = None,
+    ) -> ServiceContextTemplate:
+        for attempt in range(VERSION_ALLOCATION_ATTEMPTS):
+            async with self._sf() as session:
+                current = await session.scalar(
+                    select(func.max(ServiceContextTemplate.version)).where(
+                        ServiceContextTemplate.target_config_id == target_config_id,
+                        ServiceContextTemplate.target_model == target_model,
+                    )
+                )
+                row = ServiceContextTemplate(
+                    target_config_id=target_config_id,
+                    target_model=target_model,
+                    generator_config_id=generator_config_id,
+                    generator_model=generator_model,
+                    version=int(current or 0) + 1,
+                    status=status,
+                    template_text=template_text,
+                )
+                session.add(row)
+                try:
+                    await session.commit()
+                except IntegrityError:
+                    await session.rollback()
+                    if attempt + 1 == VERSION_ALLOCATION_ATTEMPTS:
+                        raise ValueError(
+                            "could not allocate a topic-bridge template version"
+                        ) from None
+                    continue
+                await session.refresh(row)
+                return row
+        raise AssertionError("unreachable")
 
     async def list_for_target(self, target_config_id: str) -> list[dict[str, Any]]:
         if await self._targets.get(target_config_id) is None:
@@ -145,8 +195,16 @@ class ServiceContextTemplateService:
             row = await session.get(ServiceContextTemplate, template_id)
             if row is None or row.target_config_id != target_config_id:
                 raise KeyError(template_id)
-            if row.status != "succeeded" or not row.verification_passed or not row.template_text:
-                raise ValueError("only a successfully verified template can be activated")
+            is_manual = (
+                row.generator_config_id is None
+                and row.generator_model == MANUAL_GENERATOR_MODEL
+            )
+            if (
+                row.status != "succeeded"
+                or not row.template_text
+                or (not row.verification_passed and not is_manual)
+            ):
+                raise ValueError("only a usable topic-bridge template can be activated")
             await session.execute(
                 update(ServiceContextTemplate)
                 .where(
@@ -159,6 +217,24 @@ class ServiceContextTemplateService:
             await session.commit()
             await session.refresh(row)
             return _public(row)
+
+    async def create_manual_template(
+        self,
+        target_config_id: str,
+        template: str,
+    ) -> dict[str, Any]:
+        checked = validate_bridge_template(template)
+        target_cfg = await self._targets.resolve_for_runtime(target_config_id)
+        target_model = _model_name(target_cfg)
+        row = await self._create_version(
+            target_config_id=target_config_id,
+            target_model=target_model,
+            generator_config_id=None,
+            generator_model=MANUAL_GENERATOR_MODEL,
+            status="succeeded",
+            template_text=checked,
+        )
+        return _public(row)
 
     async def generate_service_context_template(
         self,
@@ -180,24 +256,13 @@ class ServiceContextTemplateService:
         target_model = _model_name(target_cfg)
         generator_model = _model_name(generator_cfg)
 
-        async with self._sf() as session:
-            current = await session.scalar(
-                select(func.max(ServiceContextTemplate.version)).where(
-                    ServiceContextTemplate.target_config_id == target_config_id,
-                    ServiceContextTemplate.target_model == target_model,
-                )
-            )
-            row = ServiceContextTemplate(
-                target_config_id=target_config_id,
-                target_model=target_model,
-                generator_config_id=generator_config_id,
-                generator_model=generator_model,
-                version=int(current or 0) + 1,
-                status="generating",
-            )
-            session.add(row)
-            await session.commit()
-            await session.refresh(row)
+        row = await self._create_version(
+            target_config_id=target_config_id,
+            target_model=target_model,
+            generator_config_id=generator_config_id,
+            generator_model=generator_model,
+            status="generating",
+        )
 
         trace: dict[str, Any] = {
             "target_config_id": target_config_id,

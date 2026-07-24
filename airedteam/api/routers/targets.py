@@ -39,6 +39,10 @@ class GenerateServiceContextTemplate(BaseModel):
     max_candidates: int = Field(default=10, ge=1, le=20)
 
 
+class CreateManualServiceContextTemplate(BaseModel):
+    template: str
+
+
 class RunReconnaissance(BaseModel):
     generator_config_id: str
     max_rounds: int = Field(default=10, ge=1, le=10)
@@ -193,6 +197,21 @@ async def generate_service_context_template(
         )
     except KeyError:
         raise HTTPException(404, "Target or generator target not found") from None
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@router.post("/targets/{tid}/service-context-templates/manual", status_code=201)
+async def create_manual_service_context_template(
+    tid: str,
+    req: CreateManualServiceContextTemplate,
+    _=Depends(require_admin),
+    state: AppState = Depends(get_state),
+):
+    try:
+        return await state.service_context_templates.create_manual_template(tid, req.template)
+    except KeyError:
+        raise HTTPException(404, "Target not found") from None
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 
