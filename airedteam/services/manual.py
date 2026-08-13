@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from datetime import UTC, datetime
 
@@ -14,6 +15,8 @@ from airedteam.engine.input_limits import (
     ensure_text_within_target_limit,
 )
 from airedteam.storage import models
+
+logger = logging.getLogger(__name__)
 
 
 class ManualService:
@@ -156,6 +159,9 @@ class ManualService:
         cfg = await self._targets.resolve_for_runtime(att.target_id)
         target = build_target(cfg)
         apply_target_input_limit(target, cfg)
+        bind_session = getattr(target, "bind_session", None)
+        if callable(bind_session):
+            bind_session(attempt_id, new_session=att.started_at is None)
         attempt_started_at = datetime.now(UTC).replace(tzinfo=None)
         try:
             ensure_text_within_target_limit(
@@ -235,12 +241,45 @@ class ManualService:
             return _score_public(row)
 
     async def finish(self, run_id: str):
+        target_id = ""
+        session_ids: list[str] = []
         async with self._sf() as s:
             run = await s.get(models.Run, run_id)
             if run is not None:
+                target_id = json.loads(run.runspec_yaml or "{}").get("target_id", "")
+                session_ids = list(
+                    (
+                        await s.execute(
+                            select(models.Attempt.id).where(models.Attempt.run_id == run_id)
+                        )
+                    ).scalars()
+                )
                 run.status = "completed"
                 run.finished_at = datetime.now(UTC).replace(tzinfo=None)
                 await s.commit()
+
+        if not target_id or not session_ids:
+            return
+        target = None
+        try:
+            cfg = await self._targets.resolve_for_runtime(target_id)
+            target = build_target(cfg)
+            release_session = getattr(target, "release_session", None)
+            if callable(release_session):
+                for session_id in session_ids:
+                    try:
+                        await release_session(session_id)
+                    except Exception as exc:
+                        logger.warning(
+                            "failed to release manual AutoAgent session %s: %s",
+                            session_id,
+                            exc,
+                        )
+        except Exception as exc:
+            logger.warning("failed to clean up manual AutoAgent sessions for run %s: %s", run_id, exc)
+        finally:
+            if target is not None:
+                await target.aclose()
 
     async def _read_conversation(self, att) -> list[dict]:
         if not att.conversation_blob_path:

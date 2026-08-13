@@ -16,7 +16,7 @@ async def _login(c):
 @respx.mock
 async def test_manual_session_full_flow(monkeypatch, tmp_path):
     """Test creating a manual run, conversation, 2 turns, finish."""
-    respx.post("https://m.example.com/v1/chat/completions").mock(
+    target_route = respx.post("https://m.example.com/v1/chat/completions").mock(
         side_effect=[
             httpx.Response(
                 200,
@@ -32,6 +32,7 @@ async def test_manual_session_full_flow(monkeypatch, tmp_path):
                     "usage": {"prompt_tokens": 10, "completion_tokens": 2},
                 },
             ),
+            httpx.Response(200, json={}),
         ]
     )
 
@@ -63,7 +64,7 @@ async def test_manual_session_full_flow(monkeypatch, tmp_path):
             headers=h,
             json={
                 "name": "manual_target",
-                "plugin": "openai_compat",
+                "plugin": "openai_compat_new_session",
                 "params": {"name": "manual_target", "base_url": "https://m.example.com/v1", "model": "gpt-test"},
                 "secret": {"api_key": "sk-test"},
             },
@@ -114,6 +115,16 @@ async def test_manual_session_full_flow(monkeypatch, tmp_path):
         r5 = await c.post(f"/api/manual/runs/{rid}/finish", headers=h)
         assert r5.status_code == 200
         assert r5.json()["ok"] is True
+
+        first_body = json.loads(target_route.calls[0].request.content)
+        second_body = json.loads(target_route.calls[1].request.content)
+        release_body = json.loads(target_route.calls[2].request.content)
+        assert first_body["session_id"] == aid
+        assert first_body["new_session"] is True
+        assert second_body["session_id"] == aid
+        assert "new_session" not in second_body
+        assert release_body["session_id"] == aid
+        assert release_body["end_session"] is True
 
         # Verify run status is completed
         run_status = await c.get(f"/api/runs/{rid}", headers=h)

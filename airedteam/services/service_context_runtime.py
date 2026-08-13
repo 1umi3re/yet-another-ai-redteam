@@ -17,6 +17,12 @@ class _Capture:
     first_sent_prompt: Prompt | None = None
 
 
+@dataclass(frozen=True)
+class _AttemptTokens:
+    capture: Token
+    target: Any = None
+
+
 class ServiceContextTarget:
     """Target proxy that wraps actual outgoing messages and captures auditable evidence."""
 
@@ -38,10 +44,14 @@ class ServiceContextTarget:
     def __getattr__(self, name: str):
         return getattr(self._target, name)
 
-    def begin_attempt(self) -> Token:
-        return self._capture.set(_Capture())
+    def begin_attempt(self) -> _AttemptTokens:
+        target_token = None
+        begin_target = getattr(self._target, "begin_attempt", None)
+        if callable(begin_target):
+            target_token = begin_target()
+        return _AttemptTokens(capture=self._capture.set(_Capture()), target=target_token)
 
-    def finish_attempt(self, token: Token, attempt: AttemptResult) -> None:
+    def finish_attempt(self, token: _AttemptTokens, attempt: AttemptResult) -> None:
         capture = self._capture.get()
         try:
             if capture is None:
@@ -96,7 +106,12 @@ class ServiceContextTarget:
                 "calls": public_calls,
             }
         finally:
-            self._capture.reset(token)
+            self._capture.reset(token.capture)
+
+    async def end_attempt(self, token: _AttemptTokens) -> None:
+        end_target = getattr(self._target, "end_attempt", None)
+        if token.target is not None and callable(end_target):
+            await end_target(token.target)
 
     def _adapt_text(self, text: str) -> tuple[str, str, str | None]:
         wrapped = wrap_transformed_prompt(str(self._template["template"]), text)

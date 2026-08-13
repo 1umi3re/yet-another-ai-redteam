@@ -300,7 +300,7 @@ async def check_target_draft(req: CreateTarget, _=Depends(require_admin), state:
         # For targets that use secrets, we need to inject them into params
         # This depends on how the target plugin expects secrets
         # Most targets like openai_compat expect api_key in the params
-        if req.plugin in ("openai_compat", "anthropic_compat"):
+        if req.plugin in ("openai_compat", "openai_compat_new_session", "anthropic_compat"):
             runtime_cfg["params"] = {**req.params, **req.secret}
 
     return await _check_target_connectivity(runtime_cfg)

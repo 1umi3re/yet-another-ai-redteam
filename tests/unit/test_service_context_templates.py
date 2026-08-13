@@ -401,3 +401,37 @@ async def test_runtime_wraps_generate_and_only_first_chat_user():
     first, second = await asyncio.gather(concurrent_attempt("one"), concurrent_attempt("two"))
     assert first.service_context["transformed_prompt"] == "one"
     assert second.service_context["transformed_prompt"] == "two"
+
+
+@pytest.mark.asyncio
+async def test_service_context_wrapper_forwards_attempt_lifecycle():
+    class LifecycleTarget(_EchoTarget):
+        def __init__(self):
+            self.ended_with = None
+
+        def begin_attempt(self):
+            return "target-token"
+
+        async def end_attempt(self, token):
+            self.ended_with = token
+
+    underlying = LifecycleTarget()
+    target = ServiceContextTarget(
+        underlying,
+        {
+            "id": "template-1",
+            "version": 1,
+            "target_model": "m",
+            "generator_model": "g",
+            "template": "Service workflow:\n{prompt}",
+        },
+    )
+    token = target.begin_attempt()
+    response = await target.generate(Prompt(text="hello"))
+    from airedteam.core.types import AttemptResult
+
+    attempt = AttemptResult(prompt=Prompt(text="hello"), response=response)
+    target.finish_attempt(token, attempt)
+    await target.end_attempt(token)
+
+    assert underlying.ended_with == "target-token"

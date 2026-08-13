@@ -168,17 +168,28 @@ class RunEngine:
             if callable(begin_capture):
                 capture_token = begin_capture()
             try:
-                ar = await active_executor.run(item.prompt, item.target, item.converter_variant)
-            except Exception as e:
-                ar = AttemptResult(
-                    prompt=item.prompt,
-                    response=None,
-                    status="failed",
-                    error=exception_detail(e),
-                    converter_chain=[getattr(c, "name", type(c).__name__) for c in item.converter_variant],
-                )
-            if capture_token is not None:
-                item.target.finish_attempt(capture_token, ar)
+                try:
+                    ar = await active_executor.run(item.prompt, item.target, item.converter_variant)
+                except Exception as e:
+                    ar = AttemptResult(
+                        prompt=item.prompt,
+                        response=None,
+                        status="failed",
+                        error=exception_detail(e),
+                        converter_chain=[getattr(c, "name", type(c).__name__) for c in item.converter_variant],
+                    )
+                finish_attempt = getattr(item.target, "finish_attempt", None)
+                if capture_token is not None and callable(finish_attempt):
+                    finish_attempt(capture_token, ar)
+            finally:
+                end_attempt = getattr(item.target, "end_attempt", None)
+                if capture_token is not None and callable(end_attempt):
+                    try:
+                        await end_attempt(capture_token)
+                    except Exception:
+                        # Remote-session cleanup is best effort and must not
+                        # replace the actual attack result.
+                        pass
             finished_at = datetime.now(UTC).replace(tzinfo=None)
             ar.started_at = ar.started_at or started_at
             ar.finished_at = ar.finished_at or finished_at

@@ -1,12 +1,27 @@
 from __future__ import annotations
 
+import logging
 import time
+import uuid
+from contextvars import ContextVar, Token
+from dataclasses import dataclass, replace
 
 import httpx
 
 from airedteam.builtins.targets.artifact_content import openai_content
 from airedteam.core.plugins import BaseTarget
 from airedteam.core.types import Message, Prompt, Response
+
+logger = logging.getLogger(__name__)
+SESSION_RELEASE_TIMEOUT_SECONDS = 10.0
+
+
+@dataclass(frozen=True)
+class _SessionScope:
+    session_ids: tuple[str, ...] = ()
+    active_session_id: str | None = None
+    bound: bool = False
+    next_request_starts_session: bool = False
 
 
 class OpenAICompatTarget(BaseTarget):
@@ -124,6 +139,64 @@ class OpenAICompatTarget(BaseTarget):
 
 
 class OpenAICompatNewSessionTarget(OpenAICompatTarget):
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self._session_scope: ContextVar[_SessionScope | None] = ContextVar(
+            f"openai_compat_session_scope_{id(self)}", default=None
+        )
+        self._outstanding_sessions: set[str] = set()
+        self._persistent_sessions: set[str] = set()
+        self._closed = False
+
+    def begin_attempt(self) -> Token:
+        """Create an attempt-local scope on a Target shared by concurrent tasks."""
+        return self._session_scope.set(_SessionScope())
+
+    async def end_attempt(self, token: Token) -> None:
+        """Release every remote device session opened by the current attempt."""
+        scope = self._session_scope.get()
+        try:
+            if scope is not None:
+                await self._release_many(scope.session_ids)
+        finally:
+            self._session_scope.reset(token)
+
+    def bind_session(self, session_id: str, *, new_session: bool) -> None:
+        """Bind a cross-request caller (the manual console) to a stable session."""
+        value = str(session_id or "").strip()
+        if not value:
+            raise ValueError("session_id is required")
+        self._outstanding_sessions.add(value)
+        self._persistent_sessions.add(value)
+        self._session_scope.set(
+            _SessionScope(
+                session_ids=(value,),
+                active_session_id=value,
+                bound=True,
+                next_request_starts_session=bool(new_session),
+            )
+        )
+
+    def _scope(self) -> _SessionScope:
+        scope = self._session_scope.get()
+        if scope is None:
+            scope = _SessionScope()
+            self._session_scope.set(scope)
+        return scope
+
+    def _allocate_session(self) -> tuple[_SessionScope, str]:
+        scope = self._scope()
+        session_id = str(uuid.uuid4())
+        self._outstanding_sessions.add(session_id)
+        scope = replace(
+            scope,
+            session_ids=(*scope.session_ids, session_id),
+            active_session_id=session_id,
+            next_request_starts_session=False,
+        )
+        self._session_scope.set(scope)
+        return scope, session_id
+
     def _prepare_chat_completions_payload(
         self,
         payload: dict,
@@ -131,8 +204,73 @@ class OpenAICompatNewSessionTarget(OpenAICompatTarget):
         request_kind: str,
         messages: list[Message] | None = None,
     ) -> dict:
-        if request_kind == "chat" and any(message.role == "assistant" for message in messages or []):
-            return payload
+        scope = self._scope()
+        transcript_has_assistant = request_kind == "chat" and any(
+            message.role == "assistant" for message in messages or []
+        )
+        starts_independent_conversation = request_kind != "chat" or not transcript_has_assistant
+
+        if scope.bound and scope.active_session_id:
+            session_id = scope.active_session_id
+            starts_session = scope.next_request_starts_session
+            if starts_session:
+                scope = replace(scope, next_request_starts_session=False)
+                self._session_scope.set(scope)
+        elif starts_independent_conversation:
+            scope, session_id = self._allocate_session()
+            starts_session = True
+        elif scope.active_session_id:
+            session_id = scope.active_session_id
+            starts_session = False
+        else:
+            # A caller may enter with a pre-existing transcript but without an
+            # AutoAgent device binding. Establish one before sending the turn.
+            scope, session_id = self._allocate_session()
+            starts_session = True
+
         payload = dict(payload)
-        payload["new_session"] = True
+        payload["session_id"] = session_id
+        if starts_session:
+            payload["new_session"] = True
         return payload
+
+    async def release_session(self, session_id: str) -> bool:
+        """Idempotently release an AutoAgent device reservation."""
+        value = str(session_id or "").strip()
+        if not value:
+            return False
+        body = {
+            "model": self.model,
+            "messages": [{"role": "user", "content": "-"}],
+            "session_id": value,
+            "end_session": True,
+        }
+        response = await self._client.post(
+            f"{self.base_url}/chat/completions",
+            json=body,
+            timeout=httpx.Timeout(SESSION_RELEASE_TIMEOUT_SECONDS, connect=5.0),
+        )
+        response.raise_for_status()
+        self._outstanding_sessions.discard(value)
+        self._persistent_sessions.discard(value)
+        return True
+
+    async def _release_many(self, session_ids) -> None:
+        for session_id in dict.fromkeys(session_ids):
+            if session_id not in self._outstanding_sessions:
+                continue
+            try:
+                await self.release_session(session_id)
+            except Exception as exc:
+                logger.warning("failed to release AutoAgent session %s: %s", session_id, exc)
+
+    async def aclose(self) -> None:
+        if self._closed:
+            return
+        try:
+            await self._release_many(
+                tuple(self._outstanding_sessions - self._persistent_sessions)
+            )
+        finally:
+            self._closed = True
+            await super().aclose()

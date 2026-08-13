@@ -226,6 +226,46 @@ async def test_run_engine_does_not_score_failed_attempts():
 
 
 @pytest.mark.asyncio
+async def test_run_engine_ends_target_scope_for_every_attempt():
+    class LifecycleTarget(FakeTarget):
+        def __init__(self):
+            super().__init__("lifecycle")
+            self.started = 0
+            self.ended = 0
+
+        def begin_attempt(self):
+            self.started += 1
+            return self.started
+
+        async def end_attempt(self, token):
+            assert token > 0
+            self.ended += 1
+
+    target = LifecycleTarget()
+
+    async def on_attempt(ar, tname, item_id, work_key, original_prompt):
+        pass
+
+    async def on_score(idx, sr):
+        pass
+
+    engine = RunEngine(progress_bus=ProgressBus(), on_attempt=on_attempt, on_score=on_score)
+    await engine.run(
+        run_id="r",
+        dataset=FakeDataset(),
+        targets=[target],
+        converters=[],
+        executor=FakeExec(),
+        scorers=[],
+        concurrency=3,
+        orchestrator=DefaultOrchestrator(),
+    )
+
+    assert target.started == 3
+    assert target.ended == 3
+
+
+@pytest.mark.asyncio
 async def test_run_engine_runs_each_converter_as_separate_variant():
     bus = ProgressBus()
     attempts: list[list[str]] = []
